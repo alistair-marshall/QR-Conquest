@@ -1,0 +1,27 @@
+{
+  "name": "QR Conquest",
+  "short_name": "QRConquest",
+  "description": "GPS-based QR code capture game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "orientation": "portrait",
+  "categories": ["games", "entertainment"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

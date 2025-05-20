@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Conquest</title>
+  <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+<script src="indexedDB.js"></script>
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(registration => {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        })
+        .catch(error => {
+          console.error('ServiceWorker registration failed: ', error);
+        });
+    });
+  }
+</script>
+  <!-- Tailwind CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+  <!-- jsQR to handle QR scanning -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+  <script>
+    // Add comprehensive error handling
+    window.onerror = function(msg, url, line, col, error) {
+      console.error('Global error caught:', msg, 'at', url, ':', line, ':', col);
+      document.getElementById('error-container').innerHTML = `
+        <div class="p-4 bg-red-100 text-red-700 rounded-md">
+          <h3 class="font-bold">JavaScript Error</h3>
+          <p>${msg}</p>
+          <p>Line: ${line}, Col: ${col}</p>
+          <p>File: ${url}</p>
+        </div>
+      `;
+      document.getElementById('error-container').style.display = 'block';
+      return false;
+    };
+
+    // Add detailed logging for debugging
+    console.log('Document loaded, waiting for DOM content to load');
+  </script>
+</head>
+<body class="bg-gray-100">
+  <div id="error-container" style="display: none;" class="max-w-md mx-auto mt-4"></div>
+	<div id="notification-container" class="fixed top-0 right-0 p-4 z-50 space-y-2 max-w-md"></div>
+  <div id="root">
+    <!-- Loading indicator that will be replaced by JavaScript -->
+    <div class="flex items-center justify-center h-screen">
+      <div class="animate-spin h-12 w-12 border-4 border-blue-600 rounded-full border-t-transparent"></div>
+      <p class="ml-4">Loading QR Conquest...</p>
+    </div>
+  </div>
+
+  <!-- Load app js after DOM content is loaded -->
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM content loaded, loading app JavaScript files');
+
+    // Function to load scripts in sequence
+    function loadScript(src, callback) {
+      var script = document.createElement('script');
+      script.src = src;
+      script.onload = callback;
+      script.onerror = function() {
+        console.error('Failed to load ' + src);
+        document.getElementById('error-container').innerHTML = `
+          <div class="p-4 bg-red-100 text-red-700 rounded-md">
+            <h3 class="font-bold">Script Loading Error</h3>
+            <p>Failed to load ${src}</p>
+          </div>
+        `;
+        document.getElementById('error-container').style.display = 'block';
+      };
+      document.body.appendChild(script);
+    }
+
+    // Load scripts in sequence, ensuring dependencies are respected
+		loadScript('notification.js', function() {
+			loadScript('core.js', function() {
+				loadScript('ui.js', function() {
+					loadScript('admin.js', function() {
+						console.log('All app scripts loaded successfully');
+					});
+				});
+			});
+		});
+  });
+
+  // Initialize Lucide icons when the window loads
+  window.addEventListener('load', function() {
+    console.log('Window loaded');
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      console.log('Lucide found, creating icons');
+      window.lucide.createIcons();
+    } else {
+      console.error('Lucide icons library not found or createIcons function not available');
+    }
+  });
+</script>
+</body>
+</html>
