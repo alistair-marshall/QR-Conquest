@@ -1,3 +1,11 @@
+# Database
+
+*.db
+*.sqlite
+*.sqlite3
+
+# Default python .gitignore template
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
