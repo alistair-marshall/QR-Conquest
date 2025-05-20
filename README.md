@@ -30,7 +30,7 @@ Players form teams and scan QR codes placed around a physical area (like a park 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/qr-conquest.git
+   git clone https://github.com/alistair-marshall/qr-conquest.git
    cd qr-conquest
    ```
 
