@@ -118,10 +118,10 @@ async function startGame() {
 
     // Update game status
     appState.gameData.status = 'active';
-    
+
     // Show success message
     showNotification('Game has been started! Players can now capture bases.');
-    
+
     navigateTo('gameView');
   } catch (err) {
     setError(err.message);
@@ -167,11 +167,11 @@ function clearGameData() {
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
   localStorage.removeItem('adminPassword');
-  
+
   // Clear sessionStorage data that might contain pending QR codes or team selections
   sessionStorage.removeItem('pendingQRCode');
   sessionStorage.removeItem('pendingTeamId');
-  
+
   // Stop any active polling
   stopScorePolling();
 
@@ -190,19 +190,19 @@ function clearGameData() {
 
   // Clear any pending QR code
   appState.pendingQRCode = null;
-  
+
   // Clear any errors
   appState.error = null;
-  
+
   // Reset loading state
   appState.loading = false;
-  
+
   // Log the reset for debugging purposes
   console.log('Game data cleared, app state reset to initial values');
-  
+
   // Navigate to landing page
   navigateTo('landing');
-  
+
   // Display confirmation message to user
   setTimeout(function() {
     showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.','success');
@@ -244,18 +244,18 @@ function setLoading(isLoading) {
 // Set error state
 function setError(errorMessage) {
   appState.error = errorMessage;
-  
+
   // Show error notification if there's a message
   if (errorMessage) {
     showNotification(errorMessage, 'error');
-    
+
     // Auto-clear error state after 5 seconds
     setTimeout(function() {
       appState.error = null;
       // No need to re-render since notifications are separate from the main UI
     }, 5000);
   }
-  
+
   // Still render the app for other state changes
   renderApp();
 }
@@ -347,8 +347,11 @@ function initGameMap() {
     }).addTo(gameMapInstance);
 
     circleMarker.bindPopup(popupContent);
+    circleMarker.baseId = base.id;
     markers.push(circleMarker);
   });
+
+  gameMapInstance.baseMarkers = markers;
 
   // Zoom and center the map to fit all base markers
   if (latLngs.length > 0) {
@@ -360,6 +363,47 @@ function initGameMap() {
     gameMapInstance.setView([55.94763, -3.16202], 16);
     mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
   }
+}
+
+function updateMapMarkers() {
+  // If no map instance or no bases, return
+  if (!gameMapInstance || !appState.gameData.bases || appState.gameData.bases.length === 0) {
+    return;
+  }
+
+  // Get all markers (we'll store them in a new property of gameMapInstance)
+  if (!gameMapInstance.baseMarkers) {
+    console.warn('No markers to update. Reinitialize map.');
+    initGameMap()
+    return;
+  }
+
+  // Update each marker based on current base ownership
+  appState.gameData.bases.forEach(base => {
+    const marker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
+    if (!marker) return;
+
+    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
+    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
+
+    if (base.ownedBy) {
+      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
+      if (owningTeam) {
+        markerColor = getHexColorForTailwind(owningTeam.color);
+        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
+      } else {
+        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
+      }
+    }
+
+    // Update marker color
+    marker.setStyle({
+      fillColor: markerColor
+    });
+
+    // Update popup content
+    marker.getPopup().setContent(popupContent);
+  });
 }
 
 // Function to handle admin button click
@@ -461,7 +505,7 @@ function showAdminPasswordPrompt() {
       appState.gameData.adminPassword = enteredPassword;
       appState.gameData.isAdmin = true;
       localStorage.setItem('adminPassword', enteredPassword);
-      
+
       document.body.removeChild(modalBackdrop);
       navigateTo('adminPanel');
       return;
@@ -472,21 +516,21 @@ function showAdminPasswordPrompt() {
       // First, check if we can use this password to perform an admin action
       // We'll attempt to get game details, which should work regardless
       const gameId = appState.gameData.id;
-      
+
       // Store the password and mark as admin
       appState.gameData.adminPassword = enteredPassword;
       appState.gameData.isAdmin = true;
       localStorage.setItem('adminPassword', enteredPassword);
-      
+
       // Remove the modal and navigate to admin panel
       document.body.removeChild(modalBackdrop);
       navigateTo('adminPanel');
-      
+
       // In a real implementation, you might want to verify the password
       // by attempting an admin action, but for now we'll trust the user
       // and let the server reject invalid passwords when they try to
       // perform actual admin actions
-      
+
     } catch (error) {
       showError('Invalid admin password');
       console.error('Admin authentication error:', error);
@@ -502,7 +546,7 @@ function showAdminPasswordPrompt() {
     if (errorElement) {
       errorElement.textContent = message;
       errorElement.classList.remove('hidden');
-      
+
       // Hide the error after 3 seconds
       setTimeout(() => {
         errorElement.classList.add('hidden');
@@ -571,16 +615,16 @@ function renderApp() {
 
   const adminButton = document.createElement('button');
   adminButton.className = 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200 flex items-center';
-  
+
   const adminIcon = document.createElement('i');
   adminIcon.setAttribute('data-lucide', 'shield');
   adminIcon.className = 'mr-2';
   adminButton.appendChild(adminIcon);
-  
+
   const adminText = document.createElement('span');
   adminText.textContent = 'Admin';
   adminButton.appendChild(adminText);
-  
+
   adminButton.addEventListener('click', handleAdminButtonClick);
   rightSection.appendChild(adminButton);
 
@@ -921,7 +965,7 @@ function renderFirstTimePage() {
   const infoBox = document.createElement('div');
   infoBox.className = 'mt-6 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg text-left text-sm max-w-xs mx-auto';
   infoBox.innerHTML = '<p><strong>Note:</strong> In QR Conquest, all teams and bases are created by scanning QR codes first. This QR code can be used later to create a team or base after you join or create a game.</p>';
-  
+
   container.appendChild(optionsContainer);
   container.appendChild(infoBox);
 
@@ -949,16 +993,16 @@ function renderQRScanner() {
   if (appState.gameData.isAdmin) {
     const instructionBox = document.createElement('div');
     instructionBox.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4';
-    
+
     const instructionTitle = document.createElement('p');
     instructionTitle.className = 'font-bold';
     instructionTitle.textContent = 'Admin Instructions:';
     instructionBox.appendChild(instructionTitle);
-    
+
     const instructionText = document.createElement('p');
     instructionText.textContent = 'Scan a QR code to create a new team or base. All team and base creation must start by scanning a QR code first.';
     instructionBox.appendChild(instructionText);
-    
+
     container.appendChild(instructionBox);
   }
 
@@ -991,39 +1035,39 @@ function renderQRScanner() {
   // Scanner overlay/viewfinder
   const scannerOverlay = document.createElement('div');
   scannerOverlay.className = 'absolute inset-0 flex items-center justify-center';
-  
+
   const viewfinder = document.createElement('div');
   viewfinder.className = 'border-2 border-blue-500 rounded-lg w-64 h-64 opacity-60';
   scannerOverlay.appendChild(viewfinder);
-  
+
   cameraContainer.appendChild(scannerOverlay);
 
   // Loading indicator (initially visible)
   const loadingIndicator = document.createElement('div');
   loadingIndicator.className = 'absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white';
   loadingIndicator.id = 'camera-loading';
-  
+
   const loadingSpinner = document.createElement('div');
   loadingSpinner.className = 'animate-spin h-10 w-10 border-4 border-blue-500 rounded-full border-t-transparent mb-2';
   loadingIndicator.appendChild(loadingSpinner);
-  
+
   const loadingText = document.createElement('p');
   loadingText.className = 'text-sm';
   loadingText.textContent = 'Accessing camera...';
   loadingIndicator.appendChild(loadingText);
-  
+
   cameraContainer.appendChild(loadingIndicator);
 
   // Camera selection dropdown
   const cameraSelectContainer = document.createElement('div');
   cameraSelectContainer.className = 'mb-4';
-  
+
   const cameraSelectLabel = document.createElement('label');
   cameraSelectLabel.htmlFor = 'camera-select';
   cameraSelectLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
   cameraSelectLabel.textContent = 'Select camera:';
   cameraSelectContainer.appendChild(cameraSelectLabel);
-  
+
   const cameraSelect = document.createElement('select');
   cameraSelect.id = 'camera-select';
   cameraSelect.className = 'w-full px-3 py-2 border rounded-lg text-sm';
@@ -1034,7 +1078,7 @@ function renderQRScanner() {
   statusMessage.id = 'qr-status';
   statusMessage.className = 'text-sm mb-2 h-6 text-gray-600';
   statusMessage.textContent = 'Position QR code within the frame';
-  
+
   scannerContainer.appendChild(cameraContainer);
   scannerContainer.appendChild(cameraSelectContainer);
   scannerContainer.appendChild(statusMessage);
@@ -1085,7 +1129,7 @@ function renderQRScanner() {
   cancelButton.addEventListener('click', function() {
     // Stop camera before navigating away
     stopCamera();
-    
+
     // Different return destinations based on context
     if (appState.page === 'qrAssignment') {
       navigateTo('adminPanel');
@@ -1106,12 +1150,12 @@ function renderQRScanner() {
   function setStatusMessage(message, type = 'info') {
     const statusElem = document.getElementById('qr-status');
     if (!statusElem) return;
-    
+
     statusElem.textContent = message;
-    
+
     // Reset classes
     statusElem.className = 'text-sm mb-2 h-6';
-    
+
     // Apply appropriate styling
     if (type === 'error') {
       statusElem.className += ' text-red-600';
@@ -1132,44 +1176,44 @@ function renderQRScanner() {
       // Get list of video devices
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      
+
       // Populate camera selection dropdown
       const cameraSelect = document.getElementById('camera-select');
       if (cameraSelect) {
         cameraSelect.innerHTML = '';
-        
+
         videoDevices.forEach(device => {
           const option = document.createElement('option');
           option.value = device.deviceId;
           option.text = device.label || `Camera ${cameraSelect.options.length + 1}`;
           cameraSelect.appendChild(option);
         });
-        
+
         // Select back camera by default if available
-        const backCamera = videoDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
+        const backCamera = videoDevices.find(device =>
+          device.label.toLowerCase().includes('back') ||
           device.label.toLowerCase().includes('rear')
         );
-        
+
         if (backCamera) {
           cameraSelect.value = backCamera.deviceId;
           activeDeviceId = backCamera.deviceId;
         }
-        
+
         // Handle camera selection change
         cameraSelect.addEventListener('change', function() {
           activeDeviceId = this.value;
           startCamera(activeDeviceId);
         });
       }
-      
+
       // Start camera with selected device
       startCamera(activeDeviceId);
-      
+
     } catch (error) {
       console.error('Error initializing camera:', error);
       setStatusMessage('Error accessing camera: ' + error.message, 'error');
-      
+
       // Hide loading indicator
       const loadingElem = document.getElementById('camera-loading');
       if (loadingElem) loadingElem.style.display = 'none';
@@ -1181,11 +1225,11 @@ function renderQRScanner() {
     try {
       // Stop any existing stream
       stopCamera();
-      
+
       // Show loading indicator
       const loadingElem = document.getElementById('camera-loading');
       if (loadingElem) loadingElem.style.display = 'flex';
-      
+
       // Set up camera constraints
       const constraints = {
         video: {
@@ -1194,26 +1238,26 @@ function renderQRScanner() {
           height: { ideal: 720 }
         }
       };
-      
+
       // Use specific device if provided
       if (deviceId) {
         constraints.video.deviceId = { exact: deviceId };
       }
-      
+
       // Get camera stream
       videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-      
+
       // Connect stream to video element
       const videoElement = document.getElementById('qr-video');
       if (videoElement) {
         videoElement.srcObject = videoStream;
         videoElement.play();
-        
+
         // Wait for video to be ready
         videoElement.onloadedmetadata = function() {
           // Hide loading indicator
           if (loadingElem) loadingElem.style.display = 'none';
-          
+
           // Start scanning
           startScanning();
         };
@@ -1221,7 +1265,7 @@ function renderQRScanner() {
     } catch (error) {
       console.error('Error starting camera:', error);
       setStatusMessage('Error starting camera: ' + error.message, 'error');
-      
+
       // Hide loading indicator
       const loadingElem = document.getElementById('camera-loading');
       if (loadingElem) loadingElem.style.display = 'none';
@@ -1232,13 +1276,13 @@ function renderQRScanner() {
   function stopCamera() {
     // Stop scanning
     scanning = false;
-    
+
     // Stop any video track
     if (videoStream) {
       videoStream.getTracks().forEach(track => track.stop());
       videoStream = null;
     }
-    
+
     // Clear video source
     const videoElement = document.getElementById('qr-video');
     if (videoElement && videoElement.srcObject) {
@@ -1249,7 +1293,7 @@ function renderQRScanner() {
   // Start QR code scanning
   function startScanning() {
     scanning = true;
-    
+
     // Check if BarcodeDetector API is available
     if ('BarcodeDetector' in window) {
       scanWithBarcodeDetector();
@@ -1263,35 +1307,35 @@ function renderQRScanner() {
   async function scanWithBarcodeDetector() {
     try {
       const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-      
+
       const videoElement = document.getElementById('qr-video');
       const canvasElement = document.getElementById('qr-canvas');
-      
+
       if (!videoElement || !canvasElement) return;
-      
+
       const scanFrame = async () => {
         if (!scanning) return;
-        
+
         if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
           // Set canvas dimensions to match video
           canvasElement.width = videoElement.videoWidth;
           canvasElement.height = videoElement.videoHeight;
-          
+
           // Draw video frame to canvas
           const context = canvasElement.getContext('2d');
           context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-          
+
           try {
             // Detect QR codes in the current frame
             const barcodes = await barcodeDetector.detect(canvasElement);
-            
+
             if (barcodes.length > 0) {
               // QR code found
               const qrCode = barcodes[0].rawValue;
-              
+
               // Give visual feedback
               setStatusMessage('QR Code detected!', 'success');
-              
+
               // Stop scanning and handle the QR code
               stopCamera();
               setTimeout(() => handleQRScan(qrCode), 500);
@@ -1301,13 +1345,13 @@ function renderQRScanner() {
             console.error('Barcode detection error:', err);
           }
         }
-        
+
         // Continue scanning
         requestAnimationFrame(scanFrame);
       };
-      
+
       scanFrame();
-      
+
     } catch (error) {
       console.error('BarcodeDetector error:', error);
       // Fall back to jsQR
@@ -1322,9 +1366,9 @@ function renderQRScanner() {
       scanWithJsQR();
       return;
     }
-    
+
     setStatusMessage('Loading QR scanner...');
-    
+
     // Create script element to load jsQR
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
@@ -1332,7 +1376,7 @@ function renderQRScanner() {
     script.onerror = () => {
       setStatusMessage('Failed to load QR scanner library', 'error');
     };
-    
+
     document.head.appendChild(script);
   }
 
@@ -1340,47 +1384,47 @@ function renderQRScanner() {
   function scanWithJsQR() {
     const videoElement = document.getElementById('qr-video');
     const canvasElement = document.getElementById('qr-canvas');
-    
+
     if (!videoElement || !canvasElement) return;
-    
+
     const scanFrame = () => {
       if (!scanning) return;
-      
+
       if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
         // Set canvas dimensions to match video
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
-        
+
         // Draw video frame to canvas
         const context = canvasElement.getContext('2d');
         context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-        
+
         // Get image data from canvas
         const imageData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
-        
+
         // Scan for QR code
         const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'dontInvert'
         });
-        
+
         if (code) {
           // QR code found
           const qrCode = code.data;
-          
+
           // Give visual feedback
           setStatusMessage('QR Code detected!', 'success');
-          
+
           // Stop scanning and handle the QR code
           stopCamera();
           setTimeout(() => handleQRScan(qrCode), 500);
           return;
         }
       }
-      
+
       // Continue scanning
       requestAnimationFrame(scanFrame);
     };
-    
+
     scanFrame();
   }
 
@@ -1404,32 +1448,32 @@ window.addEventListener('beforeinstallprompt', (e) => {
 function showInstallButton() {
   // Only show if we have a deferred prompt and we're on the landing page
   if (!deferredPrompt || appState.page !== 'landing') return;
-  
+
   const container = document.querySelector('.flex.flex-col.space-y-4');
   if (!container) return;
-  
+
   // Check if we already added the button
   if (document.getElementById('pwa-install-btn')) return;
-  
+
   // Create install button
   const installButton = document.createElement('button');
   installButton.id = 'pwa-install-btn';
   installButton.className = 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 flex items-center justify-center';
-  
+
   const installIcon = document.createElement('i');
   installIcon.setAttribute('data-lucide', 'download');
   installIcon.className = 'mr-2';
   installButton.appendChild(installIcon);
-  
+
   const installText = document.createElement('span');
   installText.textContent = 'Install QR Conquest';
   installButton.appendChild(installText);
-  
+
   installButton.addEventListener('click', showInstallPrompt);
-  
+
   // Insert at the beginning of the container
   container.prepend(installButton);
-  
+
   // Initialize Lucide icons
   if (window.lucide) window.lucide.createIcons();
 }
@@ -1437,24 +1481,24 @@ function showInstallButton() {
 // Function to show the installation prompt
 function showInstallPrompt() {
   if (!deferredPrompt) return;
-  
+
   // Show the installation prompt
   deferredPrompt.prompt();
-  
+
   // Wait for the user to respond to the prompt
   deferredPrompt.userChoice.then((choiceResult) => {
     if (choiceResult.outcome === 'accepted') {
       console.log('User accepted the install prompt');
-      
+
       // Show success notification
       showNotification('QR Conquest has been installed! For the best experience, please restart the app.', 'success');
     } else {
       console.log('User dismissed the install prompt');
     }
-    
+
     // Clear the deferred prompt variable
     deferredPrompt = null;
-    
+
     // Remove the install button
     const installButton = document.getElementById('pwa-install-btn');
     if (installButton) installButton.remove();
@@ -1466,7 +1510,7 @@ const originalRenderApp = renderApp;
 renderApp = function() {
   // Call the original function
   originalRenderApp.apply(this, arguments);
-  
+
   // Check if we should show the install button
   setTimeout(showInstallButton, 100);
 };
@@ -1478,7 +1522,7 @@ function setupOnlineStatusMonitoring() {
     console.log('App is now online');
     showNotification('You are back online', 'success');
     updateOnlineStatus(true);
-    
+
     // Attempt to sync any pending captures
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       navigator.serviceWorker.ready
@@ -1486,14 +1530,14 @@ function setupOnlineStatusMonitoring() {
         .catch(err => console.error('Background sync registration failed:', err));
     }
   });
-  
+
   // Handle offline event
   window.addEventListener('offline', function() {
     console.log('App is now offline');
     showNotification('You are offline. Some features may be limited.', 'warning');
     updateOnlineStatus(false);
   });
-  
+
   // Update status initially
   updateOnlineStatus(navigator.onLine);
 }
@@ -1502,29 +1546,29 @@ function setupOnlineStatusMonitoring() {
 function updateOnlineStatus(isOnline) {
   // Find the status indicator or create it if it doesn't exist
   let statusIndicator = document.getElementById('online-status-indicator');
-  
+
   if (!statusIndicator) {
     // Create the indicator if it doesn't exist
     statusIndicator = document.createElement('div');
     statusIndicator.id = 'online-status-indicator';
     statusIndicator.className = 'fixed bottom-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-medium flex items-center';
-    
+
     const statusDot = document.createElement('span');
     statusDot.id = 'status-dot';
     statusDot.className = 'w-2 h-2 rounded-full mr-1';
     statusIndicator.appendChild(statusDot);
-    
+
     const statusText = document.createElement('span');
     statusText.id = 'status-text';
     statusIndicator.appendChild(statusText);
-    
+
     document.body.appendChild(statusIndicator);
   }
-  
+
   // Update the indicator
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
-  
+
   if (isOnline) {
     statusIndicator.className = 'fixed bottom-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-medium flex items-center bg-green-100 text-green-800';
     statusDot.className = 'w-2 h-2 rounded-full mr-1 bg-green-500';

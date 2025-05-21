@@ -45,7 +45,7 @@ async function handleApiResponse(response, errorMessage) {
   if (!response.ok) {
     // Read the response body once
     const responseText = await response.text();
-    
+
     try {
       // Try to parse as JSON
       const errorData = JSON.parse(responseText);
@@ -63,12 +63,12 @@ async function handleApiResponse(response, errorMessage) {
 
   // For successful responses, also handle parsing errors
   const responseText = await response.text();
-  
+
   // Don't try to parse empty responses
   if (!responseText || !responseText.trim()) {
     return {};
   }
-  
+
   try {
     // Parse as JSON
     return JSON.parse(responseText);
@@ -90,11 +90,11 @@ async function fetchGameData(gameId) {
     try {
       // Try to fetch from the network first
       const response = await fetch(API_BASE_URL + '/games/' + gameId);
-      
+
       if (response.ok) {
         data = await response.json();
         console.log('Game data received from server:', data);
-        
+
         // Cache the fresh data
         if (window.dbHelpers) {
           window.dbHelpers.cacheGameData(data).catch(cacheErr => {
@@ -106,7 +106,7 @@ async function fetchGameData(gameId) {
       }
     } catch (networkError) {
       console.warn('Network fetch failed, trying cache:', networkError);
-      
+
       // Try to load from cache if network fetch failed
       if (window.dbHelpers) {
         try {
@@ -151,22 +151,31 @@ async function fetchGameData(gameId) {
 }
 
 // Fetch scores
-async function fetchScores() {
+async function fetchGameUpdates() {
   if (!appState.gameData.id) return;
 
   try {
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/scores');
+    // Fetch complete game data instead of just scores
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id);
     if (!response.ok) {
-      throw new Error('Failed to fetch scores');
+      throw new Error('Failed to fetch game updates');
     }
 
-    const scores = await response.json();
-    appState.gameData.teams = scores;
+    const gameData = await response.json();
 
-    // Re-render with new scores
+    // Update teams with scores
+    appState.gameData.teams = gameData.teams;
+
+    // Update bases with ownership information
+    appState.gameData.bases = gameData.bases;
+
+    // Update map markers without recreating the whole map
+    updateMapMarkers();
+
+    // Re-render with new data
     renderApp();
   } catch (err) {
-    console.error('Error fetching scores:', err);
+    console.error('Error fetching game updates:', err);
   }
 }
 
@@ -176,7 +185,7 @@ let scorePollingInterval = null;
 function startScorePolling() {
   if (appState.page === 'gameView' && appState.gameData.id) {
     // Initial fetch
-    fetchScores();
+    fetchGameUpdates();
 
     // Clear any existing interval
     if (scorePollingInterval) {
@@ -184,8 +193,8 @@ function startScorePolling() {
     }
 
     // Set up polling every 5 seconds
-    scorePollingInterval = setInterval(fetchScores, 5000);
-    console.log('Score polling started');
+    scorePollingInterval = setInterval(fetchGameUpdates, 5000);
+    console.log('Game updates polling started');
   }
 }
 
@@ -193,7 +202,7 @@ function stopScorePolling() {
   if (scorePollingInterval) {
     clearInterval(scorePollingInterval);
     scorePollingInterval = null;
-    console.log('Score polling stopped');
+    console.log('Game update polling stopped');
   }
 }
 
@@ -250,7 +259,7 @@ async function handleTeamQRScan(teamId, scannedGameId) {
     } else {
       setError('You are already on a different team. Please continue playing.');
     }
-    
+
     navigateTo('gameView');
     return;
   }
@@ -265,7 +274,7 @@ async function handleTeamQRScan(teamId, scannedGameId) {
   if (!currentGameId && scannedGameId) {
     try {
       console.log('Loading game from team QR code, Game ID:', scannedGameId);
-      
+
       // Load the game automatically
       localStorage.setItem('gameId', scannedGameId);
       await fetchGameData(scannedGameId);
@@ -289,7 +298,7 @@ async function captureBase(baseId, latitude, longitude) {
 
   try {
     setLoading(true);
-    
+
     // Check if we're online
     if (navigator.onLine) {
       // Try online capture
@@ -306,21 +315,21 @@ async function captureBase(baseId, latitude, longitude) {
       });
 
       await handleApiResponse(response, 'Failed to capture base');
-      
+
       // Update scores
-      fetchScores();
-      
+      await fetchGameUpdates();
+
       showNotification('Base captured successfully!', 'success');
     } else {
       // We're offline, store for later sync
       if (window.dbHelpers && window.dbHelpers.addPendingCapture) {
         await window.dbHelpers.addPendingCapture(
-          baseId, 
-          appState.gameData.currentPlayer, 
-          latitude, 
+          baseId,
+          appState.gameData.currentPlayer,
+          latitude,
           longitude
         );
-        
+
         showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
       } else {
         throw new Error('Offline capture not supported. Please try again when online.');
@@ -405,10 +414,10 @@ function extractIdFromUrl(urlString) {
 // Enhanced QR code scanning
 function handleQRScan(qrCode) {
   console.log('QR code scanned:', qrCode);
-  
+
   // Try and extract id from full URL
   qrCode = extractIdFromUrl(qrCode);
-  
+
   // If we're admin and in the QR assignment flow, skip the normal flow
   if (appState.page === 'qrAssignment' && appState.gameData.isAdmin) {
     // Just update the QR code field in the form
@@ -431,17 +440,17 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
 
     // Check what the QR code is assigned to
     const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrId}/status`);
-    
+
     // Check if response is OK before parsing JSON
     if (!statusResponse.ok) {
       const errorText = await statusResponse.text();
       console.error('QR code status response error:', statusResponse.status, errorText);
       throw new Error(`Failed to check QR code status: ${statusResponse.status} ${statusResponse.statusText}`);
     }
-    
+
     // Read the response body ONCE
     const responseText = await statusResponse.text();
-    
+
     let statusData;
     try {
       statusData = JSON.parse(responseText);
@@ -450,7 +459,7 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
       console.log('Raw response text:', responseText);
       throw new Error('Invalid response format when checking QR code');
     }
-    
+
     // Delegate to appropriate handler based on QR type
     if (statusData.status === 'team') {
       // QR code is a team
@@ -477,11 +486,11 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
       return
     }
 
-    
+
   } catch (err) {
     setError(err.message);
     console.error('Error checking QR code assignment:', err);
-    
+
     // Store pending QR code if we have an error and no game is loaded
     if (!localStorage.getItem('gameId')) {
       appState.pendingQRCode = qrId;
@@ -543,14 +552,14 @@ async function createTeam(qrId, name, color) {
 async function updateTeam(teamId, name, color) {
   try {
     setLoading(true);
-    
+
     const gameId = localStorage.getItem('gameId');
     const adminPassword = localStorage.getItem('adminPassword');
-    
+
     if (!gameId || !adminPassword) {
       throw new Error('Admin credentials not found');
     }
-    
+
     const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
       method: 'PUT',
       headers: {
@@ -562,12 +571,12 @@ async function updateTeam(teamId, name, color) {
         color: color
       })
     });
-    
+
     await handleApiResponse(response, 'Failed to update team');
-    
+
     // Show success message
     showNotification(`Team updated successfully`,'success');
-    
+
     // Refresh game data
     await fetchGameData(gameId);
   } catch (err) {
@@ -675,7 +684,7 @@ async function createGame(gameSettings) {
 
     // Show success message with instructions about QR scanning
     showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
-    
+
     // Check if there's a pending QR code to handle
     const pendingQR = sessionStorage.getItem('pendingQRCode');
     if (pendingQR) {
