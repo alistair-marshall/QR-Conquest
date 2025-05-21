@@ -235,12 +235,14 @@ async function joinTeam(teamId) {
 }
 
 // Handle team QR scan
-function handleTeamQRScan(teamId) {
-  console.log('Team QR scanned:', teamId);
+async function handleTeamQRScan(teamId, scannedGameId) {
+  console.log('Team QR scanned:', teamId, 'Game ID:', scannedGameId);
 
-  // Check if user is already on a team
+  // Get current game and team info
+  const currentGameId = localStorage.getItem('gameId');
   const currentTeam = localStorage.getItem('teamId');
 
+  // If user is already on a team
   if (currentTeam) {
     // Check if they're trying to scan their own team
     if (currentTeam === teamId) {
@@ -253,10 +255,28 @@ function handleTeamQRScan(teamId) {
     return;
   }
 
-  // Store the team ID temporarily
-  sessionStorage.setItem('pendingTeamId', teamId);
+  // If we have a game loaded but QR is for different game
+  if (currentGameId && scannedGameId && currentGameId !== scannedGameId) {
+    setError(`This team belongs to a different game. You are currently in game ${currentGameId}.`);
+    return;
+  }
 
-  // Show player registration form
+  // If no game is loaded yet but QR code has a game ID
+  if (!currentGameId && scannedGameId) {
+    try {
+      console.log('Loading game from team QR code, Game ID:', scannedGameId);
+      
+      // Load the game automatically
+      localStorage.setItem('gameId', scannedGameId);
+      await fetchGameData(scannedGameId);
+
+    } catch (err) {
+      setError('Failed to load game: ' + err.message);
+      console.error('Error loading game from team QR:', err);
+    }
+  }
+  // Store team ID and go to registration
+  sessionStorage.setItem('pendingTeamId', teamId);
   navigateTo('playerRegistration');
 }
 
@@ -315,16 +335,23 @@ async function captureBase(baseId, latitude, longitude) {
 }
 
 // Handle base QR scan
-function handleBaseQRScan(baseId, qrCode) {
+function handleBaseQRScan(baseId, qrCode, scannedGameId) {
   console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
 
   // Check if user is on a team
+  const currentGameId = localStorage.getItem('gameId');
   const currentTeam = localStorage.getItem('teamId');
   const playerId = localStorage.getItem('playerId');
 
   if (!currentTeam || !playerId) {
     setError('You need to join a team before capturing bases. Please scan a team QR code first.');
     navigateTo('scanQR');
+    return;
+  }
+
+  // If we have a game loaded but QR is for different game
+  if (currentGameId && scannedGameId && currentGameId !== scannedGameId) {
+    setError(`This base belongs to a different game.`);
     return;
   }
 
@@ -378,18 +405,10 @@ function extractIdFromUrl(urlString) {
 // Enhanced QR code scanning
 function handleQRScan(qrCode) {
   console.log('QR code scanned:', qrCode);
-	
-	//try and extract id from full URL
-	qrCode = extractIdFromUrl(qrCode)
-  // First check if we have an active game
-  if (!appState.gameData.id) {
-    // If no active game but we have a pending QR code, store it
-    appState.pendingQRCode = qrCode;
-    appState.page = 'firstTime';
-    renderApp();
-    return;
-  }
-
+  
+  // Try and extract id from full URL
+  qrCode = extractIdFromUrl(qrCode);
+  
   // If we're admin and in the QR assignment flow, skip the normal flow
   if (appState.page === 'qrAssignment' && appState.gameData.isAdmin) {
     // Just update the QR code field in the form
@@ -401,23 +420,16 @@ function handleQRScan(qrCode) {
     return;
   }
 
-  // Check what this QR code corresponds to
+  // Check what this QR code corresponds to (regardless of whether we have a game loaded or not)
   checkQRCodeAssignment(qrCode, appState.gameData.isAdmin);
 }
 
-// Function to check if a QR code is assigned as team, base, or unassigned
+// Check QR code assignment and delegate to appropriate handler
 async function checkQRCodeAssignment(qrId, isAdmin) {
   try {
     setLoading(true);
 
-    // Get game ID from localStorage if available
-    const gameId = localStorage.getItem('gameId');
-    if (!gameId) {
-      setError('No active game found. Please join or create a game first.');
-      return;
-    }
-
-    // First check if the QR code is assigned to anything
+    // Check what the QR code is assigned to
     const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrId}/status`);
     
     // Check if response is OK before parsing JSON
@@ -439,27 +451,29 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
       throw new Error('Invalid response format when checking QR code');
     }
     
+    // Delegate to appropriate handler based on QR type
     if (statusData.status === 'team') {
       // QR code is a team
-      handleTeamQRScan(statusData.team_id);
+      handleTeamQRScan(statusData.team_id, statusData.game_id);
       return;
     } else if (statusData.status === 'base') {
       // QR code is a base
-      handleBaseQRScan(statusData.base_id, qrId);
+      handleBaseQRScan(statusData.base_id, qrId, statusData.game_id);
       return;
     }
 
     // If we're here, the QR code is unassigned
-    if (isAdmin) {
-      // Show admin interface to assign QR code
-      showQRAssignmentOptions(qrId);
-    } else {
-      // Show message for players about unassigned QR
-      setError('This QR code has not been added to the game yet. Please speak to the Game Host.');
-    }
+    handleUnassignedQRScan(qrId, isAdmin);
+    
   } catch (err) {
     setError(err.message);
     console.error('Error checking QR code assignment:', err);
+    
+    // Store pending QR code if we have an error and no game is loaded
+    if (!localStorage.getItem('gameId')) {
+      appState.pendingQRCode = qrId;
+      navigateTo('firstTime');
+    }
   } finally {
     setLoading(false);
   }
