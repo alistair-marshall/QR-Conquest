@@ -108,7 +108,7 @@ def init_db():
         name TEXT NOT NULL,
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
-        qr_code TEXT NOT NULL UNIQUE,
+        qr_code TEXT UNIQUE,
         FOREIGN KEY (game_id) REFERENCES games (id)
     )
     ''')
@@ -298,7 +298,7 @@ def start_game(game_id):
         conn.close()
         return jsonify({'error': 'Invalid admin password'}), 403
 
-    # Check team count - NEW VALIDATION
+    # Check team count
     cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
     team_count = cursor.fetchone()[0]
     
@@ -349,12 +349,33 @@ def end_game(game_id):
     WHERE id = ?
     ''', (current_time, game_id))
 
+    # Clear QR code assignments for all bases in this game
+    cursor.execute('''
+    UPDATE bases
+    SET qr_code = NULL
+    WHERE game_id = ?
+    ''', (game_id,))
+    
+    base_count = cursor.rowcount
+
+    # Clear QR code assignments for all teams in this game
+    cursor.execute('''
+    DELETE FROM team_qr_codes
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    ''', (game_id,))
+    
+    team_count = cursor.rowcount
+
     conn.commit()
     conn.close()
 
-    return jsonify({'success': True})
+    return jsonify({
+        'success': True,
+        'released_bases': base_count,
+        'released_teams': team_count
+    })
 
-# Join team - FIXED to allow joining during setup phase
+# Join team
 @app.route('/api/teams/<team_id>/join', methods=['POST'])
 def join_team(team_id):
     player_id = str(uuid.uuid4())
@@ -521,7 +542,6 @@ def add_base(game_id):
     return jsonify({'base_id': base_id}), 201
 
 # Add a new team to a game with QR code
-# Add a new team to a game with QR code - UPDATED for security
 @app.route('/api/games/<game_id>/teams', methods=['POST'])
 def add_team(game_id):
     data = request.json

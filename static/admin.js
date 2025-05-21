@@ -477,35 +477,52 @@ function renderAdminPanel() {
   const controlButtons = document.createElement('div');
   controlButtons.className = 'flex gap-4';
 
-  const startButton = document.createElement('button');
-  startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg';
-  
-  // Disable button if game is already active or if there are fewer than 2 teams
-  const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
-  startButton.disabled = appState.gameData.status === 'active' || !hasEnoughTeams;
-  
-  startButton.textContent = 'Start Game';
-  if (!hasEnoughTeams) {
-    startButton.title = 'At least 2 teams required to start game';
-  }
-  
-  startButton.addEventListener('click', function() {
-    // Double check team count before starting
-    if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
-      startGame();
-    } else {
-      setError('Cannot start game. Please add at least 2 teams by scanning QR codes.');
-    }
-  });
-  
-  controlButtons.appendChild(startButton);
+  // Show different buttons based on game status
+  if (appState.gameData.status === 'active') {
+    // Game is running - show only End Game button
+    const endButton = document.createElement('button');
+    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg';
+    endButton.textContent = 'End Game';
+    endButton.addEventListener('click', function() {
+      // Confirm before ending
+      if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
+        endGame();
+      }
+    });
+    controlButtons.appendChild(endButton);
 
-  const endButton = document.createElement('button');
-  endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg';
-  endButton.disabled = appState.gameData.status !== 'active';
-  endButton.textContent = 'End Game';
-  endButton.addEventListener('click', endGame);
-  controlButtons.appendChild(endButton);
+  } else if (appState.gameData.status === 'setup') {
+    // Game is in setup - show only Start Game button
+    const startButton = document.createElement('button');
+    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg';
+    
+    // Disable button if fewer than 2 teams
+    const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
+    startButton.disabled = !hasEnoughTeams;
+    
+    startButton.textContent = 'Start Game';
+    if (!hasEnoughTeams) {
+      startButton.title = 'At least 2 teams required to start game';
+      startButton.className += ' opacity-50 cursor-not-allowed';
+    }
+    
+    startButton.addEventListener('click', function() {
+      // Double check team count before starting
+      if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
+        startGame();
+      } else {
+        setError('Cannot start game. Please add at least 2 teams by scanning QR codes.');
+      }
+    });
+    
+    controlButtons.appendChild(startButton);
+  } else if (appState.gameData.status === 'ended') {
+    // Game is ended - show message
+    const gameEndedMsg = document.createElement('div');
+    gameEndedMsg.className = 'bg-gray-100 rounded-lg p-3 text-gray-600 mb-4';
+    gameEndedMsg.textContent = 'This game has ended. QR codes have been released and can be reused in other games.';
+    controlSection.appendChild(gameEndedMsg);
+  }
 
   const exitButton = document.createElement('button');
   exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg';

@@ -148,7 +148,7 @@ async function endGame() {
       })
     });
 
-    await handleApiResponse(response, 'Failed to end game');
+    const result = await handleApiResponse(response, 'Failed to end game');
 
     // Update game status
     appState.gameData.status = 'ended';
