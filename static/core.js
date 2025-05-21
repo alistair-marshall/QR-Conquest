@@ -463,7 +463,20 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
     }
 
     // If we're here, the QR code is unassigned
-    handleUnassignedQRScan(qrId, isAdmin);
+    if (isAdmin){
+      console.log('Showing QR assignment options for:', qrId);
+
+      // Store QR code in session for the assignment flow
+      sessionStorage.setItem('pendingQRCode', qrId);
+
+      // Navigate to QR assignment page
+      navigateTo('qrAssignment');
+      return
+    } else{
+      setError('This QR code is not yet assigned');
+      return
+    }
+
     
   } catch (err) {
     setError(err.message);
@@ -479,16 +492,6 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
   }
 }
 
-// Admin: Show options to assign QR code as team or base
-function showQRAssignmentOptions(qrId) {
-  console.log('Showing QR assignment options for:', qrId);
-
-  // Store QR code in session for the assignment flow
-  sessionStorage.setItem('pendingQRCode', qrId);
-
-  // Navigate to QR assignment page
-  navigateTo('qrAssignment');
-}
 
 // Create team with QR code
 async function createTeam(qrId, name, color) {
