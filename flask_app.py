@@ -8,9 +8,42 @@ from datetime import datetime
 import os
 import math
 import random
+from functools import wraps
 
 app = Flask(__name__, static_folder='static')
 CORS(app)  # Enable CORS for all routes
+
+# ==========================================================
+# Site Admin Authentication Setup
+# ==========================================================
+
+# Get admin password from environment
+SITE_ADMIN_PASSWORD = os.environ.get('SITE_ADMIN_PASSWORD')
+
+# Exit if SITE_ADMIN_PASSWORD is not set
+if not SITE_ADMIN_PASSWORD:
+    print("ERROR: SITE_ADMIN_PASSWORD environment variable must be set")
+    print("Run: export SITE_ADMIN_PASSWORD=your_secure_password")
+    exit(1)
+
+# Admin authentication decorator
+def require_site_admin(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        token = auth_header.split(' ')[1]
+        if token != SITE_ADMIN_PASSWORD:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ==========================================================
+# Word Lists for Game Code Generation
+# ==========================================================
 
 ADJECTIVES = [
     'brave', 'calm', 'dark', 'fast', 'green', 'happy', 'jolly', 'kind', 'loud', 'magic',
@@ -58,6 +91,10 @@ def generate_unique_game_code():
     return code
 
 
+# ==========================================================
+# Database Setup and Initialization
+# ==========================================================
+
 # Database setup
 def get_db_connection():
     conn = sqlite3.connect('qr_game.db')
@@ -71,14 +108,25 @@ def init_db():
 
     # Create tables
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS games (
+    CREATE TABLE IF NOT EXISTS hosts (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        admin_password TEXT NOT NULL,
+        qr_code TEXT UNIQUE NOT NULL,
+        expiry_date INTEGER,  -- NULL means never expires
+        creation_date INTEGER NOT NULL
+    )
+    ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS games (
+        id TEXT PRIMARY KEY,
+        host_id TEXT NOT NULL,
+        name TEXT NOT NULL,
         start_time INTEGER,
         end_time INTEGER,
         max_teams INTEGER NOT NULL,
-        status TEXT NOT NULL
+        status TEXT NOT NULL,
+        FOREIGN KEY (host_id) REFERENCES hosts (id)
     )
     ''')
 
@@ -137,6 +185,7 @@ def init_db():
 
 init_db()
 
+
 # API Routes
 
 # Create a new game
@@ -144,18 +193,212 @@ init_db()
 def health_check():
     return jsonify({"status": "ok", "message": "API is working"}), 200
 
+# ==========================================================
+# API Routes - Host Management (Site Admin)
+# ==========================================================
+
+@app.route('/api/hosts', methods=['GET'])
+@require_site_admin
+def get_hosts():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM hosts ORDER BY creation_date DESC')
+    hosts = cursor.fetchall()
+    
+    result = []
+    for host in hosts:
+        result.append({
+            'id': host['id'],
+            'name': host['name'],
+            'qr_code': host['qr_code'],
+            'expiry_date': host['expiry_date'],
+            'creation_date': host['creation_date']
+        })
+    
+    conn.close()
+    return jsonify(result)
+
+@app.route('/api/hosts', methods=['POST'])
+@require_site_admin
+def create_host():
+    data = request.json
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Host name is required'}), 400
+    
+    host_id = str(uuid.uuid4())
+    qr_code = str(uuid.uuid4())
+    name = data['name']
+    expiry_date = data.get('expiry_date')  # Can be None
+    creation_date = int(time.time())
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+        INSERT INTO hosts (id, name, qr_code, expiry_date, creation_date)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (host_id, name, qr_code, expiry_date, creation_date))
+        
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    
+    conn.close()
+    
+    return jsonify({
+        'id': host_id,
+        'name': name,
+        'qr_code': qr_code,
+        'expiry_date': expiry_date,
+        'creation_date': creation_date
+    }), 201
+
+@app.route('/api/hosts/<host_id>', methods=['PUT'])
+@require_site_admin
+def update_host(host_id):
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if host exists
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    # Update fields
+    name = data.get('name', host['name'])
+    expiry_date = data.get('expiry_date')
+    
+    try:
+        cursor.execute('''
+        UPDATE hosts
+        SET name = ?, expiry_date = ?
+        WHERE id = ?
+        ''', (name, expiry_date, host_id))
+        
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    
+    conn.close()
+    
+    return jsonify({
+        'id': host_id,
+        'name': name,
+        'qr_code': host['qr_code'],
+        'expiry_date': expiry_date,
+        'creation_date': host['creation_date']
+    })
+
+@app.route('/api/hosts/<host_id>', methods=['DELETE'])
+@require_site_admin
+def delete_host(host_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if host exists
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    # Check if host has any games
+    cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
+    game_count = cursor.fetchone()[0]
+    
+    if game_count > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete host with active games'}), 400
+    
+    try:
+        cursor.execute('DELETE FROM hosts WHERE id = ?', (host_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    
+    conn.close()
+    
+    return jsonify({'success': True})
+
+# Host verification endpoint
+@app.route('/api/hosts/verify/<qr_code>', methods=['GET'])
+def verify_host(qr_code):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM hosts WHERE qr_code = ?', (qr_code,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Invalid host QR code'}), 404
+    
+    # Check expiry
+    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+        conn.close()
+        return jsonify({
+            'status': 'expired',
+            'host_id': host['id'],
+            'name': host['name']
+        })
+    
+    conn.close()
+    
+    return jsonify({
+        'status': 'valid',
+        'host_id': host['id'],
+        'name': host['name'],
+        'creation_date': host['creation_date'],
+        'expiry_date': host['expiry_date']
+    })
+
+# ==========================================================
+# API Routes - Game Management
+# ==========================================================
+
 @app.route('/api/games', methods=['POST'])
 def create_game():
     data = request.json
-    game_id = generate_unique_game_code()
-
+    host_id = data.get('host_id')
+    
+    if not host_id:
+        return jsonify({'error': 'Host ID is required'}), 400
+    
+    # Verify host exists and has not expired
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute('''
+    SELECT * FROM hosts WHERE id = ?
+    ''', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Invalid host ID'}), 400
+        
+    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+        conn.close()
+        return jsonify({'error': 'Host account has expired'}), 400
+    
+    game_id = generate_unique_game_code()
 
     cursor.execute('''
-    INSERT INTO games (id, name, admin_password, max_teams, status)
+    INSERT INTO games (id, host_id, name, max_teams, status)
     VALUES (?, ?, ?, ?, ?)
-    ''', (game_id, data['name'], data['admin_password'], data['max_teams'], 'setup'))
+    ''', (game_id, host_id, data['name'], data.get('max_teams', 0), 'setup'))
 
     conn.commit()
     conn.close()
@@ -169,7 +412,12 @@ def get_game(game_id):
     cursor = conn.cursor()
 
     # Get game info
-    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    cursor.execute('''
+    SELECT g.*, h.name as host_name 
+    FROM games g
+    JOIN hosts h ON g.host_id = h.id
+    WHERE g.id = ?
+    ''', (game_id,))
     game = cursor.fetchone()
 
     if not game:
@@ -230,6 +478,8 @@ def get_game(game_id):
         'name': game['name'],
         'status': game['status'],
         'maxTeams': game['max_teams'],
+        'hostId': game['host_id'],
+        'hostName': game['host_name'],
         'teams': teams,
         'bases': bases
     })
@@ -280,23 +530,23 @@ def calculate_team_score(cursor, team_id, game):
 @app.route('/api/games/<game_id>/start', methods=['POST'])
 def start_game(game_id):
     data = request.json
-    if not data or 'admin_password' not in data:
-        return jsonify({'error': 'Admin password required'}), 400
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify admin password
-    cursor.execute('SELECT admin_password FROM games WHERE id = ?', (game_id,))
+    # Verify host is authorized for this game
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
     if not game:
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['admin_password'] != data['admin_password']:
+    if game['host_id'] != data['host_id']:
         conn.close()
-        return jsonify({'error': 'Invalid admin password'}), 403
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
     # Check team count
     cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
@@ -323,23 +573,23 @@ def start_game(game_id):
 @app.route('/api/games/<game_id>/end', methods=['POST'])
 def end_game(game_id):
     data = request.json
-    if not data or 'admin_password' not in data:
-        return jsonify({'error': 'Admin password required'}), 400
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify admin password
-    cursor.execute('SELECT admin_password FROM games WHERE id = ?', (game_id,))
+    # Verify host is authorized for this game
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
     if not game:
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['admin_password'] != data['admin_password']:
+    if game['host_id'] != data['host_id']:
         conn.close()
-        return jsonify({'error': 'Invalid admin password'}), 403
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
     # Update game status
     current_time = int(time.time())
@@ -505,23 +755,23 @@ def get_scores(game_id):
 @app.route('/api/games/<game_id>/bases', methods=['POST'])
 def add_base(game_id):
     data = request.json
-    if not data or 'name' not in data or 'latitude' not in data or 'longitude' not in data or 'qr_code' not in data or 'admin_password' not in data:
+    if not data or 'name' not in data or 'latitude' not in data or 'longitude' not in data or 'qr_code' not in data or 'host_id' not in data:
         return jsonify({'error': 'Missing required fields'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify game exists and admin password
-    cursor.execute('SELECT admin_password FROM games WHERE id = ?', (game_id,))
+    # Verify game exists and host is authorized
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
     if not game:
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['admin_password'] != data['admin_password']:
+    if game['host_id'] != data['host_id']:
         conn.close()
-        return jsonify({'error': 'Invalid admin password'}), 403
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
     # Add new base
     base_id = str(uuid.uuid4())
@@ -545,23 +795,23 @@ def add_base(game_id):
 @app.route('/api/games/<game_id>/teams', methods=['POST'])
 def add_team(game_id):
     data = request.json
-    if not data or 'name' not in data or 'color' not in data or 'admin_password' not in data or 'qr_code' not in data:
+    if not data or 'name' not in data or 'color' not in data or 'host_id' not in data or 'qr_code' not in data:
         return jsonify({'error': 'Missing required fields'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify game exists and admin password
-    cursor.execute('SELECT admin_password FROM games WHERE id = ?', (game_id,))
+    # Verify game exists and host is authorized
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
     if not game:
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['admin_password'] != data['admin_password']:
+    if game['host_id'] != data['host_id']:
         conn.close()
-        return jsonify({'error': 'Invalid admin password'}), 403
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
     # Check if QR code is already assigned to a base
     cursor.execute('SELECT id FROM bases WHERE qr_code = ?', (data['qr_code'],))
@@ -637,7 +887,25 @@ def check_qr_code_status(qr_code):
             'base_id': base['id'],
             'game_id': base['game_id']
         })
-
+    
+    # Check if QR code is assigned to a host
+    cursor.execute('SELECT id, name, expiry_date FROM hosts WHERE qr_code = ?', (qr_code,))
+    host = cursor.fetchone()
+    
+    if host:
+        # Check if host has expired
+        expired = False
+        if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+            expired = True
+            
+        conn.close()
+        return jsonify({
+            'status': 'host',
+            'host_id': host['id'],
+            'name': host['name'],
+            'expired': expired
+        })
+    
     # If not assigned
     conn.close()
     return jsonify({'status': 'unassigned'})
@@ -669,15 +937,15 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 @app.route('/api/teams/<team_id>', methods=['PUT'])
 def update_team(team_id):
     data = request.json
-    if not data or 'admin_password' not in data:
-        return jsonify({'error': 'Admin password required'}), 400
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     # Get team and game info
     cursor.execute('''
-    SELECT t.*, g.admin_password FROM teams t
+    SELECT t.*, g.host_id FROM teams t
     JOIN games g ON t.game_id = g.id
     WHERE t.id = ?
     ''', (team_id,))
@@ -688,9 +956,9 @@ def update_team(team_id):
         conn.close()
         return jsonify({'error': 'Team not found'}), 404
 
-    if team['admin_password'] != data['admin_password']:
+    if team['host_id'] != data['host_id']:
         conn.close()
-        return jsonify({'error': 'Invalid admin password'}), 403
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
     # Update team details
     update_fields = []
@@ -719,6 +987,152 @@ def update_team(team_id):
     conn.close()
 
     return jsonify({'success': True})
+
+# generate QR code for a host
+@app.route('/api/hosts/<host_id>/qr-code', methods=['GET'])
+@require_site_admin
+def get_host_qr_code(host_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT qr_code FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    conn.close()
+    
+    base_url = request.host_url.rstrip('/')
+    qr_url = f"{base_url}/?id={host['qr_code']}"
+    
+    return jsonify({
+        'qr_code': host['qr_code'],
+        'url': qr_url
+    })
+
+#list all games for a specific host
+@app.route('/api/hosts/<host_id>/games', methods=['GET'])
+def get_host_games(host_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verify host exists
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    # Check if host has expired
+    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+        conn.close()
+        return jsonify({'error': 'Host account has expired'}), 403
+    
+    # Get all games for this host
+    cursor.execute('''
+    SELECT id, name, status, start_time, end_time, max_teams
+    FROM games
+    WHERE host_id = ?
+    ORDER BY 
+        CASE 
+            WHEN status = 'active' THEN 1 
+            WHEN status = 'setup' THEN 2 
+            ELSE 3 
+        END,
+        COALESCE(start_time, 0) DESC
+    ''', (host_id,))
+    
+    games = []
+    for game in cursor.fetchall():
+        # Get team count for each game
+        cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game['id'],))
+        team_count = cursor.fetchone()[0]
+        
+        games.append({
+            'id': game['id'],
+            'name': game['name'],
+            'status': game['status'],
+            'start_time': game['start_time'],
+            'end_time': game['end_time'],
+            'max_teams': game['max_teams'],
+            'team_count': team_count
+        })
+    
+    conn.close()
+    
+    return jsonify(games)
+
+# Get host details
+@app.route('/api/hosts/<host_id>', methods=['GET'])
+def get_host(host_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    # Count games for this host
+    cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
+    game_count = cursor.fetchone()[0]
+    
+    # Check if expired
+    expired = False
+    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+        expired = True
+    
+    conn.close()
+    
+    return jsonify({
+        'id': host['id'],
+        'name': host['name'],
+        'qr_code': host['qr_code'],
+        'expiry_date': host['expiry_date'],
+        'creation_date': host['creation_date'],
+        'game_count': game_count,
+        'expired': expired
+    })
+
+# Regenerate a host's QR code
+@app.route('/api/hosts/<host_id>/regenerate-qr', methods=['POST'])
+@require_site_admin
+def regenerate_host_qr(host_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if host exists
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    host = cursor.fetchone()
+    
+    if not host:
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+    
+    # Generate new QR code
+    new_qr = str(uuid.uuid4())
+    
+    try:
+        cursor.execute('''
+        UPDATE hosts SET qr_code = ? WHERE id = ?
+        ''', (new_qr, host_id))
+        
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    
+    conn.close()
+    
+    return jsonify({
+        'id': host_id,
+        'qr_code': new_qr
+    })
 
 # Serve static files
 @app.route('/', defaults={'path': ''})

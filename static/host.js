@@ -1,5 +1,5 @@
-// Admin Panel - Updated to require QR code scanning first
-function renderAdminPanel() {
+// Host Panel
+function renderHostPanel() {
   const container = document.createElement('div');
 
   // If game is not loaded, show form to create or join
@@ -8,7 +8,7 @@ function renderAdminPanel() {
 
     const title = document.createElement('h2');
     title.className = 'text-2xl font-bold mb-6 text-center';
-    title.textContent = 'Admin Panel';
+    title.textContent = 'Host Panel';
     container.appendChild(title);
 
     // State for showing create or join form
@@ -47,13 +47,13 @@ function renderAdminPanel() {
 
       createForm.appendChild(nameGroup);
 
-      // Admin Password
+      // Host Password
       const passwordGroup = document.createElement('div');
       passwordGroup.className = 'mb-4';
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Admin Password';
+      passwordLabel.textContent = 'Host Password';
       passwordGroup.appendChild(passwordLabel);
 
       const passwordInput = document.createElement('input');
@@ -130,13 +130,13 @@ function renderAdminPanel() {
 
       joinForm.appendChild(idGroup);
 
-      // Admin Password
+      // Host Password
       const passwordGroup = document.createElement('div');
       passwordGroup.className = 'mb-4';
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Admin Password';
+      passwordLabel.textContent = 'Host Password';
       passwordGroup.appendChild(passwordLabel);
 
       const passwordInput = document.createElement('input');
@@ -152,7 +152,7 @@ function renderAdminPanel() {
       joinButton.textContent = 'Join Game';
       joinButton.addEventListener('click', function() {
         if (!idInput.value || !passwordInput.value) {
-          showNotification('Please enter both Game ID and Admin Password','warning');
+          showNotification('Please enter both Game ID and Host Password','warning');
           return;
         }
 
@@ -526,7 +526,7 @@ function renderAdminPanel() {
 
   const exitButton = document.createElement('button');
   exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg';
-  exitButton.textContent = 'Exit Admin';
+  exitButton.textContent = 'Exit Host Panel';
   exitButton.addEventListener('click', function() { navigateTo('landing'); });
   controlButtons.appendChild(exitButton);
 
@@ -558,7 +558,7 @@ function renderQRAssignmentPage() {
     instructionDiv.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6';
     instructionDiv.innerHTML = '<p><strong>How to add teams or bases:</strong></p>' +
       '<ol class="list-decimal pl-5 mt-2">' +
-      '<li>Return to the admin panel</li>' +
+      '<li>Return to the host panel</li>' +
       '<li>Click "Scan QR Code"</li>' +
       '<li>Scan a QR code to assign it</li>' +
       '<li>Follow the instructions to create a team or base</li>' +
@@ -567,9 +567,9 @@ function renderQRAssignmentPage() {
 
     const backButton = document.createElement('button');
     backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full';
-    backButton.textContent = 'Back to Admin Panel';
+    backButton.textContent = 'Back to Host Panel';
     backButton.addEventListener('click', function() {
-      navigateTo('adminPanel');
+      navigateTo('hostPanel');
     });
     container.appendChild(backButton);
 
@@ -639,7 +639,7 @@ function renderQRAssignmentPage() {
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   });
   container.appendChild(cancelButton);
 
@@ -773,7 +773,7 @@ function renderTeamCreationForm(qrId, container) {
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   });
   container.appendChild(cancelButton);
 }
@@ -1295,7 +1295,7 @@ function renderBaseCreationForm(qrId, container) {
     }
     
     sessionStorage.removeItem('pendingQRCode');
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   });
   container.appendChild(cancelButton);
 
@@ -1448,14 +1448,14 @@ function renderFirstTimePage() {
   });
   optionsContainer.appendChild(joinButton);
 
-  // Create new game (admin)
+  // Create new game (host)
   const createButton = document.createElement('button');
   createButton.className = 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700';
   createButton.textContent = 'Create a New Game';
   createButton.addEventListener('click', function() {
     // Store QR code in session storage for later use
     sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   });
   optionsContainer.appendChild(createButton);
 
