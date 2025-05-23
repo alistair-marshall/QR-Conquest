@@ -95,7 +95,9 @@
 			loadScript('core.js', function() {
 				loadScript('ui.js', function() {
 					loadScript('host.js', function() {
-						console.log('All app scripts loaded successfully');
+            loadScript('site-admin.js', function() {
+              console.log('All app scripts loaded successfully');
+            });
 					});
 				});
 			});
