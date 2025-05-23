@@ -495,6 +495,9 @@ function renderApp() {
   elements.root.appendChild(main);
 
   // Add footer
+  const footer = document.createElement('footer');
+  footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
+  
   const footerContent = document.createElement('div');
   footerContent.className = 'flex justify-between items-center';
 
