@@ -215,61 +215,6 @@ function stopScorePolling() {
   }
 }
 
-// Create game
-async function createGame(gameSettings) {
-  try {
-    setLoading(true);
-    console.log('Creating game with settings:', gameSettings);
-
-    // Get host ID from localStorage
-    const hostId = localStorage.getItem('hostId');
-    if (!hostId) {
-      throw new Error('Host authentication required');
-    }
-
-    const response = await fetch(API_BASE_URL + '/games', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        name: gameSettings.name,
-        host_id: hostId,
-        max_teams: gameSettings.maxTeams || 0, // Default to 0, teams will be added via QR
-      })
-    });
-
-    const data = await handleApiResponse(response, 'Failed to create game');
-    const gameId = data.game_id;
-    console.log('Game created successfully, game ID:', gameId);
-
-    // Save game ID to localStorage for persistence
-    localStorage.setItem('gameId', gameId);
-
-    // Update the game data state
-    appState.gameData.id = gameId;
-    appState.gameData.hostId = hostId;
-
-    // Fetch the full game data after creation
-    await fetchGameData(gameId);
-
-    // Show success message with instructions about QR scanning
-    showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
-    
-    // Check if there's a pending QR code to handle
-    const pendingQR = sessionStorage.getItem('pendingQRCode');
-    if (pendingQR) {
-      // Process this QR code immediately
-      handleQRScan(pendingQR);
-    }
-  } catch (err) {
-    setError(err.message);
-    console.error('Error creating game:', err);
-  } finally {
-    setLoading(false);
-  }
-}
-
 // Start game
 async function startGame() {
   if (!appState.gameData.id) return;
