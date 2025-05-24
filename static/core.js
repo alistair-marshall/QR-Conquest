@@ -8,13 +8,21 @@ const appState = {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    isAdmin: false,
-    adminPassword: '',
+    hostId: null,  
+    hostName: null,
     status: 'setup'
   },
   loading: false,
   error: null,
-  pendingQRCode: null
+  pendingQRCode: null,
+  siteAdmin: {
+    isAuthenticated: false,
+    token: null,
+    hosts: [],           // Array of host objects
+    hostsLoading: false, // Loading state for hosts
+    hostsLoaded: false,  // Whether hosts have been loaded
+    hostsError: null     // Error state for host loading
+  }
 };
 
 // API endpoint
@@ -121,8 +129,9 @@ async function fetchGameData(gameId) {
       }
     }
 
-    // Get admin password from localStorage if available
-    const storedAdminPassword = localStorage.getItem('adminPassword');
+    // Get host info from localStorage if available
+    const storedHostId = localStorage.getItem('hostId');
+    const storedHostName = localStorage.getItem('hostName');
 
     // Update game data
     appState.gameData.id = data.id;
@@ -130,8 +139,8 @@ async function fetchGameData(gameId) {
     appState.gameData.teams = data.teams;
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
-    appState.gameData.adminPassword = appState.gameData.adminPassword || storedAdminPassword || '';
-    appState.gameData.isAdmin = appState.gameData.isAdmin || !!storedAdminPassword;
+    appState.gameData.hostId = data.hostId;
+    appState.gameData.hostName = data.hostName;
 
     localStorage.setItem('gameId', gameId);
 
@@ -204,6 +213,190 @@ function stopScorePolling() {
     scorePollingInterval = null;
     console.log('Game update polling stopped');
   }
+}
+
+// Create game
+async function createGame(gameSettings) {
+  try {
+    setLoading(true);
+    console.log('Creating game with settings:', gameSettings);
+
+    // Get host ID from localStorage
+    const hostId = localStorage.getItem('hostId');
+    if (!hostId) {
+      throw new Error('Host authentication required');
+    }
+
+    const response = await fetch(API_BASE_URL + '/games', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: gameSettings.name,
+        host_id: hostId,
+        max_teams: gameSettings.maxTeams || 0, // Default to 0, teams will be added via QR
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to create game');
+    const gameId = data.game_id;
+    console.log('Game created successfully, game ID:', gameId);
+
+    // Save game ID to localStorage for persistence
+    localStorage.setItem('gameId', gameId);
+
+    // Update the game data state
+    appState.gameData.id = gameId;
+    appState.gameData.hostId = hostId;
+
+    // Fetch the full game data after creation
+    await fetchGameData(gameId);
+
+    // Show success message with instructions about QR scanning
+    showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
+    
+    // Check if there's a pending QR code to handle
+    const pendingQR = sessionStorage.getItem('pendingQRCode');
+    if (pendingQR) {
+      // Process this QR code immediately
+      handleQRScan(pendingQR);
+    }
+  } catch (err) {
+    setError(err.message);
+    console.error('Error creating game:', err);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Start game
+async function startGame() {
+  if (!appState.gameData.id) return;
+
+  try {
+    setLoading(true);
+    
+    const hostId = localStorage.getItem('hostId');
+    if (!hostId) {
+      throw new Error('Host authentication required');
+    }
+    
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: hostId  // Changed from admin_password
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to start game');
+    
+    // Update game status
+    appState.gameData.status = 'active';
+    showNotification('Game has been started!', 'success');
+    navigateTo('gameView');
+  } catch (err) {
+    setError(err.message);
+    console.error('Error starting game:', err);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// End game
+async function endGame() {
+  if (!appState.gameData.id) return;
+
+  try {
+    setLoading(true);
+    
+    // Get host ID from localStorage
+    const hostId = localStorage.getItem('hostId');
+    if (!hostId) {
+      throw new Error('Host authentication required');
+    }
+    
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/end', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: hostId
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to end game');
+
+    // Update game status
+    appState.gameData.status = 'ended';
+    navigateTo('results');
+  } catch (err) {
+    setError(err.message);
+    console.error('Error ending game:', err);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Log out/clear data
+function clearGameData() {
+  localStorage.removeItem('gameId');
+  localStorage.removeItem('teamId');
+  localStorage.removeItem('playerId');
+  localStorage.removeItem('hostId');
+  localStorage.removeItem('hostName');
+
+  // Clear sessionStorage data that might contain pending QR codes or team selections
+  sessionStorage.removeItem('pendingQRCode');
+  sessionStorage.removeItem('pendingTeamId');
+
+  // Stop any active polling
+  stopScorePolling();
+
+  // Reset app state
+  appState.gameData = {
+    id: null,
+    name: 'QR Conquest',
+    teams: [],
+    bases: [],
+    currentTeam: null,
+    currentPlayer: null,
+    hostId: null,
+    hostName: null,
+    status: 'setup'
+  };
+
+  // Clear any pending QR code
+  appState.pendingQRCode = null;
+
+  // Clear any errors
+  appState.error = null;
+
+  // Reset loading state
+  appState.loading = false;
+
+  // Log the reset for debugging purposes
+  console.log('Game data cleared, app state reset to initial values');
+
+  // Navigate to landing page
+  navigateTo('landing');
+
+  // Display confirmation message to user
+  setTimeout(function() {
+    showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.','success');
+  }, 300);
+}
+
+// Helper function to safely get team name
+function getTeamName(teamId) {
+  if (!teamId || !appState.gameData.teams) return 'Loading...';
+
+  const team = appState.gameData.teams.find(function(t) { return t.id === teamId; });
+  return team ? team.name : 'Loading...';
 }
 
 // Handle team selection
@@ -460,6 +653,18 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
       throw new Error('Invalid response format when checking QR code');
     }
 
+    // Handle host QR codes
+    if (statusData.status === 'host') {
+      // Process host QR code
+      try {
+        await verifyHostQR(qrId);
+        navigateTo('hostPanel');
+        return;
+      } catch (hostError) {
+        setError(hostError.message);
+        return;
+      }
+    }
     // Delegate to appropriate handler based on QR type
     if (statusData.status === 'team') {
       // QR code is a team
@@ -472,7 +677,8 @@ async function checkQRCodeAssignment(qrId, isAdmin) {
     }
 
     // If we're here, the QR code is unassigned
-    if (isAdmin){
+    const isUserHost = !!localStorage.getItem('hostId');
+    if (isUserHost) {
       console.log('Showing QR assignment options for:', qrId);
 
       // Store QR code in session for the assignment flow
@@ -508,10 +714,10 @@ async function createTeam(qrId, name, color) {
     setLoading(true);
 
     const gameId = localStorage.getItem('gameId');
-    const adminPassword = localStorage.getItem('adminPassword');
+    const hostId = localStorage.getItem('hostId');
 
-    if (!gameId || !adminPassword) {
-      throw new Error('Admin credentials not found');
+    if (!gameId || !hostId) {
+      throw new Error('Host authentication required');
     }
 
     const response = await fetch(`${API_BASE_URL}/games/${gameId}/teams`, {
@@ -520,7 +726,7 @@ async function createTeam(qrId, name, color) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        admin_password: adminPassword,
+        host_id: hostId,
         name: name,
         color: color,
         qr_code: qrId
@@ -539,7 +745,7 @@ async function createTeam(qrId, name, color) {
     await fetchGameData(gameId);
 
     // Navigate back to admin panel
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   } catch (err) {
     setError(err.message);
     console.error('Error creating team:', err);
@@ -554,10 +760,10 @@ async function updateTeam(teamId, name, color) {
     setLoading(true);
 
     const gameId = localStorage.getItem('gameId');
-    const adminPassword = localStorage.getItem('adminPassword');
+    const hostId = localStorage.getItem('hostId');
 
-    if (!gameId || !adminPassword) {
-      throw new Error('Admin credentials not found');
+    if (!gameId || !hostId) {
+      throw new Error('Host authentication required');
     }
 
     const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
@@ -566,7 +772,7 @@ async function updateTeam(teamId, name, color) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        admin_password: adminPassword,
+        host_id: hostId,
         name: name,
         color: color
       })
@@ -594,10 +800,10 @@ async function createBase(qrId, name, latitude, longitude) {
     setLoading(true);
 
     const gameId = localStorage.getItem('gameId');
-    const adminPassword = localStorage.getItem('adminPassword');
+    const hostId = localStorage.getItem('hostId');
 
-    if (!gameId || !adminPassword) {
-      throw new Error('Admin credentials not found');
+    if (!gameId || !hostId) {
+      throw new Error('Host authentication required');
     }
 
     // This endpoint already exists in the backend
@@ -607,7 +813,7 @@ async function createBase(qrId, name, latitude, longitude) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        admin_password: adminPassword,
+        host_id: hostId,
         name: name,
         latitude: latitude,
         longitude: longitude,
@@ -627,7 +833,7 @@ async function createBase(qrId, name, latitude, longitude) {
     await fetchGameData(gameId);
 
     // Navigate back to admin panel
-    navigateTo('adminPanel');
+    navigateTo('hostPanel');
   } catch (err) {
     setError(err.message);
     console.error('Error creating base:', err);
@@ -644,7 +850,7 @@ function handleAdminLogin(password) {
   // Store admin password
   localStorage.setItem('adminPassword', password);
 
-  navigateTo('adminPanel');
+  navigateTo('hostPanel');
 }
 
 
@@ -654,6 +860,12 @@ async function createGame(gameSettings) {
     setLoading(true);
     console.log('Creating game with settings:', gameSettings);
 
+    // Get host ID from localStorage
+    const hostId = localStorage.getItem('hostId');
+    if (!hostId) {
+      throw new Error('Host authentication required');
+    }
+
     const response = await fetch(API_BASE_URL + '/games', {
       method: 'POST',
       headers: {
@@ -661,7 +873,7 @@ async function createGame(gameSettings) {
       },
       body: JSON.stringify({
         name: gameSettings.name,
-        admin_password: gameSettings.adminPassword,
+        host_id: hostId,
         max_teams: gameSettings.maxTeams || 0, // Default to 0, teams will be added via QR
       })
     });
@@ -672,12 +884,10 @@ async function createGame(gameSettings) {
 
     // Save game ID and admin password to localStorage for persistence
     localStorage.setItem('gameId', gameId);
-    localStorage.setItem('adminPassword', gameSettings.adminPassword);
 
     // Update the game data state with admin credentials
     appState.gameData.id = gameId;
-    appState.gameData.adminPassword = gameSettings.adminPassword;
-    appState.gameData.isAdmin = true;
+    appState.gameData.hostId = hostId;
 
     // Fetch the full game data after creation
     await fetchGameData(gameId);
@@ -698,3 +908,296 @@ async function createGame(gameSettings) {
     setLoading(false);
   }
 }
+
+// Verify host QR code
+async function verifyHostQR(qrCode) {
+  try {
+    setLoading(true);
+    
+    // Check what this QR code corresponds to
+    const response = await fetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to check QR code status: ${response.status}`);
+    }
+    
+    const statusData = await response.json();
+    
+    // If it's not a host QR code, throw an error
+    if (statusData.status !== 'host') {
+      throw new Error('This QR code is not for a host');
+    }
+    
+    // Check if the host is expired
+    if (statusData.expired) {
+      throw new Error('This host access has expired');
+    }
+    
+    // Store host details in localStorage
+    localStorage.setItem('hostId', statusData.host_id);
+    localStorage.setItem('hostName', statusData.name);
+    
+    // Update app state
+    appState.gameData.hostId = statusData.host_id;
+    appState.gameData.hostName = statusData.name;
+    
+    showNotification(`Welcome, ${statusData.name}!`, 'success');
+    
+    return statusData;
+  } catch (err) {
+    setError(err.message);
+    console.error('Error verifying host QR code:', err);
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Site admin authentication
+async function authenticateSiteAdmin(password) {
+  try {
+    setLoading(true);
+    
+    // Store the admin token in memory only (not in localStorage for security)
+    appState.siteAdmin.token = password;
+    appState.siteAdmin.isAuthenticated = true;
+    
+    // Test authentication with a request to the hosts endpoint
+    const response = await fetch(`${API_BASE_URL}/hosts`, {
+      headers: {
+        'Authorization': `Bearer ${password}`
+      }
+    });
+    
+    if (!response.ok) {
+      // Reset auth state
+      appState.siteAdmin.token = null;
+      appState.siteAdmin.isAuthenticated = false;
+      
+      if (response.status === 401) {
+        throw new Error('Invalid admin password');
+      } else {
+        throw new Error(`Error authenticating: ${response.status}`);
+      }
+    }
+    
+    showNotification('Site admin authenticated successfully', 'success');
+    
+    // Clear any existing host data to force fresh load
+    clearSiteAdminHosts();
+
+    return true;
+  } catch (err) {
+    setError(err.message);
+    console.error('Site admin authentication error:', err);
+    return false;
+  } finally {
+    setLoading(false);
+  }
+}
+// Functions for site admin operations
+async function fetchHosts() {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    return [];
+  }
+
+  try {
+    setLoading(true);
+    
+    const response = await fetch(`${API_BASE_URL}/hosts`, {
+      headers: {
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Reset admin auth if unauthorized
+        appState.siteAdmin.isAuthenticated = false;
+        appState.siteAdmin.token = null;
+        throw new Error('Admin authentication expired. Please login again.');
+      }
+      throw new Error(`Failed to fetch hosts: ${response.status}`);
+    }
+    
+    const hosts = await response.json();
+    return hosts;
+  } catch (err) {
+    setError(err.message);
+    console.error('Error fetching hosts:', err);
+    return [];
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function createHost(hostData) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required');
+  }
+
+  try {
+    setLoading(true);
+    
+    const response = await fetch(`${API_BASE_URL}/hosts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      },
+      body: JSON.stringify(hostData)
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Reset admin auth if unauthorized
+        appState.siteAdmin.isAuthenticated = false;
+        appState.siteAdmin.token = null;
+        throw new Error('Admin authentication expired. Please login again.');
+      }
+      throw new Error(`Failed to create host: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    showNotification('Host created successfully', 'success');
+
+    refreshSiteAdminHosts();
+
+    return result;
+  } catch (err) {
+    setError(err.message);
+    console.error('Error creating host:', err);
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function updateHost(hostId, hostData) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required');
+  }
+
+  try {
+    setLoading(true);
+    
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      },
+      body: JSON.stringify(hostData)
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Reset admin auth if unauthorized
+        appState.siteAdmin.isAuthenticated = false;
+        appState.siteAdmin.token = null;
+        throw new Error('Admin authentication expired. Please login again.');
+      }
+      throw new Error(`Failed to update host: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    showNotification('Host updated successfully', 'success');
+    refreshSiteAdminHosts();
+    return result;
+  } catch (err) {
+    setError(err.message);
+    console.error('Error updating host:', err);
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deleteHost(hostId) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required');
+  }
+
+  try {
+    setLoading(true);
+    
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Reset admin auth if unauthorized
+        appState.siteAdmin.isAuthenticated = false;
+        appState.siteAdmin.token = null;
+        throw new Error('Admin authentication expired. Please login again.');
+      }
+      throw new Error(`Failed to delete host: ${response.status}`);
+    }
+    
+    showNotification('Host deleted successfully', 'success');
+    refreshSiteAdminHosts();
+    return true;
+  } catch (err) {
+    setError(err.message);
+    console.error('Error deleting host:', err);
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function loadSiteAdminHosts() {
+  // Prevent duplicate loading
+  if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
+    return;
+  }
+  
+  try {
+    appState.siteAdmin.hostsLoading = true;
+    appState.siteAdmin.hostsError = null;
+    renderApp(); // Update UI to show loading state
+    
+    const hosts = await fetchHosts();
+    
+    appState.siteAdmin.hosts = hosts;
+    appState.siteAdmin.hostsLoaded = true;
+    appState.siteAdmin.hostsError = null;
+  } catch (error) {
+    console.error('Error loading hosts:', error);
+    appState.siteAdmin.hostsError = error.message;
+    appState.siteAdmin.hosts = [];
+  } finally {
+    appState.siteAdmin.hostsLoading = false;
+    renderApp(); // Final render with data or error
+  }
+}
+
+function clearSiteAdminHosts() {
+  appState.siteAdmin.hosts = [];
+  appState.siteAdmin.hostsLoading = false;
+  appState.siteAdmin.hostsLoaded = false;
+  appState.siteAdmin.hostsError = null;
+}
+
+function refreshSiteAdminHosts() {
+  // Force refresh by clearing loaded state
+  appState.siteAdmin.hostsLoaded = false;
+  loadSiteAdminHosts();
+}
+
+// Export functions for global use
+window.hostHelpers = {
+  verifyHostQR,
+  fetchHosts,
+  createHost,
+  updateHost,
+  deleteHost
+};
+
+window.siteAdminHelpers = {
+  authenticateSiteAdmin
+};

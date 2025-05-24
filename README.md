@@ -1,129 +1,383 @@
 # QR Conquest
 
-QR Conquest is an interactive GPS-based game where teams compete to capture and hold bases represented by QR codes. The game combines the excitement of a capture-the-flag game with modern QR code and GPS technology.
+A GPS-based team capture game using QR codes for authentication and base capture. Players join teams by scanning QR codes and compete to capture and hold bases around a physical area.
 
-## Overview
+## 🎮 Game Overview
 
-Players form teams and scan QR codes placed around a physical area (like a park or campus). These QR codes represent either teams or bases. Teams earn points by capturing and holding bases over time, with the team accumulating the most points declared the winner.
+QR Conquest is a real-world team-based strategy game where teams compete to capture and control bases, consisting of physical locations with a QR code. The game combines digital technology with physical movement, creating an engaging outdoor activity perfect for team building, events, or casual competition.
 
-## Key Features
+### For Players - The Game Experience
 
-- **QR Code Integration**: Use generic QR codes that can be assigned as teams or bases
-- **Real-time Scoring**: Teams earn points continuously (1 point per 15 seconds) while holding a base
-- **GPS Verification**: Validates players are physically present at bases using GPS location
-- **Team Management**: Create teams with custom names and colours
-- **Admin Controls**: Start/end games, manage teams, and monitor scores
-- **Real-time Updates**: Scoreboard updates automatically during gameplay
-- **Mobile Friendly**: Designed to work well on smartphones for field play
+**Getting Started:**
+You'll receive a team QR code from your game host or team captain. Simply scan this code with your phone to join your team - no app download required, everything works through your web browser. For the best GPS performance, we recommend installing the game as a PWA (Progressive Web App) when prompted by your browser.
 
-## Setup and Installation
+**Joining Your Team:**
+- Scan your team's unique QR code 
+- Enter your name to join the team
+- See your team's color and current score
 
-### Prerequisites
+**Capturing Bases:**
+- Navigate to base locations shown on the interactive map
+- When you're at a base, scan its QR code
+- Your location is automatically verified to prevent remote captures
+- Successfully captured bases change to your team's color and start earning points
 
-- Python 3.7 or higher
-- Flask
-- SQLite
-- Web browser with JavaScript enabled
-- Devices with GPS and camera capabilities
+**Winning the Game:**
+- Teams earn points for every moment they control a base
+- The longer you hold bases, the more points you accumulate
+- Watch the live scoreboard to track your team's progress
+- Coordinate with teammates to capture and defend strategic locations
 
-### Installation
+**Game Features:**
+- **Real-time Map**: See all bases and which team currently controls each one
+- **Live Scoreboard**: Track team rankings as they change throughout the game
+- **Offline Support**: Game continues even with poor mobile signal - captures sync automatically when connection returns
+- **Team Coordination**: Work together to develop capture and defense strategies
 
-1. Clone the repository:
+### For Hosts - Managing Games
+
+**Your Role:**
+As a game host, you create and manage the entire game experience. You'll set up teams, place bases at physical locations, and oversee the competition from start to finish.
+
+**Getting Started:**
+- Receive a host secret link from the site administrator
+- Visit your secret link to authenticate and access game management features
+- Print QR codes for your game (1 per team plus 1 per base you plan to create)
+- Create a new game
+
+**Setting Up Teams:**
+- Scan QR codes to create teams (minimum 2 teams required)
+- Assign team names and colors
+- Each QR code becomes a unique team that players can join
+- Share team QR codes with players to let them join
+
+**Placing Bases:**
+- Visit each location where you want to place a base
+- Place a QR code for the players to find
+- Scan the QR code at that location to create a base
+- Your GPS location is automatically recorded
+- Give each base a descriptive name (e.g., "Library Steps", "Main Entrance")
+- Bases appear immediately on the game map
+
+**Managing the Game:**
+- Start the game when teams are ready
+- Monitor all team activity in real-time
+- Watch live base captures and score changes
+- End the game and view final results
+
+**Game Control:**
+- **Real-time Dashboard**: See all teams, bases, and current game status
+- **Live Updates**: Watch base ownership change as players capture them
+- **Score Monitoring**: Track which teams are leading throughout the game
+- **Game Timing**: Start and end games manually when appropriate
+
+### For Site Administrators - System Management
+
+**Your Role:**
+You oversee the entire QR Conquest system, creating and managing host accounts who can then run games.
+
+**Host Management:**
+- Create host accounts for people who will run games
+- Generate unique links for each host
+- Set expiry dates for host permissions (optional)
+- Monitor system usage and host activity
+
+**System Control:**
+- Access the secure admin panel
+- Create, edit, and delete host accounts
+- Generate links for new hosts
+- Review host account status and expiry dates
+
+**Security Features:**
+- Secure authentication via environment variables
+- Host permissions can be time-limited
+- Individual QR codes for each host account
+
+## 🚀 Complete Setup Guide
+
+### For Players
+
+1. **Receive your team QR code** from the game host or team captain
+2. **Scan the QR code** with your phone's camera
+3. **Install as PWA** when prompted for better GPS performance (optional but recommended)
+4. **Enter your name** to join the team
+5. **Navigate to bases** using the map
+6. **Scan base QR codes** when you're close enough to capture them
+7. **Watch your team climb the scoreboard!**
+
+### For Game Hosts
+
+#### Pre-Game Preparation
+
+1. **Get your host access**:
+   - Receive host secret link from site administrator
+   - Visit your secret link to authenticate and access game management features
+
+2. **Prepare physical materials**:
+   - Count how many teams and bases you want (minimum 2 teams, recommended 3-10 bases)
+   - Print QR codes: 1 per team + 1 per base (e.g., for 4 teams and 6 bases, print 10 QR codes)
+   - Place base QR codes at strategic locations
+   - Ensure locations are accessible and safe
+
+#### Game Setup
+
+3. **Create your game**:
+   - Visit your host secret link if not already authenticated
+   - Click "Host a Game" or use "Host Menu" button
+   - Create new game with descriptive name
+   - Note the friendly game code generated
+
+4. **Set up teams**:
+   - Use "Scan QR Code" to add teams
+   - For each team QR code scanned, choose "Assign as Team"
+   - Set team name and color
+   - Repeat for all teams (minimum 2 required)
+
+5. **Set up bases**:
+   - Visit each location where you want to place a base
+   - Place a QR code for the players to find and scan
+   - Scan the QR code at that location
+   - Choose "Assign as Base"
+   - Set base name and verify GPS location is accurate
+   - Repeat for all base locations
+
+#### Game Time
+
+6. **Team assignment**:
+   - Distribute team QR codes to team captains or players
+   - Players scan their team QR codes to join teams
+   - Monitor team formation in your host panel
+
+7. **Start and manage the game**:
+   - Ensure minimum 2 teams are formed
+   - Brief players on rules and base locations
+   - Click "Start Game" from your host panel
+   - Monitor live scoreboard and base ownership
+   - End game when appropriate and review final results
+
+### For Site Administrators
+
+#### System Setup
+
+1. **Set up environment**:
+   ```bash
+   export SITE_ADMIN_PASSWORD="your_secure_admin_password"
    ```
-   git clone https://github.com/alistair-marshall/qr-conquest.git
-   cd qr-conquest
-   ```
 
-2. Install dependencies:
-   ```
-   pip install flask flask-cors
-   ```
-
-3. Run the application:
-   ```
+2. **Start the application**:
+   ```bash
    python flask_app.py
    ```
 
-4. Access the application in your browser:
+#### Host Management
+
+3. **Access admin panel**:
+   - Navigate to the homepage
+   - Click "Site Administration" link in footer
+   - Enter admin password
+
+4. **Create host accounts**:
+   - Create host account with descriptive name
+   - Set expiry date (optional)
+   - Generate host secret link
+   - Share the secret link with the host (can be sent digitally or printed)
+
+## 🏗️ Technical Architecture
+
+### Backend (Python Flask)
+- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures
+- **Authentication**: Token-based for site admin, QR code-based for hosts/players
+- **Offline Support**: Background sync for captures when connectivity is poor
+
+### Frontend (Vanilla JavaScript)
+- **PWA**: Progressive Web App with offline capabilities
+- **QR Scanning**: Camera-based QR code detection
+- **Maps**: Interactive Leaflet maps showing base locations and ownership
+- **Real-time Updates**: Automatic polling for live scoreboard updates
+- **Responsive Design**: Works on mobile phones and tablets
+
+### QR Code System
+- **Host Authentication**: Unique secret links for host authentication
+- **Team QR**: Unique UUID linking to specific team in specific game
+- **Base QR**: Unique UUID linking to physical location and game
+- **URL Format**: `https://yoursite.com/?id={qr_uuid}`
+
+## 📱 Installation & Deployment
+
+### Prerequisites
+- Python 3.7+
+- Modern web browser with camera access
+- HTTPS connection (required for camera access)
+
+### Local Development
+
+1. **Clone and setup**:
+   ```bash
+   git clone <repository-url>
+   cd qr-conquest
+   pip install flask flask-cors
    ```
-   http://localhost:5000
+
+2. **Set environment variables**:
+   ```bash
+   export SITE_ADMIN_PASSWORD="your_secure_password"
    ```
 
-### QR Code Generation
+3. **Run application**:
+   ```bash
+   python flask_app.py
+   ```
 
-Use the included `code-generator.html` file to generate QR codes:
+4. **Access application**:
+   - Open `http://localhost:5000` in browser
+   - For camera access, use HTTPS proxy or mobile device on same network
 
-1. Open `code-generator.html` in your browser
-2. Select the number and size of QR codes you want to generate
-3. Click "Generate QR Codes"
-4. Print the generated QR codes
+### Production Deployment
 
-## Game Setup (For Game Hosts)
+1. **Set up HTTPS** (required for camera access):
+   ```bash
+   # Example with Nginx reverse proxy
+   server {
+       listen 443 ssl;
+       server_name your-domain.com;
+       
+       ssl_certificate /path/to/cert.pem;
+       ssl_certificate_key /path/to/key.pem;
+       
+       location / {
+           proxy_pass http://localhost:5000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+       }
+   }
+   ```
 
-1. **Before the Event**:
-   - Generate and print QR codes
-   - Create a new game using the admin panel
-   - Assign QR codes as teams
-   - Place QR codes around the play area and assign them as bases
-   - For bases, scan at their physical location to record GPS coordinates
+2. **Configure environment**:
+   ```bash
+   export SITE_ADMIN_PASSWORD="strong_production_password"
+   export FLASK_ENV="production"
+   ```
 
-3. **Starting the Game**:
-   - Have players scan team QR codes to join their teams
-   - When all players are ready, use the admin panel to start the game
-   - Monitor scores using the admin panel
+3. **Run with production server**:
+   ```bash
+   # Using Gunicorn
+   pip install gunicorn
+   gunicorn -w 4 -b 0.0.0.0:5000 flask_app:app
+   ```
 
-4. **Ending the Game**:
-   - Use the admin panel to end the game when time is up
-   - View final results and declare the winner
+## 🔧 Configuration Options
 
-## Game Play (For Players)
+### Environment Variables
 
-1. **Joining a Team**:
-   - Scan your team's QR code
-   - Enter your name to join the team
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
+| `FLASK_ENV` | No | Flask environment mode | `production` |
+| `FLASK_DEBUG` | No | Enable debug mode | `False` |
 
-2. **Capturing Bases**:
-   - Find QR codes around the play area
-   - Scan a base QR code
-   - Allow GPS verification to capture the base
-   - Your team will earn points as long as your team controls the base
+### Game Settings
 
-3. **Strategy**:
-   - Capture as many bases as possible
-   - Defend your bases from other teams
-   - Check the scoreboard to see which bases to target
+- **Team Limit**: No hard limit, but 2-8 teams recommended
+- **Base Limit**: No hard limit, but 5-20 bases work well
+- **Capture Range**: Players must be close enough to bases for GPS verification
+- **Scoring Rate**: Teams earn points continuously while controlling bases
+- **Game Duration**: No time limit, manually ended by host
 
-## Technical Architecture
+### Offline Support
 
-### Backend (Python/Flask)
+- Base captures are queued when offline
+- Automatic sync when connection restored
+- Cached game data for continued play
+- Visual indicators for online/offline status
 
-- RESTful API handles game logic, team management, and scoring
-- SQLite database stores game state, team information, and capture events
-- Real-time score calculation based on base ownership duration
+## 🔒 Security Features
 
-### Frontend (HTML/JavaScript)
+### Authentication Model
+- **Three-tier security**: Site Admin → Host → Player
+- **Secret link expiry**: Host permissions can be time-limited
+- **Session management**: Persistent authentication via localStorage
+- **No password storage**: Only site admin password in environment
 
-- Responsive web application with mobile-first design
-- QR code scanning integration
-- GPS location services
-- Real-time scoreboard updates
-- Admin dashboard for game management
+### Data Protection
+- **Input validation**: All API inputs validated
+- **SQL injection protection**: Parameterized queries
+- **HTTPS required**: Camera access requires secure connection
+- **CORS enabled**: Cross-origin requests properly configured
 
-### Database Schema
+### Privacy Considerations
+- **Location data**: Only stored for base creation and capture verification
+- **Player data**: Minimal personal information collected
+- **QR codes**: Unique UUIDs with no personal information
+- **Game isolation**: Each game's data is completely separate
 
-- **games**: Game information and settings
-- **teams**: Team details including name and colour
-- **players**: Player information linked to teams
-- **bases**: Base locations with GPS coordinates and QR codes
-- **captures**: Records when teams capture bases
+## 🐛 Troubleshooting
 
-## License
+### Common Issues
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**Camera not working**:
+- Ensure HTTPS connection (required for camera access)
+- Check browser permissions for camera
+- Try different browser or device
 
-## Acknowledgements
+**QR codes not scanning**:
+- Ensure good lighting conditions
+- Hold camera steady and close to QR code
+- Try manual entry of QR code value
+- Check QR code is properly generated
 
-- [QRCode.js](https://github.com/davidshimjs/qrcodejs) for QR code generation
-- [Tailwind CSS](https://tailwindcss.com/) for styling
-- [Lucide Icons](https://lucide.dev/) for UI icons
+**GPS not accurate**:
+- Install as Progressive Web App for best performance
+- Enable high accuracy mode in browser
+- Wait for GPS to settle before capturing bases
+- Check device has good GPS signal
+- Consider testing capture range in different conditions
 
+**Game not starting**:
+- Ensure minimum 2 teams created
+- Check host authentication is valid
+- Verify all teams have valid QR codes
+- Check game status in host panel
+
+**Players can't join teams**:
+- Check team QR codes are properly assigned
+- Ensure game hasn't started yet
+- Try refreshing browser and re-scanning
+- Verify QR code is readable and not damaged
+
+### Debug Information
+
+Enable debug mode for detailed logging:
+```bash
+export FLASK_DEBUG=True
+python flask_app.py
+```
+
+Check browser console for JavaScript errors:
+- Press F12 to open developer tools
+- Check Console tab for error messages
+- Network tab shows API request/response details
+
+## 📄 License
+
+This project is provided as-is for educational and entertainment purposes. Please respect local laws and property rights when placing QR codes and conducting games.
+
+## 🤝 Contributing
+
+This is a pre-beta project focused on functionality over backwards compatibility. Contributions welcome, but expect breaking changes as the system evolves.
+
+### Development Setup
+1. Fork the repository
+2. Create feature branch
+3. Test thoroughly with all user roles
+4. Submit pull request with detailed description
+
+### Known Limitations
+- Single server instance (no clustering support)
+- SQLite database (not suitable for high concurrency)
+- Basic error handling (needs improvement for production)
+- Limited game customization options
+- No game history or analytics
+
+---
+
+**Have fun conquering with QR codes! 🎯**
