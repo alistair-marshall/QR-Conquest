@@ -5,6 +5,7 @@
 function logoutSiteAdmin() {
   appState.siteAdmin.isAuthenticated = false;
   appState.siteAdmin.token = null;
+  clearSiteAdminHosts(); // Clear host data on logout
   navigateTo('landing');
   showNotification('Logged out successfully', 'info');
 }
@@ -129,84 +130,138 @@ function renderSiteAdminPanel() {
     container.appendChild(headerSection);
 
     // Stats section - placeholder initially
-    const statsSection = document.createElement('div');
-    statsSection.className = 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-6';
-    statsSection.id = 'stats-section';
-    
-    // Create placeholder stat cards
-    for (let i = 0; i < 3; i++) {
-        const statCard = document.createElement('div');
-        statCard.className = 'bg-white rounded-lg shadow-md p-6';
-        
-        const statLabel = document.createElement('div');
-        statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
-        statLabel.textContent = 'Loading...';
-        statCard.appendChild(statLabel);
-        
-        const statValue = document.createElement('div');
-        statValue.className = 'mt-2 text-3xl font-bold text-gray-400';
-        statValue.innerHTML = '<div class="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>';
-        statCard.appendChild(statValue);
-        
-        statsSection.appendChild(statCard);
-    }
-    
+    const statsSection = buildStatsSection();
     container.appendChild(statsSection);
 
     // Host list section with placeholder
-    const hostListContainer = document.createElement('div');
-    hostListContainer.className = 'bg-white rounded-lg shadow-md p-6';
-    hostListContainer.id = 'host-list-container';
+    const hostListContainer = buildHostListSection();
+    container.appendChild(hostListContainer);
 
-    const hostListHeader = document.createElement('div');
-    hostListHeader.className = 'flex justify-between items-center mb-6';
-    
-    const hostListTitle = document.createElement('h3');
-    hostListTitle.className = 'text-xl font-semibold text-gray-900';
-    hostListTitle.textContent = 'All Hosts';
-    hostListHeader.appendChild(hostListTitle);
+    return container;
+}
 
-    // Add new host button
-    const addHostButton = document.createElement('button');
-    addHostButton.className = 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center';
+function buildStatsSection() {
+  const statsSection = document.createElement('div');
+  statsSection.className = 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-6';
+  
+  if (appState.siteAdmin.hostsLoading) {
+    // Show loading state
+    for (let i = 0; i < 3; i++) {
+      const statCard = document.createElement('div');
+      statCard.className = 'bg-white rounded-lg shadow-md p-6';
+      
+      const statLabel = document.createElement('div');
+      statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
+      statLabel.textContent = 'Loading...';
+      statCard.appendChild(statLabel);
+      
+      const statValue = document.createElement('div');
+      statValue.className = 'mt-2 text-3xl font-bold text-gray-400';
+      statValue.innerHTML = '<div class="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>';
+      statCard.appendChild(statValue);
+      
+      statsSection.appendChild(statCard);
+    }
+  } else if (appState.siteAdmin.hostsError) {
+    // Show error state
+    const errorCard = document.createElement('div');
+    errorCard.className = 'col-span-3 bg-red-50 border border-red-200 rounded-lg p-4';
+    errorCard.innerHTML = `<p class="text-red-800">Error loading stats: ${appState.siteAdmin.hostsError}</p>`;
+    statsSection.appendChild(errorCard);
+  } else {
+    // Show actual stats
+    const hosts = appState.siteAdmin.hosts;
+    const totalHosts = hosts.length;
+    const activeHosts = hosts.filter(host => !host.expiry_date || host.expiry_date > Date.now() / 1000);
+    const expiredHosts = hosts.filter(host => host.expiry_date && host.expiry_date <= Date.now() / 1000);
     
-    const addIcon = document.createElement('i');
-    addIcon.setAttribute('data-lucide', 'plus');
-    addIcon.className = 'mr-2 h-4 w-4';
-    addHostButton.appendChild(addIcon);
+    const stats = [
+      { label: 'Total Hosts', value: totalHosts, color: 'text-gray-900' },
+      { label: 'Active Hosts', value: activeHosts.length, color: 'text-green-600' },
+      { label: 'Expired Hosts', value: expiredHosts.length, color: 'text-red-600' }
+    ];
     
-    const addText = document.createElement('span');
-    addText.textContent = 'Add New Host';
-    addHostButton.appendChild(addText);
-    
-    addHostButton.addEventListener('click', function() {
-        renderHostCreationModal();
+    stats.forEach(stat => {
+      const statCard = document.createElement('div');
+      statCard.className = 'bg-white rounded-lg shadow-md p-6';
+      
+      const statLabel = document.createElement('div');
+      statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
+      statLabel.textContent = stat.label;
+      statCard.appendChild(statLabel);
+      
+      const statValue = document.createElement('div');
+      statValue.className = `mt-2 text-3xl font-bold ${stat.color}`;
+      statValue.textContent = stat.value;
+      statCard.appendChild(statValue);
+      
+      statsSection.appendChild(statCard);
     });
-    
-    hostListHeader.appendChild(addHostButton);
-    hostListContainer.appendChild(hostListHeader);
+  }
+  
+  return statsSection;
+}
 
-    // Placeholder for hosts table
-    const hostsPlaceholder = document.createElement('div');
-    hostsPlaceholder.className = 'flex items-center justify-center py-12';
-    hostsPlaceholder.id = 'hosts-placeholder';
+function buildHostListSection() {
+  const hostListContainer = document.createElement('div');
+  hostListContainer.className = 'bg-white rounded-lg shadow-md p-6';
+
+  const hostListHeader = document.createElement('div');
+  hostListHeader.className = 'flex justify-between items-center mb-6';
+  
+  const hostListTitle = document.createElement('h3');
+  hostListTitle.className = 'text-xl font-semibold text-gray-900';
+  hostListTitle.textContent = 'All Hosts';
+  hostListHeader.appendChild(hostListTitle);
+
+  // Add new host button
+  const addHostButton = document.createElement('button');
+  addHostButton.className = 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center';
+  
+  const addIcon = document.createElement('i');
+  addIcon.setAttribute('data-lucide', 'plus');
+  addIcon.className = 'mr-2 h-4 w-4';
+  addHostButton.appendChild(addIcon);
+  
+  const addText = document.createElement('span');
+  addText.textContent = 'Add New Host';
+  addHostButton.appendChild(addText);
+  
+  addHostButton.addEventListener('click', function() {
+    renderHostCreationModal();
+  });
+  
+  hostListHeader.appendChild(addHostButton);
+  hostListContainer.appendChild(hostListHeader);
+
+  // Content based on current state
+  if (appState.siteAdmin.hostsLoading) {
+    // Show loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'flex items-center justify-center py-12';
     
     const loadingSpinner = document.createElement('div');
     loadingSpinner.className = 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600 mr-4';
-    hostsPlaceholder.appendChild(loadingSpinner);
+    loadingDiv.appendChild(loadingSpinner);
     
     const loadingText = document.createElement('p');
     loadingText.className = 'text-gray-600';
     loadingText.textContent = 'Loading hosts...';
-    hostsPlaceholder.appendChild(loadingText);
+    loadingDiv.appendChild(loadingText);
     
-    hostListContainer.appendChild(hostsPlaceholder);
-    container.appendChild(hostListContainer);
+    hostListContainer.appendChild(loadingDiv);
+  } else if (appState.siteAdmin.hostsError) {
+    // Show error state
+    buildHostsError(hostListContainer, appState.siteAdmin.hostsError);
+  } else if (appState.siteAdmin.hosts.length > 0) {
+    // Show hosts table
+    buildHostsTable(hostListContainer, appState.siteAdmin.hosts);
+  } else {
+    // Show empty state
+    buildEmptyHostsState(hostListContainer);
+  }
 
-    // Load hosts data asynchronously
-    loadHostsData(container);
-
-    return container;
+  return hostListContainer;
 }
 
 // New function to load and populate hosts data

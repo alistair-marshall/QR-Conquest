@@ -105,6 +105,18 @@ function navigateTo(page) {
     startScorePolling();
   }
 
+  if (page === 'siteAdminPanel' && appState.siteAdmin.isAuthenticated) {
+    // Trigger host data loading if not already loaded/loading
+    if (!appState.siteAdmin.hostsLoaded && !appState.siteAdmin.hostsLoading) {
+      loadSiteAdminHosts();
+    }
+  }
+
+  // Clear host data when leaving site admin
+  if (appState.page !== 'siteAdminPanel' && appState.page !== 'siteAdminLogin') {
+    clearSiteAdminHosts();
+  }
+
   renderApp();
 }
 

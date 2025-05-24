@@ -17,7 +17,11 @@ const appState = {
   pendingQRCode: null,
   siteAdmin: {
     isAuthenticated: false,
-    token: null
+    token: null,
+    hosts: [],           // Array of host objects
+    hostsLoading: false, // Loading state for hosts
+    hostsLoaded: false,  // Whether hosts have been loaded
+    hostsError: null     // Error state for host loading
   }
 };
 
@@ -978,6 +982,10 @@ async function authenticateSiteAdmin(password) {
     }
     
     showNotification('Site admin authenticated successfully', 'success');
+    
+    // Clear any existing host data to force fresh load
+    clearSiteAdminHosts();
+
     return true;
   } catch (err) {
     setError(err.message);
@@ -1052,6 +1060,9 @@ async function createHost(hostData) {
     
     const result = await response.json();
     showNotification('Host created successfully', 'success');
+
+    refreshSiteAdminHosts();
+
     return result;
   } catch (err) {
     setError(err.message);
@@ -1091,6 +1102,7 @@ async function updateHost(hostId, hostData) {
     
     const result = await response.json();
     showNotification('Host updated successfully', 'success');
+    refreshSiteAdminHosts();
     return result;
   } catch (err) {
     setError(err.message);
@@ -1127,6 +1139,7 @@ async function deleteHost(hostId) {
     }
     
     showNotification('Host deleted successfully', 'success');
+    refreshSiteAdminHosts();
     return true;
   } catch (err) {
     setError(err.message);
@@ -1135,6 +1148,45 @@ async function deleteHost(hostId) {
   } finally {
     setLoading(false);
   }
+}
+
+async function loadSiteAdminHosts() {
+  // Prevent duplicate loading
+  if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
+    return;
+  }
+  
+  try {
+    appState.siteAdmin.hostsLoading = true;
+    appState.siteAdmin.hostsError = null;
+    renderApp(); // Update UI to show loading state
+    
+    const hosts = await fetchHosts();
+    
+    appState.siteAdmin.hosts = hosts;
+    appState.siteAdmin.hostsLoaded = true;
+    appState.siteAdmin.hostsError = null;
+  } catch (error) {
+    console.error('Error loading hosts:', error);
+    appState.siteAdmin.hostsError = error.message;
+    appState.siteAdmin.hosts = [];
+  } finally {
+    appState.siteAdmin.hostsLoading = false;
+    renderApp(); // Final render with data or error
+  }
+}
+
+function clearSiteAdminHosts() {
+  appState.siteAdmin.hosts = [];
+  appState.siteAdmin.hostsLoading = false;
+  appState.siteAdmin.hostsLoaded = false;
+  appState.siteAdmin.hostsError = null;
+}
+
+function refreshSiteAdminHosts() {
+  // Force refresh by clearing loaded state
+  appState.siteAdmin.hostsLoaded = false;
+  loadSiteAdminHosts();
 }
 
 // Export functions for global use
