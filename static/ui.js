@@ -1,3 +1,6 @@
+// DOM elements cache
+const elements = {};
+
 // Initialize app immediately when script is loaded
 (function initializeApp() {
   console.log('app-core.js and app-ui.js loaded, initializing app immediately');
@@ -114,30 +117,6 @@ function navigateTo(page) {
     clearSiteAdminHosts();
   }
 
-  renderApp();
-}
-
-// Set loading state
-function setLoading(isLoading) {
-  appState.loading = isLoading;
-  renderApp();
-}
-
-// Set error state
-function setError(errorMessage) {
-  appState.error = errorMessage;
-
-  // Show error notification if there's a message
-  if (errorMessage) {
-    showNotification(errorMessage, 'error');
-
-    // Auto-clear error state after 5 seconds
-    setTimeout(function () {
-      appState.error = null;
-    }, 5000);
-  }
-
-  // Still render the app for other state changes
   renderApp();
 }
 
@@ -289,91 +268,6 @@ function updateMapMarkers() {
     // Update popup content
     marker.getPopup().setContent(popupContent);
   });
-}
-
-// =============================================================================
-// HOST BUTTON FUNCTIONALITY
-// =============================================================================
-
-// Function to handle host button click
-function handleHostButtonClick() {
-  // Check if user is already authenticated as a host
-  const authState = getAuthState();
-  if (authState.isHost) {
-    // If already a host, navigate to host panel
-    navigateTo('hostPanel');
-  } else {
-    // If not a host, show scan prompt
-    showHostScanPrompt();
-  }
-}
-
-function showHostScanPrompt() {
-  // Create modal backdrop
-  const modalBackdrop = document.createElement('div');
-  modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-  modalBackdrop.id = 'host-scan-modal';
-  document.body.appendChild(modalBackdrop);
-
-  // Create modal container
-  const modalContainer = document.createElement('div');
-  modalContainer.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4';
-  modalBackdrop.appendChild(modalContainer);
-
-  // Modal title
-  const modalTitle = document.createElement('h3');
-  modalTitle.className = 'text-xl font-bold mb-4';
-  modalTitle.textContent = 'Host Authentication';
-  modalContainer.appendChild(modalTitle);
-
-  // Instructions
-  const instructions = document.createElement('p');
-  instructions.className = 'mb-4 text-gray-600';
-  instructions.textContent = 'Scan your host QR code to access the game management features.';
-  modalContainer.appendChild(instructions);
-
-  // Scan button
-  const scanButton = document.createElement('button');
-  scanButton.className = 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg flex items-center justify-center mb-4';
-
-  const scanIcon = document.createElement('i');
-  scanIcon.setAttribute('data-lucide', 'qr-code');
-  scanIcon.className = 'mr-2';
-  scanButton.appendChild(scanIcon);
-
-  const scanText = document.createElement('span');
-  scanText.textContent = 'Scan Host QR Code';
-  scanButton.appendChild(scanText);
-
-  scanButton.addEventListener('click', function () {
-    document.body.removeChild(modalBackdrop);
-    navigateTo('scanQR');
-  });
-
-  modalContainer.appendChild(scanButton);
-
-  // Close button
-  const closeButton = document.createElement('button');
-  closeButton.className = 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg';
-  closeButton.textContent = 'Cancel';
-  closeButton.addEventListener('click', function () {
-    document.body.removeChild(modalBackdrop);
-  });
-  modalContainer.appendChild(closeButton);
-
-  // Initialize Lucide icons
-  if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons();
-  }
-
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
 }
 
 // =============================================================================
@@ -874,6 +768,85 @@ function renderFirstTimePage() {
   return container;
 }
 
+// Join Game Page
+function renderJoinGamePage() {
+  const container = document.createElement('div');
+  container.className = 'max-w-md mx-auto py-8';
+
+  // Title
+  const title = document.createElement('h2');
+  title.className = 'text-2xl font-bold mb-6 text-center';
+  title.textContent = 'Join a Game';
+  container.appendChild(title);
+
+  // Form
+  const form = document.createElement('form');
+  form.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
+
+  // Game ID
+  const idGroup = document.createElement('div');
+  idGroup.className = 'mb-4';
+
+  const idLabel = document.createElement('label');
+  idLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
+  idLabel.htmlFor = 'game-id';
+  idLabel.textContent = 'Game ID';
+  idGroup.appendChild(idLabel);
+
+  const idInput = document.createElement('input');
+  idInput.id = 'game-id';
+  idInput.type = 'text';
+  idInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
+  idInput.required = true;
+  idGroup.appendChild(idInput);
+
+  form.appendChild(idGroup);
+
+  // Join button
+  const joinButton = document.createElement('button');
+  joinButton.type = 'submit';
+  joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
+  joinButton.textContent = 'Join Game';
+  form.appendChild(joinButton);
+
+  // Handle form submission
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const gameId = idInput.value.trim();
+    if (!gameId) {
+      showNotification('Please enter a valid Game ID','warning');
+      return;
+    }
+
+    // Load the game and store in localStorage
+    localStorage.setItem('gameId', gameId);
+    fetchGameData(gameId).then(() => {
+      // Process the pending QR code after loading game data
+      const pendingQR = sessionStorage.getItem('pendingQRCode');
+      if (pendingQR) {
+        handleQRScan(pendingQR);
+        sessionStorage.removeItem('pendingQRCode');
+      } else {
+        navigateTo('scanQR');
+      }
+    });
+  });
+
+  container.appendChild(form);
+
+  // Back button
+  const backButton = document.createElement('button');
+  backButton.className = 'text-blue-600 hover:underline';
+  backButton.textContent = '← Back to Home';
+  backButton.addEventListener('click', function() {
+    navigateTo('landing');
+  });
+  container.appendChild(backButton);
+
+  return container;
+}
+
 // QR Scanner - Consolidated and simplified
 function renderQRScanner() {
   const container = document.createElement('div');
@@ -1344,6 +1317,91 @@ function renderQRScanner() {
 }
 
 // =============================================================================
+// HOST BUTTON FUNCTIONALITY (moved from core.js)
+// =============================================================================
+
+// Function to handle host button click
+function handleHostButtonClick() {
+  // Check if user is already authenticated as a host
+  const authState = getAuthState();
+  if (authState.isHost) {
+    // If already a host, navigate to host panel
+    navigateTo('hostPanel');
+  } else {
+    // If not a host, show scan prompt
+    showHostScanPrompt();
+  }
+}
+
+function showHostScanPrompt() {
+  // Create modal backdrop
+  const modalBackdrop = document.createElement('div');
+  modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  modalBackdrop.id = 'host-scan-modal';
+  document.body.appendChild(modalBackdrop);
+
+  // Create modal container
+  const modalContainer = document.createElement('div');
+  modalContainer.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4';
+  modalBackdrop.appendChild(modalContainer);
+
+  // Modal title
+  const modalTitle = document.createElement('h3');
+  modalTitle.className = 'text-xl font-bold mb-4';
+  modalTitle.textContent = 'Host Authentication';
+  modalContainer.appendChild(modalTitle);
+
+  // Instructions
+  const instructions = document.createElement('p');
+  instructions.className = 'mb-4 text-gray-600';
+  instructions.textContent = 'Scan your host QR code to access the game management features.';
+  modalContainer.appendChild(instructions);
+
+  // Scan button
+  const scanButton = document.createElement('button');
+  scanButton.className = 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg flex items-center justify-center mb-4';
+
+  const scanIcon = document.createElement('i');
+  scanIcon.setAttribute('data-lucide', 'qr-code');
+  scanIcon.className = 'mr-2';
+  scanButton.appendChild(scanIcon);
+
+  const scanText = document.createElement('span');
+  scanText.textContent = 'Scan Host QR Code';
+  scanButton.appendChild(scanText);
+
+  scanButton.addEventListener('click', function () {
+    document.body.removeChild(modalBackdrop);
+    navigateTo('scanQR');
+  });
+
+  modalContainer.appendChild(scanButton);
+
+  // Close button
+  const closeButton = document.createElement('button');
+  closeButton.className = 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg';
+  closeButton.textContent = 'Cancel';
+  closeButton.addEventListener('click', function () {
+    document.body.removeChild(modalBackdrop);
+  });
+  modalContainer.appendChild(closeButton);
+
+  // Initialize Lucide icons
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
+  // Allow closing modal with Escape key
+  function handleEscapeKey(e) {
+    if (e.key === 'Escape') {
+      document.body.removeChild(modalBackdrop);
+      document.removeEventListener('keydown', handleEscapeKey);
+    }
+  }
+  document.addEventListener('keydown', handleEscapeKey);
+}
+
+// =============================================================================
 // PWA INSTALLATION AND OFFLINE SUPPORT
 // =============================================================================
 
@@ -1498,3 +1556,13 @@ function updateOnlineStatus(isOnline) {
 
 // Initialize online status monitoring
 document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
+
+// =============================================================================
+// GLOBAL INTERFACE FUNCTIONS (exported to window for core.js)
+// =============================================================================
+
+// Export UI functions to global scope so core.js can call them
+window.navigateTo = navigateTo;
+window.renderApp = renderApp;
+window.showNotification = showNotification;
+window.updateMapMarkers = updateMapMarkers;

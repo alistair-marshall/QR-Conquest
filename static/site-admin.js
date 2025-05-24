@@ -1,11 +1,12 @@
-// Site Admin module for managing hosts
-// This file contains functions for site admin authentication and host management
+// Site Admin module for managing hosts - UI components only, API calls handled by core.js
 
-// Site admin authentication and state management
+// Site admin logout - UI handling only
 function logoutSiteAdmin() {
+  // Reset site admin state - core.js handles this
   appState.siteAdmin.isAuthenticated = false;
   appState.siteAdmin.token = null;
   clearSiteAdminHosts(); // Clear host data on logout
+  
   navigateTo('landing');
   showNotification('Logged out successfully', 'info');
 }
@@ -62,6 +63,7 @@ function renderSiteAdminLogin() {
       return;
     }
 
+    // Call the API function from core.js
     const success = await authenticateSiteAdmin(password);
     if (success) {
       navigateTo('siteAdminPanel');
@@ -264,79 +266,6 @@ function buildHostListSection() {
   return hostListContainer;
 }
 
-// New function to load and populate hosts data
-async function loadHostsData(container) {
-    try {
-        const hosts = await fetchHosts();
-        
-        // Update stats section
-        updateStatsSection(hosts);
-        
-        // Update hosts table
-        updateHostsTable(hosts);
-        
-    } catch (error) {
-        console.error('Error loading hosts data:', error);
-        showHostsError(error.message);
-    }
-}
-
-// Update stats section with real data
-function updateStatsSection(hosts) {
-    const statsSection = document.getElementById('stats-section');
-    if (!statsSection) return;
-    
-    // Clear existing content
-    statsSection.innerHTML = '';
-    
-    // Calculate stats
-    const totalHosts = hosts.length;
-    const activeHosts = hosts.filter(host => !host.expiry_date || host.expiry_date > Date.now() / 1000);
-    const expiredHosts = hosts.filter(host => host.expiry_date && host.expiry_date <= Date.now() / 1000);
-    
-    // Create stat cards with real data
-    const stats = [
-        { label: 'Total Hosts', value: totalHosts, color: 'text-gray-900' },
-        { label: 'Active Hosts', value: activeHosts.length, color: 'text-green-600' },
-        { label: 'Expired Hosts', value: expiredHosts.length, color: 'text-red-600' }
-    ];
-    
-    stats.forEach(stat => {
-        const statCard = document.createElement('div');
-        statCard.className = 'bg-white rounded-lg shadow-md p-6';
-        
-        const statLabel = document.createElement('div');
-        statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
-        statLabel.textContent = stat.label;
-        statCard.appendChild(statLabel);
-        
-        const statValue = document.createElement('div');
-        statValue.className = `mt-2 text-3xl font-bold ${stat.color}`;
-        statValue.textContent = stat.value;
-        statCard.appendChild(statValue);
-        
-        statsSection.appendChild(statCard);
-    });
-}
-
-// Update hosts table with real data
-function updateHostsTable(hosts) {
-    const hostListContainer = document.getElementById('host-list-container');
-    if (!hostListContainer) return;
-    
-    // Remove placeholder
-    const placeholder = document.getElementById('hosts-placeholder');
-    if (placeholder) {
-        placeholder.remove();
-    }
-    
-    if (hosts.length > 0) {
-        buildHostsTable(hostListContainer, hosts);
-    } else {
-        buildEmptyHostsState(hostListContainer);
-    }
-}
-
 // Build hosts table
 function buildHostsTable(container, hosts) {
     const tableContainer = document.createElement('div');
@@ -376,7 +305,7 @@ function buildHostsTable(container, hosts) {
     container.appendChild(tableContainer);
 }
 
-// Build individual host row (extract existing logic)
+// Build individual host row
 function buildHostRow(host) {
     const row = document.createElement('tr');
     row.className = 'hover:bg-gray-50';
@@ -504,6 +433,7 @@ function buildHostRow(host) {
     deleteButton.textContent = 'Delete';
     deleteButton.addEventListener('click', function() {
         if (confirm(`Are you sure you want to delete host "${host.name}"?\n\nThis action cannot be undone.`)) {
+            // Call the API function from core.js
             deleteHost(host.id).then((success) => {
                 if (success) {
                     renderApp(); // Refresh the view
@@ -554,16 +484,7 @@ function buildEmptyHostsState(container) {
 }
 
 // Show error state
-function showHostsError(errorMessage) {
-    const hostListContainer = document.getElementById('host-list-container');
-    if (!hostListContainer) return;
-    
-    // Remove placeholder
-    const placeholder = document.getElementById('hosts-placeholder');
-    if (placeholder) {
-        placeholder.remove();
-    }
-    
+function buildHostsError(container, errorMessage) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'text-center py-12';
     
@@ -593,7 +514,7 @@ function showHostsError(errorMessage) {
     });
     errorDiv.appendChild(retryButton);
     
-    hostListContainer.appendChild(errorDiv);
+    container.appendChild(errorDiv);
 }
 
 // Host creation modal
@@ -712,6 +633,7 @@ function renderHostCreationModal() {
     };
     
     try {
+      // Call the API function from core.js
       const result = await createHost(hostData);
       if (result) {
         document.body.removeChild(modalBackdrop);
@@ -926,16 +848,6 @@ function renderHostQRModal(host) {
   document.addEventListener('keydown', handleEscapeKey);
 }
 
-// Export functions to global scope for use by other modules
-window.siteAdminComponents = {
-  renderSiteAdminLogin,
-  renderSiteAdminPanel,
-  renderHostCreationModal,
-  renderHostEditModal,
-  renderHostQRModal,
-  logoutSiteAdmin
-};
-
 // Host edit modal
 function renderHostEditModal(host) {
   // Create modal backdrop
@@ -1070,6 +982,7 @@ function renderHostEditModal(host) {
     };
     
     try {
+      // Call the API function from core.js
       const result = await updateHost(host.id, hostData);
       if (result) {
         document.body.removeChild(modalBackdrop);

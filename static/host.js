@@ -1,4 +1,4 @@
-// Host Panel
+// Host Panel - UI components only, API calls handled by core.js
 function renderHostPanel() {
   const container = document.createElement('div');
 
@@ -47,22 +47,6 @@ function renderHostPanel() {
 
       createForm.appendChild(nameGroup);
 
-      // Host Password
-      const passwordGroup = document.createElement('div');
-      passwordGroup.className = 'mb-4';
-
-      const passwordLabel = document.createElement('label');
-      passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Host Password';
-      passwordGroup.appendChild(passwordLabel);
-
-      const passwordInput = document.createElement('input');
-      passwordInput.type = 'password';
-      passwordInput.className = 'w-full px-3 py-2 border rounded-lg';
-      passwordGroup.appendChild(passwordInput);
-
-      createForm.appendChild(passwordGroup);
-
       // Note about teams
       const teamsNoteGroup = document.createElement('div');
       teamsNoteGroup.className = 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg';
@@ -78,14 +62,14 @@ function renderHostPanel() {
       createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg';
       createButton.textContent = 'Create Game';
       createButton.addEventListener('click', function() {
-        if (!nameInput.value || !passwordInput.value) {
+        if (!nameInput.value) {
           showNotification('Please fill in all required fields','warning');
           return;
         }
 
+        // Call the API function from core.js
         createGame({
           name: nameInput.value,
-          adminPassword: passwordInput.value,
           maxTeams: 0, // Default to 0 teams, they will be added via QR scanning
         });
       });
@@ -130,40 +114,18 @@ function renderHostPanel() {
 
       joinForm.appendChild(idGroup);
 
-      // Host Password
-      const passwordGroup = document.createElement('div');
-      passwordGroup.className = 'mb-4';
-
-      const passwordLabel = document.createElement('label');
-      passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Host Password';
-      passwordGroup.appendChild(passwordLabel);
-
-      const passwordInput = document.createElement('input');
-      passwordInput.type = 'password';
-      passwordInput.className = 'w-full px-3 py-2 border rounded-lg';
-      passwordGroup.appendChild(passwordInput);
-
-      joinForm.appendChild(passwordGroup);
-
       // Join Button
       const joinButton = document.createElement('button');
       joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
       joinButton.textContent = 'Join Game';
       joinButton.addEventListener('click', function() {
-        if (!idInput.value || !passwordInput.value) {
-          showNotification('Please enter both Game ID and Host Password','warning');
+        if (!idInput.value) {
+          showNotification('Please enter Game ID','warning');
           return;
         }
 
+        // Call the API function from core.js
         fetchGameData(idInput.value);
-
-        // Set admin password
-        appState.gameData.adminPassword = passwordInput.value;
-        appState.gameData.isAdmin = true;
-
-        // Store admin password
-        localStorage.setItem('adminPassword', passwordInput.value);
       });
       joinForm.appendChild(joinButton);
 
@@ -257,7 +219,7 @@ function renderHostPanel() {
 
   qrSection.appendChild(scanQRButton);
   
-  // Add instruction text to emphasize the QR-first approach
+  // Add instruction text to emphasise the QR-first approach
   const instructionText = document.createElement('p');
   instructionText.className = 'text-amber-600 text-sm mt-2';
   instructionText.textContent = 'Note: Teams and bases can only be created by scanning QR codes first.';
@@ -486,6 +448,7 @@ function renderHostPanel() {
     endButton.addEventListener('click', function() {
       // Confirm before ending
       if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
+        // Call the API function from core.js
         endGame();
       }
     });
@@ -509,9 +472,10 @@ function renderHostPanel() {
     startButton.addEventListener('click', function() {
       // Double check team count before starting
       if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
+        // Call the API function from core.js
         startGame();
       } else {
-        setError('Cannot start game. Please add at least 2 teams by scanning QR codes.');
+        showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.','error');
       }
     });
     
@@ -539,9 +503,7 @@ function renderHostPanel() {
   return container;
 }
 
-
-
-
+// QR Assignment Page
 function renderQRAssignmentPage() {
   const container = document.createElement('div');
   container.className = 'max-w-md mx-auto py-8';
@@ -762,6 +724,7 @@ function renderTeamCreationForm(qrId, container) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
+    // Call the API function from core.js
     createTeam(qrId, nameInput.value, colorSelect.value);
   });
 
@@ -881,6 +844,7 @@ function renderTeamEditModal(team) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
+    // Call the API function from core.js
     updateTeam(team.id, nameInput.value, colorSelect.value);
     document.body.removeChild(modalBackdrop);
   });
@@ -1259,7 +1223,7 @@ function renderBaseCreationForm(qrId, container) {
     e.preventDefault();
 
     if (!latInput.value || !lngInput.value) {
-      setError('Please get the location for this base first.');
+      showNotification('Please get the location for this base first.', 'error');
       return;
     }
     
@@ -1278,6 +1242,7 @@ function renderBaseCreationForm(qrId, container) {
       navigator.geolocation.clearWatch(parseInt(watchId));
     }
 
+    // Call the API function from core.js
     createBase(qrId, nameInput.value, parseFloat(latInput.value), parseFloat(lngInput.value));
   });
 
@@ -1388,7 +1353,7 @@ function renderPlayerRegistrationPage() {
     // Get player name (optional)
     const playerName = nameInput.value.trim() || 'Anonymous Player';
 
-    // Join the team
+    // Call the API function from core.js
     joinTeam(teamId);
 
     // Clear pending team
@@ -1406,139 +1371,6 @@ function renderPlayerRegistrationPage() {
     navigateTo('landing');
   });
   container.appendChild(cancelButton);
-
-  return container;
-}
-
-// First-Time User Page - New page for users who scan a QR code but aren't in a game
-function renderFirstTimePage() {
-  const container = document.createElement('div');
-  container.className = 'text-center py-10';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-3xl font-bold mb-4';
-  title.textContent = 'Welcome to QR Conquest!';
-  container.appendChild(title);
-
-  // Description
-  const description = document.createElement('p');
-  description.className = 'mb-8';
-  description.textContent = 'You\'ve scanned a QR code, but you\'re not currently part of any game.';
-  container.appendChild(description);
-
-  // QR code info
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6 inline-block';
-  qrInfo.textContent = `QR Code: ${appState.pendingQRCode}`;
-  container.appendChild(qrInfo);
-
-  // Options
-  const optionsContainer = document.createElement('div');
-  optionsContainer.className = 'flex flex-col space-y-4 max-w-xs mx-auto';
-
-  // Join existing game
-  const joinButton = document.createElement('button');
-  joinButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-  joinButton.textContent = 'Join a Game';
-  joinButton.addEventListener('click', function() {
-    // Store QR code in session storage for later use
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('joinGame');
-  });
-  optionsContainer.appendChild(joinButton);
-
-  // Create new game (host)
-  const createButton = document.createElement('button');
-  createButton.className = 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700';
-  createButton.textContent = 'Create a New Game';
-  createButton.addEventListener('click', function() {
-    // Store QR code in session storage for later use
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('hostPanel');
-  });
-  optionsContainer.appendChild(createButton);
-
-  container.appendChild(optionsContainer);
-
-  return container;
-}
-
-// Join Game Page - For joining an existing game
-function renderJoinGamePage() {
-  const container = document.createElement('div');
-  container.className = 'max-w-md mx-auto py-8';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Join a Game';
-  container.appendChild(title);
-
-  // Form
-  const form = document.createElement('form');
-  form.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
-
-  // Game ID
-  const idGroup = document.createElement('div');
-  idGroup.className = 'mb-4';
-
-  const idLabel = document.createElement('label');
-  idLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  idLabel.htmlFor = 'game-id';
-  idLabel.textContent = 'Game ID';
-  idGroup.appendChild(idLabel);
-
-  const idInput = document.createElement('input');
-  idInput.id = 'game-id';
-  idInput.type = 'text';
-  idInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  idInput.required = true;
-  idGroup.appendChild(idInput);
-
-  form.appendChild(idGroup);
-
-  // Join button
-  const joinButton = document.createElement('button');
-  joinButton.type = 'submit';
-  joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
-  joinButton.textContent = 'Join Game';
-  form.appendChild(joinButton);
-
-  // Handle form submission
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const gameId = idInput.value.trim();
-    if (!gameId) {
-      showNotification('Please enter a valid Game ID','warning');
-      return;
-    }
-
-    // Load the game and store in localStorage
-    localStorage.setItem('gameId', gameId);
-    fetchGameData(gameId).then(() => {
-      // Process the pending QR code after loading game data
-      const pendingQR = sessionStorage.getItem('pendingQRCode');
-      if (pendingQR) {
-        handleQRScan(pendingQR);
-        sessionStorage.removeItem('pendingQRCode');
-      } else {
-        navigateTo('scanQR');
-      }
-    });
-  });
-
-  container.appendChild(form);
-
-  // Back button
-  const backButton = document.createElement('button');
-  backButton.className = 'text-blue-600 hover:underline';
-  backButton.textContent = '← Back to Home';
-  backButton.addEventListener('click', function() {
-    navigateTo('landing');
-  });
-  container.appendChild(backButton);
 
   return container;
 }

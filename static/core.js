@@ -28,9 +28,6 @@ const appState = {
 // API endpoint
 const API_BASE_URL = '/api';
 
-// DOM elements cache
-const elements = {};
-
 // Enhanced API error handling function
 async function handleApiResponse(response, errorMessage) {
   if (!response.ok) {
@@ -197,7 +194,10 @@ async function handleQRCode(qrCode, context = 'scan') {
   // If we're in admin QR assignment flow, handle differently
   if (context === 'assignment' && getAuthState().isHost) {
     sessionStorage.setItem('pendingQRCode', qrCode);
-    navigateTo('qrAssignment');
+    // Navigate to assignment page - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('qrAssignment');
+    }
     return;
   }
 
@@ -232,7 +232,9 @@ async function handleQRCode(qrCode, context = 'scan') {
     // If we have no game loaded and this is an unrecognised QR code
     if (!getAuthState().hasGame) {
       appState.pendingQRCode = qrCode;
-      navigateTo('firstTime');
+      if (window.navigateTo) {
+        window.navigateTo('firstTime');
+      }
     } else {
       setError(err.message);
     }
@@ -279,8 +281,13 @@ async function handleHostQR(qrCode, statusData) {
     hostName: statusData.name
   });
 
-  showNotification(`Welcome, ${statusData.name}!`, 'success');
-  navigateTo('hostPanel');
+  // Show success notification and navigate - UI will handle this
+  if (window.showNotification) {
+    window.showNotification(`Welcome, ${statusData.name}!`, 'success');
+  }
+  if (window.navigateTo) {
+    window.navigateTo('hostPanel');
+  }
 }
 
 // Handle team QR codes
@@ -298,7 +305,9 @@ async function handleTeamQR(qrCode, statusData) {
     } else {
       setError('You are already on a different team. Please continue playing.');
     }
-    navigateTo('gameView');
+    if (window.navigateTo) {
+      window.navigateTo('gameView');
+    }
     return;
   }
 
@@ -321,9 +330,11 @@ async function handleTeamQR(qrCode, statusData) {
     }
   }
 
-  // Store team ID and go to registration
+  // Store team ID and go to registration - UI will handle this
   sessionStorage.setItem('pendingTeamId', teamId);
-  navigateTo('playerRegistration');
+  if (window.navigateTo) {
+    window.navigateTo('playerRegistration');
+  }
 }
 
 // Handle base QR codes
@@ -337,7 +348,9 @@ async function handleBaseQR(qrCode, statusData) {
   // Check if user is on a team
   if (!authState.hasTeam) {
     setError('You need to join a team before capturing bases. Please scan a team QR code first.');
-    navigateTo('scanQR');
+    if (window.navigateTo) {
+      window.navigateTo('scanQR');
+    }
     return;
   }
 
@@ -350,7 +363,9 @@ async function handleBaseQR(qrCode, statusData) {
   // Check game status
   if (appState.gameData.status !== 'active') {
     setError('The game is not active yet. Please wait for the host to start the game.');
-    navigateTo('gameView');
+    if (window.navigateTo) {
+      window.navigateTo('gameView');
+    }
     return;
   }
 
@@ -365,11 +380,15 @@ async function handleUnassignedQR(qrCode) {
   if (authState.isHost) {
     console.log('Showing QR assignment options for:', qrCode);
     sessionStorage.setItem('pendingQRCode', qrCode);
-    navigateTo('qrAssignment');
+    if (window.navigateTo) {
+      window.navigateTo('qrAssignment');
+    }
   } else {
     // Store pending QR code for first-time user flow
     appState.pendingQRCode = qrCode;
-    navigateTo('firstTime');
+    if (window.navigateTo) {
+      window.navigateTo('firstTime');
+    }
   }
 }
 
@@ -457,11 +476,15 @@ async function fetchGameData(gameId) {
 
     // Show offline notification if data came from cache
     if (fromCache) {
-      showNotification('Using cached game data (offline mode)', 'warning');
+      if (window.showNotification) {
+        window.showNotification('Using cached game data (offline mode)', 'warning');
+      }
     }
 
-    // Re-render with new data
-    renderApp();
+    // Re-render with new data - UI will handle this
+    if (window.renderApp) {
+      window.renderApp();
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error fetching game data:', err);
@@ -489,11 +512,15 @@ async function fetchGameUpdates() {
     // Update bases with ownership information
     appState.gameData.bases = gameData.bases;
 
-    // Update map markers without recreating the whole map
-    updateMapMarkers();
+    // Update map markers without recreating the whole map - UI will handle this
+    if (window.updateMapMarkers) {
+      window.updateMapMarkers();
+    }
 
-    // Re-render with new data
-    renderApp();
+    // Re-render with new data - UI will handle this
+    if (window.renderApp) {
+      window.renderApp();
+    }
   } catch (err) {
     console.error('Error fetching game updates:', err);
   }
@@ -564,8 +591,10 @@ async function createGame(gameSettings) {
     // Fetch the full game data after creation
     await fetchGameData(gameId);
 
-    // Show success message
-    showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
+    }
     
     // Check if there's a pending QR code to handle
     const pendingQR = sessionStorage.getItem('pendingQRCode');
@@ -606,8 +635,14 @@ async function startGame() {
     
     // Update game status
     appState.gameData.status = 'active';
-    showNotification('Game has been started!', 'success');
-    navigateTo('gameView');
+    
+    // Show success message and navigate - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Game has been started!', 'success');
+    }
+    if (window.navigateTo) {
+      window.navigateTo('gameView');
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error starting game:', err);
@@ -642,7 +677,11 @@ async function endGame() {
 
     // Update game status
     appState.gameData.status = 'ended';
-    navigateTo('results');
+    
+    // Navigate to results - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('results');
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error ending game:', err);
@@ -680,9 +719,14 @@ async function joinTeam(teamId) {
     });
 
     const teamName = getTeamName(teamId);
-    showNotification(`You have successfully joined ${teamName}!`, 'success');
-
-    navigateTo('gameView');
+    
+    // Show success message and navigate - UI will handle this
+    if (window.showNotification) {
+      window.showNotification(`You have successfully joined ${teamName}!`, 'success');
+    }
+    if (window.navigateTo) {
+      window.navigateTo('gameView');
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error joining team:', err);
@@ -722,7 +766,10 @@ async function captureBase(baseId, latitude, longitude) {
       // Update scores
       await fetchGameUpdates();
 
-      showNotification('Base captured successfully!', 'success');
+      // Show success message - UI will handle this
+      if (window.showNotification) {
+        window.showNotification('Base captured successfully!', 'success');
+      }
     } else {
       // We're offline, store for later sync
       if (window.dbHelpers && window.dbHelpers.addPendingCapture) {
@@ -733,7 +780,10 @@ async function captureBase(baseId, latitude, longitude) {
           longitude
         );
 
-        showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
+        // Show offline message - UI will handle this
+        if (window.showNotification) {
+          window.showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
+        }
       } else {
         throw new Error('Offline capture not supported. Please try again when online.');
       }
@@ -778,14 +828,18 @@ async function createTeam(qrId, name, color) {
     // Clear the pending QR code
     sessionStorage.removeItem('pendingQRCode');
 
-    // Show success message
-    showNotification(`Team "${name}" created successfully with QR code ${qrId}`,'success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification(`Team "${name}" created successfully with QR code ${qrId}`,'success');
+    }
 
     // Refresh game data
     await fetchGameData(authState.gameId);
 
-    // Navigate back to host panel
-    navigateTo('hostPanel');
+    // Navigate back to host panel - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error creating team:', err);
@@ -818,8 +872,10 @@ async function updateTeam(teamId, name, color) {
 
     await handleApiResponse(response, 'Failed to update team');
 
-    // Show success message
-    showNotification('Team updated successfully','success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Team updated successfully','success');
+    }
 
     // Refresh game data
     await fetchGameData(authState.gameId);
@@ -860,14 +916,18 @@ async function createBase(qrId, name, latitude, longitude) {
     // Clear the pending QR code
     sessionStorage.removeItem('pendingQRCode');
 
-    // Show success message
-    showNotification(`Base "${name}" created successfully with QR code ${qrId}`,'success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification(`Base "${name}" created successfully with QR code ${qrId}`,'success');
+    }
 
     // Refresh game data
     await fetchGameData(authState.gameId);
 
-    // Navigate back to host panel
-    navigateTo('hostPanel');
+    // Navigate back to host panel - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
   } catch (err) {
     setError(err.message);
     console.error('Error creating base:', err);
@@ -908,7 +968,10 @@ async function authenticateSiteAdmin(password) {
       }
     }
     
-    showNotification('Site admin authenticated successfully', 'success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Site admin authenticated successfully', 'success');
+    }
     
     // Clear any existing host data to force fresh load
     clearSiteAdminHosts();
@@ -987,7 +1050,11 @@ async function createHost(hostData) {
     }
     
     const result = await response.json();
-    showNotification('Host created successfully', 'success');
+    
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Host created successfully', 'success');
+    }
 
     refreshSiteAdminHosts();
 
@@ -1029,7 +1096,12 @@ async function updateHost(hostId, hostData) {
     }
     
     const result = await response.json();
-    showNotification('Host updated successfully', 'success');
+    
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Host updated successfully', 'success');
+    }
+    
     refreshSiteAdminHosts();
     return result;
   } catch (err) {
@@ -1066,7 +1138,11 @@ async function deleteHost(hostId) {
       throw new Error(`Failed to delete host: ${response.status}`);
     }
     
-    showNotification('Host deleted successfully', 'success');
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Host deleted successfully', 'success');
+    }
+    
     refreshSiteAdminHosts();
     return true;
   } catch (err) {
@@ -1087,7 +1163,11 @@ async function loadSiteAdminHosts() {
   try {
     appState.siteAdmin.hostsLoading = true;
     appState.siteAdmin.hostsError = null;
-    renderApp(); // Update UI to show loading state
+    
+    // Re-render to show loading state - UI will handle this
+    if (window.renderApp) {
+      window.renderApp();
+    }
     
     const hosts = await fetchHosts();
     
@@ -1100,7 +1180,11 @@ async function loadSiteAdminHosts() {
     appState.siteAdmin.hosts = [];
   } finally {
     appState.siteAdmin.hostsLoading = false;
-    renderApp(); // Final render with data or error
+    
+    // Final render with data or error - UI will handle this
+    if (window.renderApp) {
+      window.renderApp();
+    }
   }
 }
 
@@ -1115,6 +1199,40 @@ function refreshSiteAdminHosts() {
   // Force refresh by clearing loaded state
   appState.siteAdmin.hostsLoaded = false;
   loadSiteAdminHosts();
+}
+
+// =============================================================================
+// STATE MANAGEMENT FUNCTIONS
+// =============================================================================
+
+// Set loading state
+function setLoading(isLoading) {
+  appState.loading = isLoading;
+  
+  // Re-render to show loading state - UI will handle this
+  if (window.renderApp) {
+    window.renderApp();
+  }
+}
+
+// Set error state
+function setError(errorMessage) {
+  appState.error = errorMessage;
+
+  // Show error notification if there's a message - UI will handle this
+  if (errorMessage && window.showNotification) {
+    window.showNotification(errorMessage, 'error');
+
+    // Auto-clear error state after 5 seconds
+    setTimeout(function () {
+      appState.error = null;
+    }, 5000);
+  }
+
+  // Still render the app for other state changes - UI will handle this
+  if (window.renderApp) {
+    window.renderApp();
+  }
 }
 
 // =============================================================================
@@ -1137,10 +1255,16 @@ function handleQRScan(qrCode) {
 // Log out/clear data - public interface
 function clearGameData() {
   clearAuthState();
-  navigateTo('landing');
   
-  // Display confirmation message to user
+  // Navigate to landing - UI will handle this
+  if (window.navigateTo) {
+    window.navigateTo('landing');
+  }
+  
+  // Display confirmation message to user - UI will handle this
   setTimeout(function() {
-    showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.','success');
+    if (window.showNotification) {
+      window.showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.','success');
+    }
   }, 300);
 }
