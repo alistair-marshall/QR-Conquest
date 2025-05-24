@@ -59,17 +59,18 @@ function renderHostPanel() {
 
       // Create Game Button
       const createButton = document.createElement('button');
-      createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg';
+      createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors';
       createButton.textContent = 'Create Game';
       createButton.addEventListener('click', function() {
-        if (!nameInput.value) {
-          showNotification('Please fill in all required fields','warning');
+        const gameName = nameInput.value.trim();
+        if (!gameName) {
+          showNotification('Please enter a game name', 'warning');
           return;
         }
 
         // Call the API function from core.js
         createGame({
-          name: nameInput.value,
+          name: gameName,
           maxTeams: 0, // Default to 0 teams, they will be added via QR scanning
         });
       });
@@ -82,7 +83,7 @@ function renderHostPanel() {
       joinLink.className = 'text-center';
 
       const joinButton = document.createElement('button');
-      joinButton.className = 'text-blue-600 underline';
+      joinButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
       joinButton.textContent = 'Join Existing Game Instead';
       joinButton.addEventListener('click', toggleForm);
       joinLink.appendChild(joinButton);
@@ -110,22 +111,24 @@ function renderHostPanel() {
       const idInput = document.createElement('input');
       idInput.type = 'text';
       idInput.className = 'w-full px-3 py-2 border rounded-lg';
+      idInput.placeholder = 'Enter game ID (e.g., brave-apple)';
       idGroup.appendChild(idInput);
 
       joinForm.appendChild(idGroup);
 
       // Join Button
       const joinButton = document.createElement('button');
-      joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
+      joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
       joinButton.textContent = 'Join Game';
       joinButton.addEventListener('click', function() {
-        if (!idInput.value) {
-          showNotification('Please enter Game ID','warning');
+        const gameId = idInput.value.trim();
+        if (!gameId) {
+          showNotification('Please enter a Game ID', 'warning');
           return;
         }
 
         // Call the API function from core.js
-        fetchGameData(idInput.value);
+        fetchGameData(gameId);
       });
       joinForm.appendChild(joinButton);
 
@@ -136,7 +139,7 @@ function renderHostPanel() {
       createLink.className = 'text-center';
 
       const createButton = document.createElement('button');
-      createButton.className = 'text-blue-600 underline';
+      createButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
       createButton.textContent = 'Create New Game Instead';
       createButton.addEventListener('click', toggleForm);
       createLink.appendChild(createButton);
@@ -149,7 +152,7 @@ function renderHostPanel() {
     backContainer.className = 'text-center mt-6';
 
     const backButton = document.createElement('button');
-    backButton.className = 'text-gray-600';
+    backButton.className = 'text-gray-600 hover:text-gray-800 transition-colors';
     backButton.textContent = 'Back to Home';
     backButton.addEventListener('click', function() { navigateTo('landing'); });
     backContainer.appendChild(backButton);
@@ -202,7 +205,7 @@ function renderHostPanel() {
   qrSection.appendChild(qrDescription);
 
   const scanQRButton = document.createElement('button');
-  scanQRButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center';
+  scanQRButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors';
 
   const qrIcon = document.createElement('i');
   qrIcon.setAttribute('data-lucide', 'qr-code');
@@ -302,7 +305,7 @@ function renderHostPanel() {
 
       // Edit button
       const editButton = document.createElement('button');
-      editButton.className = 'text-blue-600 hover:text-blue-800';
+      editButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
       editButton.textContent = 'Edit';
       editButton.addEventListener('click', function() {
         renderTeamEditModal(team);
@@ -443,7 +446,7 @@ function renderHostPanel() {
   if (appState.gameData.status === 'active') {
     // Game is running - show only End Game button
     const endButton = document.createElement('button');
-    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg';
+    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors';
     endButton.textContent = 'End Game';
     endButton.addEventListener('click', function() {
       // Confirm before ending
@@ -457,7 +460,7 @@ function renderHostPanel() {
   } else if (appState.gameData.status === 'setup') {
     // Game is in setup - show only Start Game button
     const startButton = document.createElement('button');
-    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg';
+    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
     
     // Disable button if fewer than 2 teams
     const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
@@ -475,7 +478,7 @@ function renderHostPanel() {
         // Call the API function from core.js
         startGame();
       } else {
-        showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.','error');
+        showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.', 'error');
       }
     });
     
@@ -489,7 +492,7 @@ function renderHostPanel() {
   }
 
   const exitButton = document.createElement('button');
-  exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg';
+  exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors';
   exitButton.textContent = 'Exit Host Panel';
   exitButton.addEventListener('click', function() { navigateTo('landing'); });
   controlButtons.appendChild(exitButton);
@@ -528,7 +531,7 @@ function renderQRAssignmentPage() {
     container.appendChild(instructionDiv);
 
     const backButton = document.createElement('button');
-    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full';
+    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
     backButton.textContent = 'Back to Host Panel';
     backButton.addEventListener('click', function() {
       navigateTo('hostPanel');
@@ -557,7 +560,7 @@ function renderQRAssignmentPage() {
 
   // Assign as Team button
   const teamButton = document.createElement('button');
-  teamButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center';
+  teamButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
 
   const teamIcon = document.createElement('i');
   teamIcon.setAttribute('data-lucide', 'users');
@@ -576,7 +579,7 @@ function renderQRAssignmentPage() {
 
   // Assign as Base button
   const baseButton = document.createElement('button');
-  baseButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center';
+  baseButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
 
   const baseIcon = document.createElement('i');
   baseIcon.setAttribute('data-lucide', 'flag');
@@ -597,7 +600,7 @@ function renderQRAssignmentPage() {
 
   // Cancel button
   const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
+  cancelButton.className = 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');
@@ -716,7 +719,7 @@ function renderTeamCreationForm(qrId, container) {
 
   // Submit button
   const submitButton = document.createElement('button');
-  submitButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full';
+  submitButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   submitButton.type = 'submit';
   submitButton.textContent = 'Create Team';
   form.appendChild(submitButton);
@@ -724,15 +727,22 @@ function renderTeamCreationForm(qrId, container) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const teamName = nameInput.value.trim();
+    if (!teamName) {
+      showNotification('Please enter a team name', 'warning');
+      return;
+    }
+    
     // Call the API function from core.js
-    createTeam(qrId, nameInput.value, colorSelect.value);
+    createTeam(qrId, teamName, colorSelect.value);
   });
 
   container.appendChild(form);
 
   // Cancel button
   const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
+  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');

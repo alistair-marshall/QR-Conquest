@@ -87,7 +87,7 @@ function getAuthState() {
 
 // Update authentication state
 function updateAuthState(authData) {
-  // Update localStorage
+  // Update localStorage for persistent data
   if (authData.hostId !== undefined) {
     if (authData.hostId) {
       localStorage.setItem('hostId', authData.hostId);
@@ -116,7 +116,7 @@ function updateAuthState(authData) {
     }
   }
 
-  // Update app state
+  // Update app state for runtime use
   if (authData.hostId !== undefined) {
     appState.gameData.hostId = authData.hostId;
     appState.gameData.hostName = authData.hostName;
@@ -130,13 +130,14 @@ function updateAuthState(authData) {
 
 // Clear all authentication data
 function clearAuthState() {
+  // Clear persistent storage
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
   localStorage.removeItem('hostId');
   localStorage.removeItem('hostName');
 
-  // Clear sessionStorage data
+  // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
   sessionStorage.removeItem('pendingTeamId');
 
@@ -208,9 +209,7 @@ async function handleQRCode(qrCode, context = 'scan') {
     const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
 
     if (!statusResponse.ok) {
-      const errorText = await statusResponse.text();
-      console.error('QR code status response error:', statusResponse.status, errorText);
-      throw new Error(`Failed to check QR code status: ${statusResponse.status} ${statusResponse.statusText}`);
+      throw new Error(`Unable to verify QR code. Please check your connection and try again.`);
     }
 
     const responseText = await statusResponse.text();
@@ -220,7 +219,7 @@ async function handleQRCode(qrCode, context = 'scan') {
       statusData = JSON.parse(responseText);
     } catch (jsonError) {
       console.error('Error parsing QR code status response:', jsonError);
-      throw new Error('Invalid response format when checking QR code');
+      throw new Error('Server returned invalid response. Please try again.');
     }
 
     // Route to appropriate handler based on QR type
@@ -229,14 +228,18 @@ async function handleQRCode(qrCode, context = 'scan') {
   } catch (err) {
     console.error('Error processing QR code:', err);
     
+    // Show user-friendly error message
+    const userMessage = err.message || 'Unable to process QR code. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    
     // If we have no game loaded and this is an unrecognised QR code
     if (!getAuthState().hasGame) {
       appState.pendingQRCode = qrCode;
       if (window.navigateTo) {
         window.navigateTo('firstTime');
       }
-    } else {
-      setError(err.message);
     }
   } finally {
     setLoading(false);
@@ -245,175 +248,203 @@ async function handleQRCode(qrCode, context = 'scan') {
 
 // Route QR code to appropriate handler based on type
 async function routeQRCode(qrCode, statusData) {
-  const authState = getAuthState();
-
-  switch (statusData.status) {
-    case 'host':
-      await handleHostQR(qrCode, statusData);
-      break;
-      
-    case 'team':
-      await handleTeamQR(qrCode, statusData);
-      break;
-      
-    case 'base':
-      await handleBaseQR(qrCode, statusData);
-      break;
-      
-    case 'unassigned':
-      await handleUnassignedQR(qrCode);
-      break;
-      
-    default:
-      throw new Error('Unknown QR code type');
+  try {
+    switch (statusData.status) {
+      case 'host':
+        await handleHostQR(qrCode, statusData);
+        break;
+        
+      case 'team':
+        await handleTeamQR(qrCode, statusData);
+        break;
+        
+      case 'base':
+        await handleBaseQR(qrCode, statusData);
+        break;
+        
+      case 'unassigned':
+        await handleUnassignedQR(qrCode);
+        break;
+        
+      default:
+        throw new Error('This QR code is not recognised by the system.');
+    }
+  } catch (err) {
+    // Re-throw with context if needed
+    throw err;
   }
 }
 
 // Handle host QR codes
 async function handleHostQR(qrCode, statusData) {
-  if (statusData.expired) {
-    throw new Error('This host access has expired');
-  }
+  try {
+    if (statusData.expired) {
+      throw new Error('This host access has expired. Please contact the administrator.');
+    }
 
-  // Update authentication state
-  updateAuthState({
-    hostId: statusData.host_id,
-    hostName: statusData.name
-  });
+    // Update authentication state
+    updateAuthState({
+      hostId: statusData.host_id,
+      hostName: statusData.name
+    });
 
-  // Show success notification and navigate - UI will handle this
-  if (window.showNotification) {
-    window.showNotification(`Welcome, ${statusData.name}!`, 'success');
-  }
-  if (window.navigateTo) {
-    window.navigateTo('hostPanel');
+    // Show success notification and navigate - UI will handle this
+    if (window.showNotification) {
+      window.showNotification(`Welcome, ${statusData.name}!`, 'success');
+    }
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
+  } catch (err) {
+    throw err; // Re-throw for consistent error handling
   }
 }
 
 // Handle team QR codes
 async function handleTeamQR(qrCode, statusData) {
-  const authState = getAuthState();
-  const teamId = statusData.team_id;
-  const gameId = statusData.game_id;
+  try {
+    const authState = getAuthState();
+    const teamId = statusData.team_id;
+    const gameId = statusData.game_id;
 
-  console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
+    console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
 
-  // If user is already on a team
-  if (authState.hasTeam) {
-    if (authState.teamId === teamId) {
-      setError('You are already a member of this team.');
-    } else {
-      setError('You are already on a different team. Please continue playing.');
+    // If user is already on a team
+    if (authState.hasTeam) {
+      if (authState.teamId === teamId) {
+        throw new Error('You are already a member of this team.');
+      } else {
+        throw new Error('You are already on a different team. Please continue playing with your current team.');
+      }
     }
-    if (window.navigateTo) {
-      window.navigateTo('gameView');
+
+    // If we have a game loaded but QR is for different game
+    if (authState.hasGame && authState.gameId !== gameId) {
+      throw new Error(`This team belongs to a different game. You are currently in game ${authState.gameId}.`);
     }
-    return;
-  }
 
-  // If we have a game loaded but QR is for different game
-  if (authState.hasGame && authState.gameId !== gameId) {
-    setError(`This team belongs to a different game. You are currently in game ${authState.gameId}.`);
-    return;
-  }
-
-  // If no game is loaded yet but QR code has a game ID
-  if (!authState.hasGame && gameId) {
-    try {
+    // If no game is loaded yet but QR code has a game ID
+    if (!authState.hasGame && gameId) {
       console.log('Loading game from team QR code, Game ID:', gameId);
       updateAuthState({ gameId: gameId });
       await fetchGameData(gameId);
-    } catch (err) {
-      setError('Failed to load game: ' + err.message);
-      console.error('Error loading game from team QR:', err);
-      return;
     }
-  }
 
-  // Store team ID and go to registration - UI will handle this
-  sessionStorage.setItem('pendingTeamId', teamId);
-  if (window.navigateTo) {
-    window.navigateTo('playerRegistration');
+    // Store team ID and go to registration - UI will handle this
+    sessionStorage.setItem('pendingTeamId', teamId);
+    if (window.navigateTo) {
+      window.navigateTo('playerRegistration');
+    }
+  } catch (err) {
+    // If this was an error during team handling, navigate appropriately
+    if (getAuthState().hasTeam && window.navigateTo) {
+      window.navigateTo('gameView');
+    }
+    throw err;
   }
 }
 
 // Handle base QR codes
 async function handleBaseQR(qrCode, statusData) {
-  const authState = getAuthState();
-  const baseId = statusData.base_id;
-  const gameId = statusData.game_id;
+  try {
+    const authState = getAuthState();
+    const baseId = statusData.base_id;
+    const gameId = statusData.game_id;
 
-  console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
+    console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
 
-  // Check if user is on a team
-  if (!authState.hasTeam) {
-    setError('You need to join a team before capturing bases. Please scan a team QR code first.');
-    if (window.navigateTo) {
-      window.navigateTo('scanQR');
+    // Check if user is on a team
+    if (!authState.hasTeam) {
+      throw new Error('You need to join a team before capturing bases. Please scan a team QR code first.');
     }
-    return;
-  }
 
-  // If we have a game loaded but QR is for different game
-  if (authState.hasGame && authState.gameId !== gameId) {
-    setError('This base belongs to a different game.');
-    return;
-  }
+    // If we have a game loaded but QR is for different game
+    if (authState.hasGame && authState.gameId !== gameId) {
+      throw new Error('This base belongs to a different game.');
+    }
 
-  // Check game status
-  if (appState.gameData.status !== 'active') {
-    setError('The game is not active yet. Please wait for the host to start the game.');
-    if (window.navigateTo) {
+    // Check game status
+    if (appState.gameData.status !== 'active') {
+      throw new Error('The game is not active yet. Please wait for the host to start the game.');
+    }
+
+    // Attempt to capture the base with GPS location
+    await captureBaseWithLocation(baseId);
+  } catch (err) {
+    // Navigate appropriately based on error context
+    if (!getAuthState().hasTeam && window.navigateTo) {
+      window.navigateTo('scanQR');
+    } else if (appState.gameData.status !== 'active' && window.navigateTo) {
       window.navigateTo('gameView');
     }
-    return;
+    throw err;
   }
-
-  // Attempt to capture the base with GPS location
-  await captureBaseWithLocation(baseId);
 }
 
 // Handle unassigned QR codes
 async function handleUnassignedQR(qrCode) {
-  const authState = getAuthState();
+  try {
+    const authState = getAuthState();
 
-  if (authState.isHost) {
-    console.log('Showing QR assignment options for:', qrCode);
-    sessionStorage.setItem('pendingQRCode', qrCode);
-    if (window.navigateTo) {
-      window.navigateTo('qrAssignment');
+    if (authState.isHost) {
+      console.log('Showing QR assignment options for:', qrCode);
+      sessionStorage.setItem('pendingQRCode', qrCode);
+      if (window.navigateTo) {
+        window.navigateTo('qrAssignment');
+      }
+    } else {
+      // Store pending QR code for first-time user flow
+      appState.pendingQRCode = qrCode;
+      if (window.navigateTo) {
+        window.navigateTo('firstTime');
+      }
     }
-  } else {
-    // Store pending QR code for first-time user flow
-    appState.pendingQRCode = qrCode;
-    if (window.navigateTo) {
-      window.navigateTo('firstTime');
-    }
+  } catch (err) {
+    throw err;
   }
 }
 
 // Capture base with GPS location verification
 async function captureBaseWithLocation(baseId) {
   if (!navigator.geolocation) {
-    setError('Geolocation is not supported by this browser.');
-    return;
+    throw new Error('Location services are not available on this device.');
   }
 
-  navigator.geolocation.getCurrentPosition(
-    function(position) {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      captureBase(baseId, latitude, longitude);
-    },
-    function(error) {
-      setError('Error getting location. Please enable GPS and try again: ' + error.message);
-    },
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
-    }
-  );
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      function(position) {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        captureBase(baseId, latitude, longitude)
+          .then(resolve)
+          .catch(reject);
+      },
+      function(error) {
+        let errorMessage = 'Unable to get your location. ';
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage += 'Please enable location services and try again.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Location information is unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage += 'Location request timed out. Please try again.';
+            break;
+          default:
+            errorMessage += 'Please check your GPS settings and try again.';
+            break;
+        }
+        reject(new Error(errorMessage));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  });
 }
 
 // =============================================================================
@@ -444,7 +475,7 @@ async function fetchGameData(gameId) {
           });
         }
       } else {
-        throw new Error('Failed to fetch game data from server');
+        throw new Error('Failed to load game data from server');
       }
     } catch (networkError) {
       console.warn('Network fetch failed, trying cache:', networkError);
@@ -456,10 +487,10 @@ async function fetchGameData(gameId) {
           fromCache = true;
           console.log('Game data loaded from cache:', data);
         } catch (cacheError) {
-          throw new Error('Failed to load game data: No network connection and no cached data');
+          throw new Error('Unable to load game data. Please check your connection and try again.');
         }
       } else {
-        throw networkError;
+        throw new Error('Unable to load game data. Please check your connection and try again.');
       }
     }
 
@@ -475,10 +506,8 @@ async function fetchGameData(gameId) {
     updateAuthState({ gameId: gameId });
 
     // Show offline notification if data came from cache
-    if (fromCache) {
-      if (window.showNotification) {
-        window.showNotification('Using cached game data (offline mode)', 'warning');
-      }
+    if (fromCache && window.showNotification) {
+      window.showNotification('Using cached game data (offline mode)', 'warning');
     }
 
     // Re-render with new data - UI will handle this
@@ -486,8 +515,12 @@ async function fetchGameData(gameId) {
       window.renderApp();
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error fetching game data:', err);
+    const userMessage = err.message || 'Unable to load game data. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -523,6 +556,7 @@ async function fetchGameUpdates() {
     }
   } catch (err) {
     console.error('Error fetching game updates:', err);
+    // Don't show error notification for background updates to avoid spam
   }
 }
 
@@ -565,7 +599,7 @@ async function createGame(gameSettings) {
 
     const authState = getAuthState();
     if (!authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Host authentication required to create games.');
     }
 
     const response = await fetch(API_BASE_URL + '/games', {
@@ -593,7 +627,7 @@ async function createGame(gameSettings) {
 
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification('Game created successfully! Game ID: ' + gameId + '\n\nYou can now scan QR codes to add teams and bases.','success');
+      window.showNotification(`Game created successfully! Game ID: ${gameId}\n\nYou can now scan QR codes to add teams and bases.`, 'success');
     }
     
     // Check if there's a pending QR code to handle
@@ -602,8 +636,12 @@ async function createGame(gameSettings) {
       handleQRCode(pendingQR);
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error creating game:', err);
+    const userMessage = err.message || 'Unable to create game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -611,14 +649,16 @@ async function createGame(gameSettings) {
 
 // Start game
 async function startGame() {
-  if (!appState.gameData.id) return;
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded to start.');
+  }
 
   try {
     setLoading(true);
     
     const authState = getAuthState();
     if (!authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Only the game host can start the game.');
     }
     
     const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/start', {
@@ -644,8 +684,12 @@ async function startGame() {
       window.navigateTo('gameView');
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error starting game:', err);
+    const userMessage = err.message || 'Unable to start game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -653,14 +697,16 @@ async function startGame() {
 
 // End game
 async function endGame() {
-  if (!appState.gameData.id) return;
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded to end.');
+  }
 
   try {
     setLoading(true);
     
     const authState = getAuthState();
     if (!authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Only the game host can end the game.');
     }
     
     const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/end', {
@@ -683,8 +729,12 @@ async function endGame() {
       window.navigateTo('results');
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error ending game:', err);
+    const userMessage = err.message || 'Unable to end game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -728,8 +778,12 @@ async function joinTeam(teamId) {
       window.navigateTo('gameView');
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error joining team:', err);
+    const userMessage = err.message || 'Unable to join team. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -739,8 +793,7 @@ async function joinTeam(teamId) {
 async function captureBase(baseId, latitude, longitude) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
-    setError('You must join a team first');
-    return;
+    throw new Error('You must join a team before capturing bases.');
   }
 
   try {
@@ -785,12 +838,16 @@ async function captureBase(baseId, latitude, longitude) {
           window.showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
         }
       } else {
-        throw new Error('Offline capture not supported. Please try again when online.');
+        throw new Error('You are offline and offline capture is not available. Please try again when online.');
       }
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error capturing base:', err);
+    const userMessage = err.message || 'Unable to capture base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -807,7 +864,7 @@ async function createTeam(qrId, name, color) {
 
     const authState = getAuthState();
     if (!authState.hasGame || !authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Host authentication required to create teams.');
     }
 
     const response = await fetch(`${API_BASE_URL}/games/${authState.gameId}/teams`, {
@@ -830,7 +887,7 @@ async function createTeam(qrId, name, color) {
 
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification(`Team "${name}" created successfully with QR code ${qrId}`,'success');
+      window.showNotification(`Team "${name}" created successfully!`, 'success');
     }
 
     // Refresh game data
@@ -841,8 +898,12 @@ async function createTeam(qrId, name, color) {
       window.navigateTo('hostPanel');
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error creating team:', err);
+    const userMessage = err.message || 'Unable to create team. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -855,7 +916,7 @@ async function updateTeam(teamId, name, color) {
 
     const authState = getAuthState();
     if (!authState.hasGame || !authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Host authentication required to update teams.');
     }
 
     const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
@@ -874,14 +935,18 @@ async function updateTeam(teamId, name, color) {
 
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification('Team updated successfully','success');
+      window.showNotification('Team updated successfully!', 'success');
     }
 
     // Refresh game data
     await fetchGameData(authState.gameId);
   } catch (err) {
-    setError(err.message);
     console.error('Error updating team:', err);
+    const userMessage = err.message || 'Unable to update team. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -894,7 +959,7 @@ async function createBase(qrId, name, latitude, longitude) {
 
     const authState = getAuthState();
     if (!authState.hasGame || !authState.isHost) {
-      throw new Error('Host authentication required');
+      throw new Error('Host authentication required to create bases.');
     }
 
     const response = await fetch(`${API_BASE_URL}/games/${authState.gameId}/bases`, {
@@ -918,7 +983,7 @@ async function createBase(qrId, name, latitude, longitude) {
 
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification(`Base "${name}" created successfully with QR code ${qrId}`,'success');
+      window.showNotification(`Base "${name}" created successfully!`, 'success');
     }
 
     // Refresh game data
@@ -929,8 +994,12 @@ async function createBase(qrId, name, latitude, longitude) {
       window.navigateTo('hostPanel');
     }
   } catch (err) {
-    setError(err.message);
     console.error('Error creating base:', err);
+    const userMessage = err.message || 'Unable to create base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -962,9 +1031,9 @@ async function authenticateSiteAdmin(password) {
       appState.siteAdmin.isAuthenticated = false;
       
       if (response.status === 401) {
-        throw new Error('Invalid admin password');
+        throw new Error('Invalid admin password. Please check your credentials.');
       } else {
-        throw new Error(`Error authenticating: ${response.status}`);
+        throw new Error('Authentication failed. Please try again.');
       }
     }
     
@@ -978,8 +1047,11 @@ async function authenticateSiteAdmin(password) {
 
     return true;
   } catch (err) {
-    setError(err.message);
     console.error('Site admin authentication error:', err);
+    const userMessage = err.message || 'Authentication failed. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
     return false;
   } finally {
     setLoading(false);
@@ -989,7 +1061,7 @@ async function authenticateSiteAdmin(password) {
 // Site admin host management functions
 async function fetchHosts() {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
-    return [];
+    throw new Error('Admin authentication required to fetch hosts.');
   }
 
   try {
@@ -1006,17 +1078,20 @@ async function fetchHosts() {
         // Reset admin auth if unauthorized
         appState.siteAdmin.isAuthenticated = false;
         appState.siteAdmin.token = null;
-        throw new Error('Admin authentication expired. Please login again.');
+        throw new Error('Admin session expired. Please login again.');
       }
-      throw new Error(`Failed to fetch hosts: ${response.status}`);
+      throw new Error('Unable to load hosts. Please try again.');
     }
     
     const hosts = await response.json();
     return hosts;
   } catch (err) {
-    setError(err.message);
     console.error('Error fetching hosts:', err);
-    return [];
+    const userMessage = err.message || 'Unable to load hosts. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
   } finally {
     setLoading(false);
   }
@@ -1024,7 +1099,7 @@ async function fetchHosts() {
 
 async function createHost(hostData) {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
-    throw new Error('Admin authentication required');
+    throw new Error('Admin authentication required to create hosts.');
   }
 
   try {
@@ -1044,24 +1119,26 @@ async function createHost(hostData) {
         // Reset admin auth if unauthorized
         appState.siteAdmin.isAuthenticated = false;
         appState.siteAdmin.token = null;
-        throw new Error('Admin authentication expired. Please login again.');
+        throw new Error('Admin session expired. Please login again.');
       }
-      throw new Error(`Failed to create host: ${response.status}`);
+      throw new Error('Unable to create host. Please check your details and try again.');
     }
     
     const result = await response.json();
     
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification('Host created successfully', 'success');
+      window.showNotification('Host created successfully!', 'success');
     }
 
     refreshSiteAdminHosts();
-
     return result;
   } catch (err) {
-    setError(err.message);
     console.error('Error creating host:', err);
+    const userMessage = err.message || 'Unable to create host. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
     throw err;
   } finally {
     setLoading(false);
@@ -1070,7 +1147,7 @@ async function createHost(hostData) {
 
 async function updateHost(hostId, hostData) {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
-    throw new Error('Admin authentication required');
+    throw new Error('Admin authentication required to update hosts.');
   }
 
   try {
@@ -1090,23 +1167,26 @@ async function updateHost(hostId, hostData) {
         // Reset admin auth if unauthorized
         appState.siteAdmin.isAuthenticated = false;
         appState.siteAdmin.token = null;
-        throw new Error('Admin authentication expired. Please login again.');
+        throw new Error('Admin session expired. Please login again.');
       }
-      throw new Error(`Failed to update host: ${response.status}`);
+      throw new Error('Unable to update host. Please check your details and try again.');
     }
     
     const result = await response.json();
     
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification('Host updated successfully', 'success');
+      window.showNotification('Host updated successfully!', 'success');
     }
     
     refreshSiteAdminHosts();
     return result;
   } catch (err) {
-    setError(err.message);
     console.error('Error updating host:', err);
+    const userMessage = err.message || 'Unable to update host. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
     throw err;
   } finally {
     setLoading(false);
@@ -1115,7 +1195,7 @@ async function updateHost(hostId, hostData) {
 
 async function deleteHost(hostId) {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
-    throw new Error('Admin authentication required');
+    throw new Error('Admin authentication required to delete hosts.');
   }
 
   try {
@@ -1133,21 +1213,24 @@ async function deleteHost(hostId) {
         // Reset admin auth if unauthorized
         appState.siteAdmin.isAuthenticated = false;
         appState.siteAdmin.token = null;
-        throw new Error('Admin authentication expired. Please login again.');
+        throw new Error('Admin session expired. Please login again.');
       }
-      throw new Error(`Failed to delete host: ${response.status}`);
+      throw new Error('Unable to delete host. Please try again.');
     }
     
     // Show success message - UI will handle this
     if (window.showNotification) {
-      window.showNotification('Host deleted successfully', 'success');
+      window.showNotification('Host deleted successfully!', 'success');
     }
     
     refreshSiteAdminHosts();
     return true;
   } catch (err) {
-    setError(err.message);
     console.error('Error deleting host:', err);
+    const userMessage = err.message || 'Unable to delete host. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
     throw err;
   } finally {
     setLoading(false);
@@ -1176,7 +1259,7 @@ async function loadSiteAdminHosts() {
     appState.siteAdmin.hostsError = null;
   } catch (error) {
     console.error('Error loading hosts:', error);
-    appState.siteAdmin.hostsError = error.message;
+    appState.siteAdmin.hostsError = error.message || 'Unable to load hosts. Please try again.';
     appState.siteAdmin.hosts = [];
   } finally {
     appState.siteAdmin.hostsLoading = false;
@@ -1215,7 +1298,7 @@ function setLoading(isLoading) {
   }
 }
 
-// Set error state
+// Set error state - DEPRECATED: Use showNotification instead for user messages
 function setError(errorMessage) {
   appState.error = errorMessage;
 
@@ -1264,7 +1347,7 @@ function clearGameData() {
   // Display confirmation message to user - UI will handle this
   setTimeout(function() {
     if (window.showNotification) {
-      window.showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.','success');
+      window.showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.', 'success');
     }
   }, 300);
 }
