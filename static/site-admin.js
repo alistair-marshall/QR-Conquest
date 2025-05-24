@@ -93,134 +93,197 @@ function renderSiteAdminLogin() {
   return container;
 }
 
-// Render site admin panel
-async function renderSiteAdminPanel() {
-  if (!appState.siteAdmin.isAuthenticated) {
-    return renderSiteAdminLogin();
-  }
+// Render site admin panel with async host loading
+function renderSiteAdminPanel() {
+    if (!appState.siteAdmin.isAuthenticated) {
+        return renderSiteAdminLogin();
+    }
 
-  const container = document.createElement('div');
-  container.className = 'max-w-6xl mx-auto py-8';
+    const container = document.createElement('div');
+    container.className = 'max-w-6xl mx-auto py-8';
 
-  // Title and summary
-  const headerSection = document.createElement('div');
-  headerSection.className = 'flex justify-between items-center mb-6';
+    // Title and summary - build immediately
+    const headerSection = document.createElement('div');
+    headerSection.className = 'flex justify-between items-center mb-6';
 
-  const titleSection = document.createElement('div');
-  const title = document.createElement('h2');
-  title.className = 'text-3xl font-bold text-gray-900';
-  title.textContent = 'Host Management';
-  titleSection.appendChild(title);
+    const titleSection = document.createElement('div');
+    const title = document.createElement('h2');
+    title.className = 'text-3xl font-bold text-gray-900';
+    title.textContent = 'Host Management';
+    titleSection.appendChild(title);
 
-  const subtitle = document.createElement('p');
-  subtitle.className = 'text-gray-600 mt-1';
-  subtitle.textContent = 'Manage game hosts and their permissions';
-  titleSection.appendChild(subtitle);
+    const subtitle = document.createElement('p');
+    subtitle.className = 'text-gray-600 mt-1';
+    subtitle.textContent = 'Manage game hosts and their permissions';
+    titleSection.appendChild(subtitle);
 
-  headerSection.appendChild(titleSection);
+    headerSection.appendChild(titleSection);
 
-  // Logout button
-  const logoutButton = document.createElement('button');
-  logoutButton.className = 'bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors';
-  logoutButton.textContent = 'Logout';
-  logoutButton.addEventListener('click', logoutSiteAdmin);
-  headerSection.appendChild(logoutButton);
+    // Logout button
+    const logoutButton = document.createElement('button');
+    logoutButton.className = 'bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors';
+    logoutButton.textContent = 'Logout';
+    logoutButton.addEventListener('click', logoutSiteAdmin);
+    headerSection.appendChild(logoutButton);
 
-  container.appendChild(headerSection);
+    container.appendChild(headerSection);
 
-  // Fetch hosts
-  const hosts = await fetchHosts();
-  
-  // Stats section
-  const statsSection = document.createElement('div');
-  statsSection.className = 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-6';
+    // Stats section - placeholder initially
+    const statsSection = document.createElement('div');
+    statsSection.className = 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-6';
+    statsSection.id = 'stats-section';
+    
+    // Create placeholder stat cards
+    for (let i = 0; i < 3; i++) {
+        const statCard = document.createElement('div');
+        statCard.className = 'bg-white rounded-lg shadow-md p-6';
+        
+        const statLabel = document.createElement('div');
+        statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
+        statLabel.textContent = 'Loading...';
+        statCard.appendChild(statLabel);
+        
+        const statValue = document.createElement('div');
+        statValue.className = 'mt-2 text-3xl font-bold text-gray-400';
+        statValue.innerHTML = '<div class="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>';
+        statCard.appendChild(statValue);
+        
+        statsSection.appendChild(statCard);
+    }
+    
+    container.appendChild(statsSection);
 
-  // Total hosts stat
-  const totalHostsCard = document.createElement('div');
-  totalHostsCard.className = 'bg-white rounded-lg shadow-md p-6';
-  
-  const totalHostsLabel = document.createElement('div');
-  totalHostsLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
-  totalHostsLabel.textContent = 'Total Hosts';
-  totalHostsCard.appendChild(totalHostsLabel);
-  
-  const totalHostsValue = document.createElement('div');
-  totalHostsValue.className = 'mt-2 text-3xl font-bold text-gray-900';
-  totalHostsValue.textContent = hosts.length;
-  totalHostsCard.appendChild(totalHostsValue);
-  
-  statsSection.appendChild(totalHostsCard);
+    // Host list section with placeholder
+    const hostListContainer = document.createElement('div');
+    hostListContainer.className = 'bg-white rounded-lg shadow-md p-6';
+    hostListContainer.id = 'host-list-container';
 
-  // Active hosts stat
-  const activeHosts = hosts.filter(host => !host.expiry_date || host.expiry_date > Date.now() / 1000);
-  const activeHostsCard = document.createElement('div');
-  activeHostsCard.className = 'bg-white rounded-lg shadow-md p-6';
-  
-  const activeHostsLabel = document.createElement('div');
-  activeHostsLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
-  activeHostsLabel.textContent = 'Active Hosts';
-  activeHostsCard.appendChild(activeHostsLabel);
-  
-  const activeHostsValue = document.createElement('div');
-  activeHostsValue.className = 'mt-2 text-3xl font-bold text-green-600';
-  activeHostsValue.textContent = activeHosts.length;
-  activeHostsCard.appendChild(activeHostsValue);
-  
-  statsSection.appendChild(activeHostsCard);
+    const hostListHeader = document.createElement('div');
+    hostListHeader.className = 'flex justify-between items-center mb-6';
+    
+    const hostListTitle = document.createElement('h3');
+    hostListTitle.className = 'text-xl font-semibold text-gray-900';
+    hostListTitle.textContent = 'All Hosts';
+    hostListHeader.appendChild(hostListTitle);
 
-  // Expired hosts stat
-  const expiredHosts = hosts.filter(host => host.expiry_date && host.expiry_date <= Date.now() / 1000);
-  const expiredHostsCard = document.createElement('div');
-  expiredHostsCard.className = 'bg-white rounded-lg shadow-md p-6';
-  
-  const expiredHostsLabel = document.createElement('div');
-  expiredHostsLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
-  expiredHostsLabel.textContent = 'Expired Hosts';
-  expiredHostsCard.appendChild(expiredHostsLabel);
-  
-  const expiredHostsValue = document.createElement('div');
-  expiredHostsValue.className = 'mt-2 text-3xl font-bold text-red-600';
-  expiredHostsValue.textContent = expiredHosts.length;
-  expiredHostsCard.appendChild(expiredHostsValue);
-  
-  statsSection.appendChild(expiredHostsCard);
-  
-  container.appendChild(statsSection);
+    // Add new host button
+    const addHostButton = document.createElement('button');
+    addHostButton.className = 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center';
+    
+    const addIcon = document.createElement('i');
+    addIcon.setAttribute('data-lucide', 'plus');
+    addIcon.className = 'mr-2 h-4 w-4';
+    addHostButton.appendChild(addIcon);
+    
+    const addText = document.createElement('span');
+    addText.textContent = 'Add New Host';
+    addHostButton.appendChild(addText);
+    
+    addHostButton.addEventListener('click', function() {
+        renderHostCreationModal();
+    });
+    
+    hostListHeader.appendChild(addHostButton);
+    hostListContainer.appendChild(hostListHeader);
 
-  // Host list section
-  const hostListContainer = document.createElement('div');
-  hostListContainer.className = 'bg-white rounded-lg shadow-md p-6';
+    // Placeholder for hosts table
+    const hostsPlaceholder = document.createElement('div');
+    hostsPlaceholder.className = 'flex items-center justify-center py-12';
+    hostsPlaceholder.id = 'hosts-placeholder';
+    
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.className = 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600 mr-4';
+    hostsPlaceholder.appendChild(loadingSpinner);
+    
+    const loadingText = document.createElement('p');
+    loadingText.className = 'text-gray-600';
+    loadingText.textContent = 'Loading hosts...';
+    hostsPlaceholder.appendChild(loadingText);
+    
+    hostListContainer.appendChild(hostsPlaceholder);
+    container.appendChild(hostListContainer);
 
-  const hostListHeader = document.createElement('div');
-  hostListHeader.className = 'flex justify-between items-center mb-6';
-  
-  const hostListTitle = document.createElement('h3');
-  hostListTitle.className = 'text-xl font-semibold text-gray-900';
-  hostListTitle.textContent = 'All Hosts';
-  hostListHeader.appendChild(hostListTitle);
+    // Load hosts data asynchronously
+    loadHostsData(container);
 
-  // Add new host button
-  const addHostButton = document.createElement('button');
-  addHostButton.className = 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center';
-  
-  const addIcon = document.createElement('i');
-  addIcon.setAttribute('data-lucide', 'plus');
-  addIcon.className = 'mr-2 h-4 w-4';
-  addHostButton.appendChild(addIcon);
-  
-  const addText = document.createElement('span');
-  addText.textContent = 'Add New Host';
-  addHostButton.appendChild(addText);
-  
-  addHostButton.addEventListener('click', function() {
-    renderHostCreationModal();
-  });
-  
-  hostListHeader.appendChild(addHostButton);
-  hostListContainer.appendChild(hostListHeader);
+    return container;
+}
 
-  // Hosts table
-  if (hosts.length > 0) {
+// New function to load and populate hosts data
+async function loadHostsData(container) {
+    try {
+        const hosts = await fetchHosts();
+        
+        // Update stats section
+        updateStatsSection(hosts);
+        
+        // Update hosts table
+        updateHostsTable(hosts);
+        
+    } catch (error) {
+        console.error('Error loading hosts data:', error);
+        showHostsError(error.message);
+    }
+}
+
+// Update stats section with real data
+function updateStatsSection(hosts) {
+    const statsSection = document.getElementById('stats-section');
+    if (!statsSection) return;
+    
+    // Clear existing content
+    statsSection.innerHTML = '';
+    
+    // Calculate stats
+    const totalHosts = hosts.length;
+    const activeHosts = hosts.filter(host => !host.expiry_date || host.expiry_date > Date.now() / 1000);
+    const expiredHosts = hosts.filter(host => host.expiry_date && host.expiry_date <= Date.now() / 1000);
+    
+    // Create stat cards with real data
+    const stats = [
+        { label: 'Total Hosts', value: totalHosts, color: 'text-gray-900' },
+        { label: 'Active Hosts', value: activeHosts.length, color: 'text-green-600' },
+        { label: 'Expired Hosts', value: expiredHosts.length, color: 'text-red-600' }
+    ];
+    
+    stats.forEach(stat => {
+        const statCard = document.createElement('div');
+        statCard.className = 'bg-white rounded-lg shadow-md p-6';
+        
+        const statLabel = document.createElement('div');
+        statLabel.className = 'text-sm font-medium text-gray-500 uppercase tracking-wide';
+        statLabel.textContent = stat.label;
+        statCard.appendChild(statLabel);
+        
+        const statValue = document.createElement('div');
+        statValue.className = `mt-2 text-3xl font-bold ${stat.color}`;
+        statValue.textContent = stat.value;
+        statCard.appendChild(statValue);
+        
+        statsSection.appendChild(statCard);
+    });
+}
+
+// Update hosts table with real data
+function updateHostsTable(hosts) {
+    const hostListContainer = document.getElementById('host-list-container');
+    if (!hostListContainer) return;
+    
+    // Remove placeholder
+    const placeholder = document.getElementById('hosts-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    if (hosts.length > 0) {
+        buildHostsTable(hostListContainer, hosts);
+    } else {
+        buildEmptyHostsState(hostListContainer);
+    }
+}
+
+// Build hosts table
+function buildHostsTable(container, hosts) {
     const tableContainer = document.createElement('div');
     tableContainer.className = 'overflow-x-auto';
     
@@ -235,10 +298,10 @@ async function renderSiteAdminPanel() {
     
     const headers = ['Host Name', 'QR Code', 'Status', 'Expiry Date', 'Created', 'Actions'];
     headers.forEach(function(headerText) {
-      const th = document.createElement('th');
-      th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
-      th.textContent = headerText;
-      headerRow.appendChild(th);
+        const th = document.createElement('th');
+        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+        th.textContent = headerText;
+        headerRow.appendChild(th);
     });
     
     thead.appendChild(headerRow);
@@ -249,151 +312,160 @@ async function renderSiteAdminPanel() {
     tbody.className = 'bg-white divide-y divide-gray-200';
     
     hosts.forEach(function(host) {
-      const row = document.createElement('tr');
-      row.className = 'hover:bg-gray-50';
-      
-      // Name cell
-      const nameCell = document.createElement('td');
-      nameCell.className = 'px-6 py-4 whitespace-nowrap';
-      
-      const nameContainer = document.createElement('div');
-      const hostName = document.createElement('div');
-      hostName.className = 'text-sm font-medium text-gray-900';
-      hostName.textContent = host.name;
-      nameContainer.appendChild(hostName);
-      
-      nameCell.appendChild(nameContainer);
-      row.appendChild(nameCell);
-      
-      // QR Code cell
-      const qrCell = document.createElement('td');
-      qrCell.className = 'px-6 py-4 whitespace-nowrap';
-      
-      const qrContainer = document.createElement('div');
-      qrContainer.className = 'flex items-center space-x-2';
-      
-      const qrValue = document.createElement('span');
-      qrValue.className = 'text-sm text-gray-600 font-mono';
-      qrValue.textContent = host.qr_code.substring(0, 8) + '...';
-      qrValue.title = host.qr_code;
-      qrContainer.appendChild(qrValue);
-      
-      const copyButton = document.createElement('button');
-      copyButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
-      copyButton.title = 'Copy QR Code';
-      
-      const copyIcon = document.createElement('i');
-      copyIcon.setAttribute('data-lucide', 'copy');
-      copyIcon.className = 'h-4 w-4';
-      copyButton.appendChild(copyIcon);
-      
-      copyButton.addEventListener('click', function() {
-        navigator.clipboard.writeText(host.qr_code);
-        showNotification('QR code copied to clipboard', 'success');
-      });
-      
-      qrContainer.appendChild(copyButton);
-      qrCell.appendChild(qrContainer);
-      row.appendChild(qrCell);
-      
-      // Status cell
-      const statusCell = document.createElement('td');
-      statusCell.className = 'px-6 py-4 whitespace-nowrap';
-      
-      const statusBadge = document.createElement('span');
-      statusBadge.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
-      
-      const now = Date.now() / 1000;
-      const isExpired = host.expiry_date && host.expiry_date <= now;
-      const isExpiringSoon = host.expiry_date && !isExpired && (host.expiry_date - now) < 7 * 24 * 60 * 60; // 7 days
-      
-      if (isExpired) {
-        statusBadge.className += ' bg-red-100 text-red-800';
-        statusBadge.textContent = 'Expired';
-      } else if (isExpiringSoon) {
-        statusBadge.className += ' bg-yellow-100 text-yellow-800';
-        statusBadge.textContent = 'Expiring Soon';
-      } else {
-        statusBadge.className += ' bg-green-100 text-green-800';
-        statusBadge.textContent = 'Active';
-      }
-      
-      statusCell.appendChild(statusBadge);
-      row.appendChild(statusCell);
-      
-      // Expiry Date cell
-      const expiryCell = document.createElement('td');
-      expiryCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
-      
-      if (host.expiry_date) {
-        const expiryDate = new Date(host.expiry_date * 1000);
-        expiryCell.textContent = expiryDate.toLocaleDateString();
-      } else {
-        expiryCell.textContent = 'Never';
-        expiryCell.className += ' text-gray-500';
-      }
-      
-      row.appendChild(expiryCell);
-      
-      // Created Date cell
-      const createdCell = document.createElement('td');
-      createdCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
-      
-      const createdDate = new Date(host.creation_date * 1000);
-      createdCell.textContent = createdDate.toLocaleDateString();
-      row.appendChild(createdCell);
-      
-      // Actions cell
-      const actionsCell = document.createElement('td');
-      actionsCell.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
-      
-      const actionsContainer = document.createElement('div');
-      actionsContainer.className = 'flex space-x-2';
-      
-      // View QR button
-      const qrButton = document.createElement('button');
-      qrButton.className = 'text-purple-600 hover:text-purple-900 transition-colors';
-      qrButton.textContent = 'QR';
-      qrButton.title = 'View QR Code';
-      qrButton.addEventListener('click', function() {
-        renderHostQRModal(host);
-      });
-      actionsContainer.appendChild(qrButton);
-      
-      // Edit button
-      const editButton = document.createElement('button');
-      editButton.className = 'text-blue-600 hover:text-blue-900 transition-colors';
-      editButton.textContent = 'Edit';
-      editButton.addEventListener('click', function() {
-        renderHostEditModal(host);
-      });
-      actionsContainer.appendChild(editButton);
-      
-      // Delete button
-      const deleteButton = document.createElement('button');
-      deleteButton.className = 'text-red-600 hover:text-red-900 transition-colors';
-      deleteButton.textContent = 'Delete';
-      deleteButton.addEventListener('click', function() {
-        if (confirm(`Are you sure you want to delete host "${host.name}"?\n\nThis action cannot be undone.`)) {
-          deleteHost(host.id).then((success) => {
-            if (success) {
-              renderApp(); // Refresh the view
-            }
-          });
-        }
-      });
-      actionsContainer.appendChild(deleteButton);
-      
-      actionsCell.appendChild(actionsContainer);
-      row.appendChild(actionsCell);
-      
-      tbody.appendChild(row);
+        const row = buildHostRow(host);
+        tbody.appendChild(row);
     });
     
     table.appendChild(tbody);
     tableContainer.appendChild(table);
-    hostListContainer.appendChild(tableContainer);
-  } else {
+    container.appendChild(tableContainer);
+}
+
+// Build individual host row (extract existing logic)
+function buildHostRow(host) {
+    const row = document.createElement('tr');
+    row.className = 'hover:bg-gray-50';
+    
+    // Name cell
+    const nameCell = document.createElement('td');
+    nameCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const nameContainer = document.createElement('div');
+    const hostName = document.createElement('div');
+    hostName.className = 'text-sm font-medium text-gray-900';
+    hostName.textContent = host.name;
+    nameContainer.appendChild(hostName);
+    
+    nameCell.appendChild(nameContainer);
+    row.appendChild(nameCell);
+    
+    // QR Code cell
+    const qrCell = document.createElement('td');
+    qrCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const qrContainer = document.createElement('div');
+    qrContainer.className = 'flex items-center space-x-2';
+    
+    const qrValue = document.createElement('span');
+    qrValue.className = 'text-sm text-gray-600 font-mono';
+    qrValue.textContent = host.qr_code.substring(0, 8) + '...';
+    qrValue.title = host.qr_code;
+    qrContainer.appendChild(qrValue);
+    
+    const copyButton = document.createElement('button');
+    copyButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
+    copyButton.title = 'Copy QR Code';
+    
+    const copyIcon = document.createElement('i');
+    copyIcon.setAttribute('data-lucide', 'copy');
+    copyIcon.className = 'h-4 w-4';
+    copyButton.appendChild(copyIcon);
+    
+    copyButton.addEventListener('click', function() {
+        navigator.clipboard.writeText(host.qr_code);
+        showNotification('QR code copied to clipboard', 'success');
+    });
+    
+    qrContainer.appendChild(copyButton);
+    qrCell.appendChild(qrContainer);
+    row.appendChild(qrCell);
+    
+    // Status cell
+    const statusCell = document.createElement('td');
+    statusCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
+    
+    const now = Date.now() / 1000;
+    const isExpired = host.expiry_date && host.expiry_date <= now;
+    const isExpiringSoon = host.expiry_date && !isExpired && (host.expiry_date - now) < 7 * 24 * 60 * 60; // 7 days
+    
+    if (isExpired) {
+        statusBadge.className += ' bg-red-100 text-red-800';
+        statusBadge.textContent = 'Expired';
+    } else if (isExpiringSoon) {
+        statusBadge.className += ' bg-yellow-100 text-yellow-800';
+        statusBadge.textContent = 'Expiring Soon';
+    } else {
+        statusBadge.className += ' bg-green-100 text-green-800';
+        statusBadge.textContent = 'Active';
+    }
+    
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+    
+    // Expiry Date cell
+    const expiryCell = document.createElement('td');
+    expiryCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+    
+    if (host.expiry_date) {
+        const expiryDate = new Date(host.expiry_date * 1000);
+        expiryCell.textContent = expiryDate.toLocaleDateString();
+    } else {
+        expiryCell.textContent = 'Never';
+        expiryCell.className += ' text-gray-500';
+    }
+    
+    row.appendChild(expiryCell);
+    
+    // Created Date cell
+    const createdCell = document.createElement('td');
+    createdCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+    
+    const createdDate = new Date(host.creation_date * 1000);
+    createdCell.textContent = createdDate.toLocaleDateString();
+    row.appendChild(createdCell);
+    
+    // Actions cell
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
+    
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'flex space-x-2';
+    
+    // View QR button
+    const qrButton = document.createElement('button');
+    qrButton.className = 'text-purple-600 hover:text-purple-900 transition-colors';
+    qrButton.textContent = 'QR';
+    qrButton.title = 'View QR Code';
+    qrButton.addEventListener('click', function() {
+        renderHostQRModal(host);
+    });
+    actionsContainer.appendChild(qrButton);
+    
+    // Edit button
+    const editButton = document.createElement('button');
+    editButton.className = 'text-blue-600 hover:text-blue-900 transition-colors';
+    editButton.textContent = 'Edit';
+    editButton.addEventListener('click', function() {
+        renderHostEditModal(host);
+    });
+    actionsContainer.appendChild(editButton);
+    
+    // Delete button
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'text-red-600 hover:text-red-900 transition-colors';
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', function() {
+        if (confirm(`Are you sure you want to delete host "${host.name}"?\n\nThis action cannot be undone.`)) {
+            deleteHost(host.id).then((success) => {
+                if (success) {
+                    renderApp(); // Refresh the view
+                }
+            });
+        }
+    });
+    actionsContainer.appendChild(deleteButton);
+    
+    actionsCell.appendChild(actionsContainer);
+    row.appendChild(actionsCell);
+    
+    return row;
+}
+
+// Build empty state for no hosts
+function buildEmptyHostsState(container) {
     const noHosts = document.createElement('div');
     noHosts.className = 'text-center py-12';
     
@@ -419,16 +491,54 @@ async function renderSiteAdminPanel() {
     createFirstButton.className = 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors';
     createFirstButton.textContent = 'Create First Host';
     createFirstButton.addEventListener('click', function() {
-      renderHostCreationModal();
+        renderHostCreationModal();
     });
     noHosts.appendChild(createFirstButton);
     
-    hostListContainer.appendChild(noHosts);
-  }
-  
-  container.appendChild(hostListContainer);
-  
-  return container;
+    container.appendChild(noHosts);
+}
+
+// Show error state
+function showHostsError(errorMessage) {
+    const hostListContainer = document.getElementById('host-list-container');
+    if (!hostListContainer) return;
+    
+    // Remove placeholder
+    const placeholder = document.getElementById('hosts-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'text-center py-12';
+    
+    const errorIcon = document.createElement('div');
+    errorIcon.className = 'mx-auto h-12 w-12 text-red-400 mb-4';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'alert-circle');
+    icon.className = 'h-12 w-12';
+    errorIcon.appendChild(icon);
+    errorDiv.appendChild(errorIcon);
+    
+    const errorTitle = document.createElement('h3');
+    errorTitle.className = 'text-lg font-medium text-gray-900 mb-2';
+    errorTitle.textContent = 'Error Loading Hosts';
+    errorDiv.appendChild(errorTitle);
+    
+    const errorText = document.createElement('p');
+    errorText.className = 'text-gray-500 mb-6';
+    errorText.textContent = errorMessage;
+    errorDiv.appendChild(errorText);
+    
+    const retryButton = document.createElement('button');
+    retryButton.className = 'bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors';
+    retryButton.textContent = 'Retry';
+    retryButton.addEventListener('click', function() {
+        renderApp();
+    });
+    errorDiv.appendChild(retryButton);
+    
+    hostListContainer.appendChild(errorDiv);
 }
 
 // Host creation modal
