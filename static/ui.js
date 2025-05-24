@@ -365,162 +365,174 @@ function showHostScanPrompt() {
 function renderApp() {
   console.log('Rendering app, current page:', appState.page);
 
-  // Clear the root element
-  elements.root.innerHTML = '';
+  // Render loop protection
+  if (window.renderingInProgress) {
+      console.warn('Render already in progress, preventing loop');
+      return;
+  }
+  window.renderingInProgress = true;
 
-  // Add header
-  const header = document.createElement('header');
-  header.className = 'bg-blue-600 text-white p-4 shadow-md relative';
+  try{
+    // Clear the root element
+    elements.root.innerHTML = '';
 
-  // Create a container for the header content
-  const headerContent = document.createElement('div');
-  headerContent.className = 'flex justify-between items-start';
+    // Add header
+    const header = document.createElement('header');
+    header.className = 'bg-blue-600 text-white p-4 shadow-md relative';
 
-  // Left side: Title and status
-  const leftSection = document.createElement('div');
-  leftSection.className = 'flex-1';
+    // Create a container for the header content
+    const headerContent = document.createElement('div');
+    headerContent.className = 'flex justify-between items-start';
 
-  const title = document.createElement('h1');
-  title.className = 'text-2xl font-bold';
-  title.textContent = appState.gameData.name || 'QR Conquest';
-  leftSection.appendChild(title);
+    // Left side: Title and status
+    const leftSection = document.createElement('div');
+    leftSection.className = 'flex-1';
 
-  if (appState.gameData.status === 'active') {
-    const statusDiv = document.createElement('div');
-    statusDiv.className = 'flex justify-between items-center mt-1';
+    const title = document.createElement('h1');
+    title.className = 'text-2xl font-bold';
+    title.textContent = appState.gameData.name || 'QR Conquest';
+    leftSection.appendChild(title);
 
-    const statusText = document.createElement('p');
-    statusText.className = 'text-sm';
-    statusText.textContent = 'Game in progress';
-    statusDiv.appendChild(statusText);
+    if (appState.gameData.status === 'active') {
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'flex justify-between items-center mt-1';
 
-    if (appState.gameData.currentTeam) {
-      const teamText = document.createElement('p');
-      teamText.className = 'text-sm';
-      teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
-      statusDiv.appendChild(teamText);
+      const statusText = document.createElement('p');
+      statusText.className = 'text-sm';
+      statusText.textContent = 'Game in progress';
+      statusDiv.appendChild(statusText);
+
+      if (appState.gameData.currentTeam) {
+        const teamText = document.createElement('p');
+        teamText.className = 'text-sm';
+        teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
+        statusDiv.appendChild(teamText);
+      }
+
+      leftSection.appendChild(statusDiv);
     }
 
-    leftSection.appendChild(statusDiv);
-  }
+    headerContent.appendChild(leftSection);
 
-  headerContent.appendChild(leftSection);
+    // Right side: Admin button
+    const rightSection = document.createElement('div');
+    rightSection.className = 'flex items-center';
 
-  // Right side: Admin button
-  const rightSection = document.createElement('div');
-  rightSection.className = 'flex items-center';
+    // Show different buttons based on context
+    if (appState.page.startsWith('siteAdmin')) {
+      // If we're in site admin pages, show a label
+      const adminBadge = document.createElement('div');
+      adminBadge.className = 'bg-purple-800 text-white py-1 px-3 rounded-lg text-sm';
+      adminBadge.textContent = 'Site Admin';
+      rightSection.appendChild(adminBadge);
+    } else {
+      // Regular host button
+      const hostButton = document.createElement('button');
+      hostButton.className = 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200 flex items-center';
 
-  // Show different buttons based on context
-  if (appState.page.startsWith('siteAdmin')) {
-    // If we're in site admin pages, show a label
-    const adminBadge = document.createElement('div');
-    adminBadge.className = 'bg-purple-800 text-white py-1 px-3 rounded-lg text-sm';
-    adminBadge.textContent = 'Site Admin';
-    rightSection.appendChild(adminBadge);
-  } else {
-    // Regular host button
-    const hostButton = document.createElement('button');
-    hostButton.className = 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200 flex items-center';
+      const hostIcon = document.createElement('i');
+      hostIcon.setAttribute('data-lucide', 'shield');
+      hostIcon.className = 'mr-2';
+      hostButton.appendChild(hostIcon);
 
-    const hostIcon = document.createElement('i');
-    hostIcon.setAttribute('data-lucide', 'shield');
-    hostIcon.className = 'mr-2';
-    hostButton.appendChild(hostIcon);
+      const hostText = document.createElement('span');
+      hostText.textContent = 'Host Menu';
+      hostButton.appendChild(hostText);
 
-    const hostText = document.createElement('span');
-    hostText.textContent = 'Host Menu';
-    hostButton.appendChild(hostText);
-
-    hostButton.addEventListener('click', handleHostButtonClick);
-    rightSection.appendChild(hostButton);
-  }
-  headerContent.appendChild(rightSection);
-  header.appendChild(headerContent);
-
-  elements.root.appendChild(header);
-
-  // Main content container
-  const main = document.createElement('main');
-  main.className = 'p-4';
-
-  // Show loading screen if loading
-  if (appState.loading) {
-    main.appendChild(renderLoadingScreen());
-  }
-  // Show error screen if error
-  else if (appState.error) {
-    main.appendChild(renderErrorScreen());
-  }
-  // Render the current page
-  else {
-    switch (appState.page) {
-      case 'landing':
-        main.appendChild(renderLandingPage());
-        break;
-      case 'gameView':
-        main.appendChild(renderGameView());
-        break;
-      case 'hostPanel':
-        main.appendChild(renderHostPanel());
-        break;
-      case 'scanQR':
-        main.appendChild(renderQRScanner());
-        break;
-      case 'results':
-        main.appendChild(renderResultsPage());
-        break;
-      case 'qrAssignment':
-        main.appendChild(renderQRAssignmentPage());
-        break;
-      case 'playerRegistration':
-        main.appendChild(renderPlayerRegistrationPage());
-        break;
-      case 'firstTime':
-        main.appendChild(renderFirstTimePage());
-        break;
-      case 'joinGame':
-        main.appendChild(renderJoinGamePage());
-        break;
-      case 'siteAdminLogin':
-        main.appendChild(renderSiteAdminLogin());
-        break;
-      case 'siteAdminPanel':
-        main.appendChild(renderSiteAdminPanel());
-        break;
-      default:
-        main.appendChild(renderLandingPage());
+      hostButton.addEventListener('click', handleHostButtonClick);
+      rightSection.appendChild(hostButton);
     }
-  }
+    headerContent.appendChild(rightSection);
+    header.appendChild(headerContent);
 
-  elements.root.appendChild(main);
+    elements.root.appendChild(header);
 
-  // Add footer
-  const footer = document.createElement('footer');
-  footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
-  
-  const footerContent = document.createElement('div');
-  footerContent.className = 'flex justify-between items-center';
+    // Main content container
+    const main = document.createElement('main');
+    main.className = 'p-4';
 
-  const copyright = document.createElement('div');
-  copyright.textContent = 'QR Conquest © 2025';
-  footerContent.appendChild(copyright);
+    // Show loading screen if loading
+    if (appState.loading) {
+      main.appendChild(renderLoadingScreen());
+    }
+    // Show error screen if error
+    else if (appState.error) {
+      main.appendChild(renderErrorScreen());
+    }
+    // Render the current page
+    else {
+      switch (appState.page) {
+        case 'landing':
+          main.appendChild(renderLandingPage());
+          break;
+        case 'gameView':
+          main.appendChild(renderGameView());
+          break;
+        case 'hostPanel':
+          main.appendChild(renderHostPanel());
+          break;
+        case 'scanQR':
+          main.appendChild(renderQRScanner());
+          break;
+        case 'results':
+          main.appendChild(renderResultsPage());
+          break;
+        case 'qrAssignment':
+          main.appendChild(renderQRAssignmentPage());
+          break;
+        case 'playerRegistration':
+          main.appendChild(renderPlayerRegistrationPage());
+          break;
+        case 'firstTime':
+          main.appendChild(renderFirstTimePage());
+          break;
+        case 'joinGame':
+          main.appendChild(renderJoinGamePage());
+          break;
+        case 'siteAdminLogin':
+          main.appendChild(renderSiteAdminLogin());
+          break;
+        case 'siteAdminPanel':
+          main.appendChild(renderSiteAdminPanel());
+          break;
+        default:
+          main.appendChild(renderLandingPage());
+      }
+    }
 
-  const adminLink = document.createElement('a');
-  adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
-  adminLink.textContent = 'Site Administration';
-  adminLink.href = '#';
-  adminLink.addEventListener('click', function(e) {
-    e.preventDefault();
-    navigateTo('siteAdminLogin');
-  });
-  footerContent.appendChild(adminLink);
+    elements.root.appendChild(main);
 
-  footer.appendChild(footerContent);
-  elements.root.appendChild(footer);
+    // Add footer
+    const footer = document.createElement('footer');
+    footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
+    
+    const footerContent = document.createElement('div');
+    footerContent.className = 'flex justify-between items-center';
 
-  // Initialize Lucide icons if available
-  if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons();
+    const copyright = document.createElement('div');
+    copyright.textContent = 'QR Conquest © 2025';
+    footerContent.appendChild(copyright);
+
+    const adminLink = document.createElement('a');
+    adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
+    adminLink.textContent = 'Site Administration';
+    adminLink.href = '#';
+    adminLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      navigateTo('siteAdminLogin');
+    });
+    footerContent.appendChild(adminLink);
+
+    footer.appendChild(footerContent);
+    elements.root.appendChild(footer);
+
+    // Initialize Lucide icons if available
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  } finally {
+    // Always clear the render lock
+    window.renderingInProgress = false;
   }
 }
 
