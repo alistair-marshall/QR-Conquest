@@ -476,7 +476,6 @@ def get_game(game_id):
         'id': game['id'],
         'name': game['name'],
         'status': game['status'],
-        'hostId': game['host_id'],
         'hostName': game['host_name'],
         'teams': teams,
         'bases': bases

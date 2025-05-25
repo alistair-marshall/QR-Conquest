@@ -500,10 +500,16 @@ async function fetchGameData(gameId) {
     appState.gameData.teams = data.teams;
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
-    appState.gameData.hostId = data.hostId;
     appState.gameData.hostName = data.hostName;
 
-    updateAuthState({ gameId: gameId });
+    // IMPORTANT: Keep existing host auth if user is authenticated as host
+    // The hostId is maintained from localStorage, not from game data
+    const authState = getAuthState();
+    if (authState.isHost) {
+      appState.gameData.hostId = authState.hostId;
+      appState.gameData.hostName = authState.hostName;
+      console.log('Maintaining host authentication for:', authState.hostName);
+    }
 
     // Show offline notification if data came from cache
     if (fromCache && window.showNotification) {
