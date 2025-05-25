@@ -156,7 +156,7 @@ function cacheGameData(gameData) {
       id: gameData.id,
       name: gameData.name,
       status: gameData.status,
-      maxTeams: gameData.maxTeams,
+      hostName: gameData.hostName,
       lastUpdated: Date.now()
     });
     

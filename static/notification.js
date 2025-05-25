@@ -12,8 +12,26 @@ function createNotificationContainer() {
   return container;
 }
 
-// Show a toast notification
-function showToast(message, type = 'info', duration = 5000) {
+// Standardised notification durations
+const NOTIFICATION_DURATIONS = {
+  'success': 4000,   // Success messages - shorter duration
+  'info': 5000,      // Info messages - standard duration
+  'warning': 7000,   // Warnings - longer duration
+  'error': 8000      // Errors - longest duration
+};
+
+// Show a toast notification with standardised behaviour
+function showToast(message, type = 'info', customDuration = null) {
+  // Validate notification type
+  const validTypes = ['success', 'error', 'warning', 'info'];
+  if (!validTypes.includes(type)) {
+    console.warn(`Invalid notification type '${type}', defaulting to 'info'`);
+    type = 'info';
+  }
+
+  // Use standardised duration unless custom duration provided
+  const duration = customDuration !== null ? customDuration : NOTIFICATION_DURATIONS[type];
+
   const container = createNotificationContainer();
   
   // Create toast element
@@ -62,12 +80,19 @@ function showToast(message, type = 'info', duration = 5000) {
   // Add message
   const messageElem = document.createElement('div');
   messageElem.className = 'flex-grow text-sm';
-  messageElem.textContent = message;
+  // Handle both plain text and simple HTML formatting
+  if (message.includes('\n')) {
+    // Convert line breaks to HTML breaks for better formatting
+    messageElem.innerHTML = message.replace(/\n/g, '<br>');
+  } else {
+    messageElem.textContent = message;
+  }
   toast.appendChild(messageElem);
   
   // Add close button
   const closeButton = document.createElement('button');
-  closeButton.className = 'ml-3 flex-shrink-0 text-white focus:outline-none';
+  closeButton.className = 'ml-3 flex-shrink-0 text-white focus:outline-none hover:opacity-70 transition-opacity';
+  closeButton.setAttribute('aria-label', 'Close notification');
   closeButton.addEventListener('click', () => removeToast(toast));
   
   const closeIcon = document.createElement('i');
@@ -90,7 +115,7 @@ function showToast(message, type = 'info', duration = 5000) {
     toast.classList.remove('translate-x-full', 'opacity-0');
   }, 10);
   
-  // Auto-dismiss after duration
+  // Auto-dismiss after duration (if duration > 0)
   if (duration > 0) {
     setTimeout(() => removeToast(toast), duration);
   }
@@ -100,20 +125,94 @@ function showToast(message, type = 'info', duration = 5000) {
 
 // Remove a toast with animation
 function removeToast(toast) {
+  // Prevent double removal
+  if (toast.dataset.removing === 'true') {
+    return;
+  }
+  toast.dataset.removing = 'true';
+  
   toast.classList.add('opacity-0', 'translate-x-full');
   
-  toast.addEventListener('transitionend', () => {
+  // Clean up after transition completes
+  const handleTransitionEnd = () => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
     }
-  });
+    toast.removeEventListener('transitionend', handleTransitionEnd);
+  };
+  
+  toast.addEventListener('transitionend', handleTransitionEnd);
+  
+  // Fallback cleanup in case transition event doesn't fire
+  setTimeout(() => {
+    if (toast.parentNode && toast.dataset.removing === 'true') {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 1000);
 }
 
-// Function to replace all alert() calls
-function showNotification(message, type = 'info') {
-  return showToast(message, type);
+// Standardised notification function - primary interface
+function showNotification(message, type = 'info', duration = null) {
+  // Input validation
+  if (!message || typeof message !== 'string') {
+    console.warn('showNotification requires a valid message string');
+    return null;
+  }
+  
+  // Clean up the message - remove excessive whitespace
+  const cleanMessage = message.trim().replace(/\s+/g, ' ');
+  
+  // Log notification for debugging (except in production)
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    console.log(`Notification [${type.toUpperCase()}]: ${cleanMessage}`);
+  }
+  
+  return showToast(cleanMessage, type, duration);
+}
+
+// Clear all notifications
+function clearAllNotifications() {
+  const container = document.getElementById('notification-container');
+  if (container) {
+    // Remove all toast elements
+    const toasts = container.querySelectorAll('div[class*="transform"]');
+    toasts.forEach(toast => removeToast(toast));
+  }
+}
+
+// Utility function to show loading notification that can be manually dismissed
+function showLoadingNotification(message = 'Loading...') {
+  return showNotification(message, 'info', 0); // Duration 0 = manual dismiss only
+}
+
+// Utility function to show persistent notification (manual dismiss only)
+function showPersistentNotification(message, type = 'info') {
+  return showNotification(message, type, 0); // Duration 0 = manual dismiss only
+}
+
+// Error logging with notification (for development/debugging)
+function logAndNotifyError(error, userMessage = null) {
+  // Log the full error for debugging
+  console.error('Application error:', error);
+  
+  // Show user-friendly message
+  const displayMessage = userMessage || 'An unexpected error occurred. Please try again.';
+  showNotification(displayMessage, 'error');
+}
+
+// Legacy compatibility - keep for backwards compatibility but mark as deprecated
+function showAlert(message) {
+  console.warn('showAlert is deprecated. Use showNotification instead.');
+  return showNotification(message, 'info');
 }
 
 // Export functions for global use
 window.showToast = showToast;
 window.showNotification = showNotification;
+window.clearAllNotifications = clearAllNotifications;
+window.showLoadingNotification = showLoadingNotification;
+window.showPersistentNotification = showPersistentNotification;
+window.logAndNotifyError = logAndNotifyError;
+
+// Legacy exports (deprecated but maintained for compatibility)
+window.showAlert = showAlert;

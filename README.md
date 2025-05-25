@@ -196,6 +196,14 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - **Real-time Updates**: Automatic polling for live scoreboard updates
 - **Responsive Design**: Works on mobile phones and tablets
 
+**File Responsibility Matrix**:
+| File | Responsibility | Contains | Calls |
+|------|---------------|----------|-------|
+| **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
+| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, PWA | Core.js API functions |
+| **host.js** | Host UI | Host panel, team/base forms, host modals | Core.js API functions |
+| **site-admin.js** | Admin UI | Admin login, host management, admin modals | Core.js API functions |
+
 ### QR Code System
 - **Host Authentication**: Unique secret links for host authentication
 - **Team QR**: Unique UUID linking to specific team in specific game

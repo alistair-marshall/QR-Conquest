@@ -1,4 +1,4 @@
-// Host Panel
+// Host Panel - UI components only, API calls handled by core.js
 function renderHostPanel() {
   const container = document.createElement('div');
 
@@ -47,46 +47,35 @@ function renderHostPanel() {
 
       createForm.appendChild(nameGroup);
 
-      // Host Password
-      const passwordGroup = document.createElement('div');
-      passwordGroup.className = 'mb-4';
-
-      const passwordLabel = document.createElement('label');
-      passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Host Password';
-      passwordGroup.appendChild(passwordLabel);
-
-      const passwordInput = document.createElement('input');
-      passwordInput.type = 'password';
-      passwordInput.className = 'w-full px-3 py-2 border rounded-lg';
-      passwordGroup.appendChild(passwordInput);
-
-      createForm.appendChild(passwordGroup);
-
       // Note about teams
       const teamsNoteGroup = document.createElement('div');
       teamsNoteGroup.className = 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg';
       
       const teamsNoteText = document.createElement('p');
-      teamsNoteText.innerHTML = '<strong>Note:</strong> Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.';
+      const noteStrong = document.createElement('strong');
+      noteStrong.textContent = 'Note:';
+      teamsNoteText.appendChild(noteStrong);
+
+      const noteText = document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.');
+      teamsNoteText.appendChild(noteText);
       teamsNoteGroup.appendChild(teamsNoteText);
       
       createForm.appendChild(teamsNoteGroup);
 
       // Create Game Button
       const createButton = document.createElement('button');
-      createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg';
+      createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors';
       createButton.textContent = 'Create Game';
       createButton.addEventListener('click', function() {
-        if (!nameInput.value || !passwordInput.value) {
-          showNotification('Please fill in all required fields','warning');
+        const gameName = nameInput.value.trim();
+        if (!gameName) {
+          showNotification('Please enter a game name', 'warning');
           return;
         }
 
+        // Call the API function from core.js
         createGame({
-          name: nameInput.value,
-          adminPassword: passwordInput.value,
-          maxTeams: 0, // Default to 0 teams, they will be added via QR scanning
+          name: gameName,
         });
       });
       createForm.appendChild(createButton);
@@ -98,7 +87,7 @@ function renderHostPanel() {
       joinLink.className = 'text-center';
 
       const joinButton = document.createElement('button');
-      joinButton.className = 'text-blue-600 underline';
+      joinButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
       joinButton.textContent = 'Join Existing Game Instead';
       joinButton.addEventListener('click', toggleForm);
       joinLink.appendChild(joinButton);
@@ -126,44 +115,24 @@ function renderHostPanel() {
       const idInput = document.createElement('input');
       idInput.type = 'text';
       idInput.className = 'w-full px-3 py-2 border rounded-lg';
+      idInput.placeholder = 'Enter game ID (e.g., brave-apple)';
       idGroup.appendChild(idInput);
 
       joinForm.appendChild(idGroup);
 
-      // Host Password
-      const passwordGroup = document.createElement('div');
-      passwordGroup.className = 'mb-4';
-
-      const passwordLabel = document.createElement('label');
-      passwordLabel.className = 'block text-gray-700 mb-2';
-      passwordLabel.textContent = 'Host Password';
-      passwordGroup.appendChild(passwordLabel);
-
-      const passwordInput = document.createElement('input');
-      passwordInput.type = 'password';
-      passwordInput.className = 'w-full px-3 py-2 border rounded-lg';
-      passwordGroup.appendChild(passwordInput);
-
-      joinForm.appendChild(passwordGroup);
-
       // Join Button
       const joinButton = document.createElement('button');
-      joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
+      joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
       joinButton.textContent = 'Join Game';
       joinButton.addEventListener('click', function() {
-        if (!idInput.value || !passwordInput.value) {
-          showNotification('Please enter both Game ID and Host Password','warning');
+        const gameId = idInput.value.trim();
+        if (!gameId) {
+          showNotification('Please enter a Game ID', 'warning');
           return;
         }
 
-        fetchGameData(idInput.value);
-
-        // Set admin password
-        appState.gameData.adminPassword = passwordInput.value;
-        appState.gameData.isAdmin = true;
-
-        // Store admin password
-        localStorage.setItem('adminPassword', passwordInput.value);
+        // Call the API function from core.js
+        fetchGameData(gameId);
       });
       joinForm.appendChild(joinButton);
 
@@ -174,7 +143,7 @@ function renderHostPanel() {
       createLink.className = 'text-center';
 
       const createButton = document.createElement('button');
-      createButton.className = 'text-blue-600 underline';
+      createButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
       createButton.textContent = 'Create New Game Instead';
       createButton.addEventListener('click', toggleForm);
       createLink.appendChild(createButton);
@@ -187,7 +156,7 @@ function renderHostPanel() {
     backContainer.className = 'text-center mt-6';
 
     const backButton = document.createElement('button');
-    backButton.className = 'text-gray-600';
+    backButton.className = 'text-gray-600 hover:text-gray-800 transition-colors';
     backButton.textContent = 'Back to Home';
     backButton.addEventListener('click', function() { navigateTo('landing'); });
     backContainer.appendChild(backButton);
@@ -217,11 +186,18 @@ function renderHostPanel() {
   infoSection.appendChild(infoTitle);
 
   const gameId = document.createElement('p');
-  gameId.innerHTML = '<strong>Game ID: </strong>' + appState.gameData.id;
+  const gameIdStrong = document.createElement('strong');
+  gameIdStrong.textContent = 'Game ID: ';
+  gameId.appendChild(gameIdStrong);
+  const gameIdText = document.createTextNode(appState.gameData.id);
+  gameId.appendChild(gameIdText);
   infoSection.appendChild(gameId);
 
   const gameStatus = document.createElement('p');
-  gameStatus.innerHTML = '<strong>Status: </strong>' + appState.gameData.status;
+  const statusStrong = document.createElement('strong');
+  statusStrong.textContent = 'Status: ';
+  gameStatus.appendChild(statusStrong);
+  const statusText = document.createTextNode(appState.gameData.status);
   infoSection.appendChild(gameStatus);
 
   grid.appendChild(infoSection);
@@ -240,7 +216,7 @@ function renderHostPanel() {
   qrSection.appendChild(qrDescription);
 
   const scanQRButton = document.createElement('button');
-  scanQRButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center';
+  scanQRButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors';
 
   const qrIcon = document.createElement('i');
   qrIcon.setAttribute('data-lucide', 'qr-code');
@@ -257,7 +233,7 @@ function renderHostPanel() {
 
   qrSection.appendChild(scanQRButton);
   
-  // Add instruction text to emphasize the QR-first approach
+  // Add instruction text to emphasise the QR-first approach
   const instructionText = document.createElement('p');
   instructionText.className = 'text-amber-600 text-sm mt-2';
   instructionText.textContent = 'Note: Teams and bases can only be created by scanning QR codes first.';
@@ -340,7 +316,7 @@ function renderHostPanel() {
 
       // Edit button
       const editButton = document.createElement('button');
-      editButton.className = 'text-blue-600 hover:text-blue-800';
+      editButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
       editButton.textContent = 'Edit';
       editButton.addEventListener('click', function() {
         renderTeamEditModal(team);
@@ -481,11 +457,12 @@ function renderHostPanel() {
   if (appState.gameData.status === 'active') {
     // Game is running - show only End Game button
     const endButton = document.createElement('button');
-    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg';
+    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors';
     endButton.textContent = 'End Game';
     endButton.addEventListener('click', function() {
       // Confirm before ending
       if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
+        // Call the API function from core.js
         endGame();
       }
     });
@@ -494,7 +471,7 @@ function renderHostPanel() {
   } else if (appState.gameData.status === 'setup') {
     // Game is in setup - show only Start Game button
     const startButton = document.createElement('button');
-    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg';
+    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
     
     // Disable button if fewer than 2 teams
     const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
@@ -509,9 +486,10 @@ function renderHostPanel() {
     startButton.addEventListener('click', function() {
       // Double check team count before starting
       if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
+        // Call the API function from core.js
         startGame();
       } else {
-        setError('Cannot start game. Please add at least 2 teams by scanning QR codes.');
+        showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.', 'error');
       }
     });
     
@@ -525,7 +503,7 @@ function renderHostPanel() {
   }
 
   const exitButton = document.createElement('button');
-  exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg';
+  exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors';
   exitButton.textContent = 'Exit Host Panel';
   exitButton.addEventListener('click', function() { navigateTo('landing'); });
   controlButtons.appendChild(exitButton);
@@ -539,9 +517,7 @@ function renderHostPanel() {
   return container;
 }
 
-
-
-
+// QR Assignment Page
 function renderQRAssignmentPage() {
   const container = document.createElement('div');
   container.className = 'max-w-md mx-auto py-8';
@@ -556,17 +532,34 @@ function renderQRAssignmentPage() {
 
     const instructionDiv = document.createElement('div');
     instructionDiv.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6';
-    instructionDiv.innerHTML = '<p><strong>How to add teams or bases:</strong></p>' +
-      '<ol class="list-decimal pl-5 mt-2">' +
-      '<li>Return to the host panel</li>' +
-      '<li>Click "Scan QR Code"</li>' +
-      '<li>Scan a QR code to assign it</li>' +
-      '<li>Follow the instructions to create a team or base</li>' +
-      '</ol>';
+
+    const instructionTitle = document.createElement('p');
+    const titleStrong = document.createElement('strong');
+    titleStrong.textContent = 'How to add teams or bases:';
+    instructionTitle.appendChild(titleStrong);
+    instructionDiv.appendChild(instructionTitle);
+
+    const instructionList = document.createElement('ol');
+    instructionList.className = 'list-decimal pl-5 mt-2';
+
+    const steps = [
+      'Return to the host panel',
+      'Click "Scan QR Code"',
+      'Scan a QR code to assign it',
+      'Follow the instructions to create a team or base'
+    ];
+
+    steps.forEach(stepText => {
+      const listItem = document.createElement('li');
+      listItem.textContent = stepText;
+      instructionList.appendChild(listItem);
+    });
+
+    instructionDiv.appendChild(instructionList);
     container.appendChild(instructionDiv);
 
     const backButton = document.createElement('button');
-    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full';
+    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
     backButton.textContent = 'Back to Host Panel';
     backButton.addEventListener('click', function() {
       navigateTo('hostPanel');
@@ -595,7 +588,7 @@ function renderQRAssignmentPage() {
 
   // Assign as Team button
   const teamButton = document.createElement('button');
-  teamButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center';
+  teamButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
 
   const teamIcon = document.createElement('i');
   teamIcon.setAttribute('data-lucide', 'users');
@@ -614,7 +607,7 @@ function renderQRAssignmentPage() {
 
   // Assign as Base button
   const baseButton = document.createElement('button');
-  baseButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center';
+  baseButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
 
   const baseIcon = document.createElement('i');
   baseIcon.setAttribute('data-lucide', 'flag');
@@ -635,7 +628,7 @@ function renderQRAssignmentPage() {
 
   // Cancel button
   const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
+  cancelButton.className = 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');
@@ -754,7 +747,7 @@ function renderTeamCreationForm(qrId, container) {
 
   // Submit button
   const submitButton = document.createElement('button');
-  submitButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full';
+  submitButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   submitButton.type = 'submit';
   submitButton.textContent = 'Create Team';
   form.appendChild(submitButton);
@@ -762,14 +755,22 @@ function renderTeamCreationForm(qrId, container) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
-    createTeam(qrId, nameInput.value, colorSelect.value);
+    
+    const teamName = nameInput.value.trim();
+    if (!teamName) {
+      showNotification('Please enter a team name', 'warning');
+      return;
+    }
+    
+    // Call the API function from core.js
+    createTeam(qrId, teamName, colorSelect.value);
   });
 
   container.appendChild(form);
 
   // Cancel button
   const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
+  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
   cancelButton.textContent = 'Cancel';
   cancelButton.addEventListener('click', function() {
     sessionStorage.removeItem('pendingQRCode');
@@ -881,6 +882,7 @@ function renderTeamEditModal(team) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
+    // Call the API function from core.js
     updateTeam(team.id, nameInput.value, colorSelect.value);
     document.body.removeChild(modalBackdrop);
   });
@@ -989,7 +991,7 @@ function renderBaseCreationForm(qrId, container) {
   const getLocationBtn = document.createElement('button');
   getLocationBtn.className = 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded';
   getLocationBtn.type = 'button';
-  getLocationBtn.innerHTML = '<i data-lucide="navigation" class="inline mr-1"></i> Get Current Location';
+  updateLocationButtonContent(getLocationBtn, 'navigation', 'Get Current Location');
 
   // Button for high accuracy mode
   const highAccuracyBtn = document.createElement('button');
@@ -1037,7 +1039,7 @@ function renderBaseCreationForm(qrId, container) {
   
   // Initialize high accuracy button state
   highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-  highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: ON';
+  updateHighAccuracyButtonContent(highAccuracyBtn, true);
   
   // Toggle high accuracy mode
   highAccuracyBtn.addEventListener('click', function(e) {
@@ -1047,11 +1049,11 @@ function renderBaseCreationForm(qrId, container) {
     if (highAccuracyMode) {
       highAccuracyBtn.classList.remove('bg-amber-500', 'hover:bg-amber-700');
       highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-      highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: ON';
+      updateHighAccuracyButtonContent(highAccuracyBtn, true);
     } else {
       highAccuracyBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
       highAccuracyBtn.classList.add('bg-amber-500', 'hover:bg-amber-700');
-      highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: OFF';
+      updateHighAccuracyButtonContent(highAccuracyBtn, false);
     }
     
     // If we're currently watching location, restart with new settings
@@ -1148,7 +1150,7 @@ function renderBaseCreationForm(qrId, container) {
     
     // Update button state
     getLocationBtn.disabled = true;
-    getLocationBtn.innerHTML = '<i data-lucide="loader-2" class="inline mr-1 animate-spin"></i> Getting location...';
+    updateLocationButtonContent(getLocationBtn, 'loader-2', 'Getting location...', 'animate-spin');
     
     // Set up high accuracy options
     const options = {
@@ -1192,7 +1194,7 @@ function renderBaseCreationForm(qrId, container) {
       
       // Update button state
       getLocationBtn.disabled = false;
-      getLocationBtn.innerHTML = '<i data-lucide="navigation" class="inline mr-1"></i> Update Location';
+      updateLocationButtonContent(getLocationBtn, 'navigation', 'Update Location')
       
       // Update icons
       if (window.lucide) window.lucide.createIcons();
@@ -1259,7 +1261,7 @@ function renderBaseCreationForm(qrId, container) {
     e.preventDefault();
 
     if (!latInput.value || !lngInput.value) {
-      setError('Please get the location for this base first.');
+      showNotification('Please get the location for this base first.', 'error');
       return;
     }
     
@@ -1278,6 +1280,7 @@ function renderBaseCreationForm(qrId, container) {
       navigator.geolocation.clearWatch(parseInt(watchId));
     }
 
+    // Call the API function from core.js
     createBase(qrId, nameInput.value, parseFloat(latInput.value), parseFloat(lngInput.value));
   });
 
@@ -1388,7 +1391,7 @@ function renderPlayerRegistrationPage() {
     // Get player name (optional)
     const playerName = nameInput.value.trim() || 'Anonymous Player';
 
-    // Join the team
+    // Call the API function from core.js
     joinTeam(teamId);
 
     // Clear pending team
@@ -1406,139 +1409,6 @@ function renderPlayerRegistrationPage() {
     navigateTo('landing');
   });
   container.appendChild(cancelButton);
-
-  return container;
-}
-
-// First-Time User Page - New page for users who scan a QR code but aren't in a game
-function renderFirstTimePage() {
-  const container = document.createElement('div');
-  container.className = 'text-center py-10';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-3xl font-bold mb-4';
-  title.textContent = 'Welcome to QR Conquest!';
-  container.appendChild(title);
-
-  // Description
-  const description = document.createElement('p');
-  description.className = 'mb-8';
-  description.textContent = 'You\'ve scanned a QR code, but you\'re not currently part of any game.';
-  container.appendChild(description);
-
-  // QR code info
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6 inline-block';
-  qrInfo.textContent = `QR Code: ${appState.pendingQRCode}`;
-  container.appendChild(qrInfo);
-
-  // Options
-  const optionsContainer = document.createElement('div');
-  optionsContainer.className = 'flex flex-col space-y-4 max-w-xs mx-auto';
-
-  // Join existing game
-  const joinButton = document.createElement('button');
-  joinButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-  joinButton.textContent = 'Join a Game';
-  joinButton.addEventListener('click', function() {
-    // Store QR code in session storage for later use
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('joinGame');
-  });
-  optionsContainer.appendChild(joinButton);
-
-  // Create new game (host)
-  const createButton = document.createElement('button');
-  createButton.className = 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700';
-  createButton.textContent = 'Create a New Game';
-  createButton.addEventListener('click', function() {
-    // Store QR code in session storage for later use
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('hostPanel');
-  });
-  optionsContainer.appendChild(createButton);
-
-  container.appendChild(optionsContainer);
-
-  return container;
-}
-
-// Join Game Page - For joining an existing game
-function renderJoinGamePage() {
-  const container = document.createElement('div');
-  container.className = 'max-w-md mx-auto py-8';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Join a Game';
-  container.appendChild(title);
-
-  // Form
-  const form = document.createElement('form');
-  form.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
-
-  // Game ID
-  const idGroup = document.createElement('div');
-  idGroup.className = 'mb-4';
-
-  const idLabel = document.createElement('label');
-  idLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  idLabel.htmlFor = 'game-id';
-  idLabel.textContent = 'Game ID';
-  idGroup.appendChild(idLabel);
-
-  const idInput = document.createElement('input');
-  idInput.id = 'game-id';
-  idInput.type = 'text';
-  idInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  idInput.required = true;
-  idGroup.appendChild(idInput);
-
-  form.appendChild(idGroup);
-
-  // Join button
-  const joinButton = document.createElement('button');
-  joinButton.type = 'submit';
-  joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
-  joinButton.textContent = 'Join Game';
-  form.appendChild(joinButton);
-
-  // Handle form submission
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const gameId = idInput.value.trim();
-    if (!gameId) {
-      showNotification('Please enter a valid Game ID','warning');
-      return;
-    }
-
-    // Load the game and store in localStorage
-    localStorage.setItem('gameId', gameId);
-    fetchGameData(gameId).then(() => {
-      // Process the pending QR code after loading game data
-      const pendingQR = sessionStorage.getItem('pendingQRCode');
-      if (pendingQR) {
-        handleQRScan(pendingQR);
-        sessionStorage.removeItem('pendingQRCode');
-      } else {
-        navigateTo('scanQR');
-      }
-    });
-  });
-
-  container.appendChild(form);
-
-  // Back button
-  const backButton = document.createElement('button');
-  backButton.className = 'text-blue-600 hover:underline';
-  backButton.textContent = '← Back to Home';
-  backButton.addEventListener('click', function() {
-    navigateTo('landing');
-  });
-  container.appendChild(backButton);
 
   return container;
 }
@@ -1661,4 +1531,30 @@ function renderResultsPage() {
   container.appendChild(actionsContainer);
 
   return container;
+}
+
+function updateLocationButtonContent(button, iconName, text, extraClasses = '') {
+  // Clear existing content
+  button.innerHTML = '';
+  
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', iconName);
+  icon.className = `inline mr-1 ${extraClasses}`;
+  button.appendChild(icon);
+  
+  const textNode = document.createTextNode(` ${text}`);
+  button.appendChild(textNode);
+}
+
+function updateHighAccuracyButtonContent(button, isOn) {
+  // Clear existing content
+  button.innerHTML = '';
+  
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', 'crosshair');
+  icon.className = 'inline mr-1';
+  button.appendChild(icon);
+  
+  const text = document.createTextNode(` High Accuracy: ${isOn ? 'ON' : 'OFF'}`);
+  button.appendChild(text);
 }
