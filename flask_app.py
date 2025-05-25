@@ -625,13 +625,14 @@ def end_game(game_id):
 # Join team
 @app.route('/api/teams/<team_id>/join', methods=['POST'])
 def join_team(team_id):
-    player_id = str(uuid.uuid4())
+    data = request.json
+    player_id = data.get('player_id') if data else None
     current_time = int(time.time())
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Check if team exists
+    # Check if team exists and get game info
     cursor.execute('''
     SELECT t.*, g.status FROM teams t
     JOIN games g ON t.game_id = g.id
@@ -643,7 +644,31 @@ def join_team(team_id):
         conn.close()
         return jsonify({'error': 'Team not found'}), 404
 
-    # Add player to team
+    # If player_id is provided, check if they're already in a team for this game
+    if player_id:
+        cursor.execute('''
+        SELECT p.*, t.game_id FROM players p
+        JOIN teams t ON p.team_id = t.id
+        WHERE p.id = ? AND t.game_id = ?
+        ''', (player_id, team['game_id']))
+        
+        existing_player = cursor.fetchone()
+        
+        if existing_player:
+            # Player is already in a team for this game
+            if existing_player['team_id'] == team_id:
+                conn.close()
+                return jsonify({'error': 'Player is already a member of this team'}), 400
+            
+            # Remove player from their current team
+            cursor.execute('DELETE FROM players WHERE id = ?', (player_id,))
+            print(f"Removed player {player_id} from previous team {existing_player['team_id']}")
+
+    # Generate new player ID if not provided (new player joining)
+    if not player_id:
+        player_id = str(uuid.uuid4())
+
+    # Add player to the new team
     cursor.execute('''
     INSERT INTO players (id, team_id, join_time)
     VALUES (?, ?, ?)

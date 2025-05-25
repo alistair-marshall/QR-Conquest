@@ -310,11 +310,21 @@ async function handleTeamQR(qrCode, statusData) {
     console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
 
     // If user is already on a team
-    if (authState.hasTeam) {
-      if (authState.teamId === teamId) {
-        throw new Error('You are already a member of this team.');
+    if (authState.teamId === teamId) {
+      throw new Error('You are already a member of this team.');
+    } else {
+      const currentTeamName = getTeamName(authState.teamId);
+      const newTeamName = getTeamName(teamId);
+      
+      if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
+        // Proceed with team switch
+        await joinTeam(teamId);
       } else {
-        throw new Error('You are already on a different team. Please continue playing with your current team.');
+        // User cancelled, navigate back to game
+        if (window.navigateTo) {
+          window.navigateTo('gameView');
+        }
+        return;
       }
     }
 
