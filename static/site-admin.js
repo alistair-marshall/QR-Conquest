@@ -75,7 +75,12 @@ function renderSiteAdminLogin() {
   // Security notice
   const securityNotice = document.createElement('div');
   securityNotice.className = 'bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm mb-6';
-  securityNotice.innerHTML = '<strong>Security Notice:</strong> This is a restricted admin area. Access is logged and monitored.';
+  const noticeTitle = document.createElement('strong');
+  noticeTitle.textContent = 'Security Notice:';
+  securityNotice.appendChild(noticeTitle);
+
+  const noticeText = document.createTextNode(' This is a restricted admin area. Access is logged and monitored.');
+  securityNotice.appendChild(noticeText);
   container.appendChild(securityNotice);
 
   // Back to Home link
@@ -168,7 +173,10 @@ function buildStatsSection() {
     // Show error state
     const errorCard = document.createElement('div');
     errorCard.className = 'col-span-3 bg-red-50 border border-red-200 rounded-lg p-4';
-    errorCard.innerHTML = `<p class="text-red-800">Error loading stats: ${appState.siteAdmin.hostsError}</p>`;
+    const errorText = document.createElement('p');
+    errorText.className = 'text-red-800';
+    errorText.textContent = `Error loading stats: ${appState.siteAdmin.hostsError}`;
+    errorCard.appendChild(errorText);
     statsSection.appendChild(errorCard);
   } else {
     // Show actual stats
@@ -817,7 +825,14 @@ function renderHostQRModal(host) {
         console.warn('Failed to generate QR code:', error);
         const errorMsg = document.createElement('div');
         errorMsg.className = 'text-center text-gray-600 p-8';
-        errorMsg.innerHTML = '<i data-lucide="alert-circle" class="mx-auto h-12 w-12 text-gray-400 mb-2"></i><p>QR Code generation unavailable</p>';
+        const errorIcon = document.createElement('i');
+        errorIcon.setAttribute('data-lucide', 'alert-circle');
+        errorIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-2';
+        errorMsg.appendChild(errorIcon);
+
+        const errorText = document.createElement('p');
+        errorText.textContent = 'QR Code generation unavailable';
+        errorMsg.appendChild(errorText);
         qrDiv.appendChild(errorMsg);
         
         // Initialize lucide icons
@@ -827,7 +842,20 @@ function renderHostQRModal(host) {
       // QR code library not available
       const placeholder = document.createElement('div');
       placeholder.className = 'text-center text-gray-600 p-8';
-      placeholder.innerHTML = '<i data-lucide="qr-code" class="mx-auto h-12 w-12 text-gray-400 mb-2"></i><p>QR Code library not loaded</p><p class="text-xs">Use the link above instead</p>';
+      
+      const placeholderIcon = document.createElement('i');
+      placeholderIcon.setAttribute('data-lucide', 'qr-code');
+      placeholderIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-2';
+      placeholder.appendChild(placeholderIcon);
+
+      const placeholderText1 = document.createElement('p');
+      placeholderText1.textContent = 'QR Code library not loaded';
+      placeholder.appendChild(placeholderText1);
+
+      const placeholderText2 = document.createElement('p');
+      placeholderText2.className = 'text-xs';
+      placeholderText2.textContent = 'Use the link above instead';
+      placeholder.appendChild(placeholderText2);
       qrDiv.appendChild(placeholder);
       
       // Initialize lucide icons

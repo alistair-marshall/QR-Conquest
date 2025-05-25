@@ -52,7 +52,12 @@ function renderHostPanel() {
       teamsNoteGroup.className = 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg';
       
       const teamsNoteText = document.createElement('p');
-      teamsNoteText.innerHTML = '<strong>Note:</strong> Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.';
+      const noteStrong = document.createElement('strong');
+      noteStrong.textContent = 'Note:';
+      teamsNoteText.appendChild(noteStrong);
+
+      const noteText = document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.');
+      teamsNoteText.appendChild(noteText);
       teamsNoteGroup.appendChild(teamsNoteText);
       
       createForm.appendChild(teamsNoteGroup);
@@ -181,11 +186,18 @@ function renderHostPanel() {
   infoSection.appendChild(infoTitle);
 
   const gameId = document.createElement('p');
-  gameId.innerHTML = '<strong>Game ID: </strong>' + appState.gameData.id;
+  const gameIdStrong = document.createElement('strong');
+  gameIdStrong.textContent = 'Game ID: ';
+  gameId.appendChild(gameIdStrong);
+  const gameIdText = document.createTextNode(appState.gameData.id);
+  gameId.appendChild(gameIdText);
   infoSection.appendChild(gameId);
 
   const gameStatus = document.createElement('p');
-  gameStatus.innerHTML = '<strong>Status: </strong>' + appState.gameData.status;
+  const statusStrong = document.createElement('strong');
+  statusStrong.textContent = 'Status: ';
+  gameStatus.appendChild(statusStrong);
+  const statusText = document.createTextNode(appState.gameData.status);
   infoSection.appendChild(gameStatus);
 
   grid.appendChild(infoSection);
@@ -520,13 +532,30 @@ function renderQRAssignmentPage() {
 
     const instructionDiv = document.createElement('div');
     instructionDiv.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6';
-    instructionDiv.innerHTML = '<p><strong>How to add teams or bases:</strong></p>' +
-      '<ol class="list-decimal pl-5 mt-2">' +
-      '<li>Return to the host panel</li>' +
-      '<li>Click "Scan QR Code"</li>' +
-      '<li>Scan a QR code to assign it</li>' +
-      '<li>Follow the instructions to create a team or base</li>' +
-      '</ol>';
+
+    const instructionTitle = document.createElement('p');
+    const titleStrong = document.createElement('strong');
+    titleStrong.textContent = 'How to add teams or bases:';
+    instructionTitle.appendChild(titleStrong);
+    instructionDiv.appendChild(instructionTitle);
+
+    const instructionList = document.createElement('ol');
+    instructionList.className = 'list-decimal pl-5 mt-2';
+
+    const steps = [
+      'Return to the host panel',
+      'Click "Scan QR Code"',
+      'Scan a QR code to assign it',
+      'Follow the instructions to create a team or base'
+    ];
+
+    steps.forEach(stepText => {
+      const listItem = document.createElement('li');
+      listItem.textContent = stepText;
+      instructionList.appendChild(listItem);
+    });
+
+    instructionDiv.appendChild(instructionList);
     container.appendChild(instructionDiv);
 
     const backButton = document.createElement('button');
@@ -962,7 +991,7 @@ function renderBaseCreationForm(qrId, container) {
   const getLocationBtn = document.createElement('button');
   getLocationBtn.className = 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded';
   getLocationBtn.type = 'button';
-  getLocationBtn.innerHTML = '<i data-lucide="navigation" class="inline mr-1"></i> Get Current Location';
+  updateLocationButtonContent(getLocationBtn, 'navigation', 'Get Current Location');
 
   // Button for high accuracy mode
   const highAccuracyBtn = document.createElement('button');
@@ -1010,7 +1039,7 @@ function renderBaseCreationForm(qrId, container) {
   
   // Initialize high accuracy button state
   highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-  highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: ON';
+  updateHighAccuracyButtonContent(highAccuracyBtn, true);
   
   // Toggle high accuracy mode
   highAccuracyBtn.addEventListener('click', function(e) {
@@ -1020,11 +1049,11 @@ function renderBaseCreationForm(qrId, container) {
     if (highAccuracyMode) {
       highAccuracyBtn.classList.remove('bg-amber-500', 'hover:bg-amber-700');
       highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-      highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: ON';
+      updateHighAccuracyButtonContent(highAccuracyBtn, true);
     } else {
       highAccuracyBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
       highAccuracyBtn.classList.add('bg-amber-500', 'hover:bg-amber-700');
-      highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i> High Accuracy: OFF';
+      updateHighAccuracyButtonContent(highAccuracyBtn, false);
     }
     
     // If we're currently watching location, restart with new settings
@@ -1121,7 +1150,7 @@ function renderBaseCreationForm(qrId, container) {
     
     // Update button state
     getLocationBtn.disabled = true;
-    getLocationBtn.innerHTML = '<i data-lucide="loader-2" class="inline mr-1 animate-spin"></i> Getting location...';
+    updateLocationButtonContent(getLocationBtn, 'loader-2', 'Getting location...', 'animate-spin');
     
     // Set up high accuracy options
     const options = {
@@ -1165,7 +1194,7 @@ function renderBaseCreationForm(qrId, container) {
       
       // Update button state
       getLocationBtn.disabled = false;
-      getLocationBtn.innerHTML = '<i data-lucide="navigation" class="inline mr-1"></i> Update Location';
+      updateLocationButtonContent(getLocationBtn, 'navigation', 'Update Location')
       
       // Update icons
       if (window.lucide) window.lucide.createIcons();
@@ -1502,4 +1531,30 @@ function renderResultsPage() {
   container.appendChild(actionsContainer);
 
   return container;
+}
+
+function updateLocationButtonContent(button, iconName, text, extraClasses = '') {
+  // Clear existing content
+  button.innerHTML = '';
+  
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', iconName);
+  icon.className = `inline mr-1 ${extraClasses}`;
+  button.appendChild(icon);
+  
+  const textNode = document.createTextNode(` ${text}`);
+  button.appendChild(textNode);
+}
+
+function updateHighAccuracyButtonContent(button, isOn) {
+  // Clear existing content
+  button.innerHTML = '';
+  
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', 'crosshair');
+  icon.className = 'inline mr-1';
+  button.appendChild(icon);
+  
+  const text = document.createTextNode(` High Accuracy: ${isOn ? 'ON' : 'OFF'}`);
+  button.appendChild(text);
 }

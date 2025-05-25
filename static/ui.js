@@ -609,7 +609,16 @@ function renderLandingPage() {
     // Host Login help text
     const hostLoginLink = document.createElement('p');
     hostLoginLink.className = 'text-sm text-gray-600 mt-2 text-center';
-    hostLoginLink.innerHTML = 'Are you a game host?<br><span class="text-purple-600">Scan your host QR code above</span>';
+    const hostLoginText1 = document.createTextNode('Are you a game host?');
+    hostLoginLink.appendChild(hostLoginText1);
+
+    const lineBreak = document.createElement('br');
+    hostLoginLink.appendChild(lineBreak);
+
+    const hostLoginSpan = document.createElement('span');
+    hostLoginSpan.className = 'text-purple-600';
+    hostLoginSpan.textContent = 'Scan your host QR code above';
+    hostLoginLink.appendChild(hostLoginSpan);
     buttonContainer.appendChild(hostLoginLink);
   }
 
