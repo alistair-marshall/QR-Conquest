@@ -609,8 +609,7 @@ async function createGame(gameSettings) {
       },
       body: JSON.stringify({
         name: gameSettings.name,
-        host_id: authState.hostId,
-        max_teams: gameSettings.maxTeams || 0, // Default to 0, teams will be added via QR
+        host_id: authState.hostId
       })
     });
 

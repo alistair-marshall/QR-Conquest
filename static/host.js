@@ -71,7 +71,6 @@ function renderHostPanel() {
         // Call the API function from core.js
         createGame({
           name: gameName,
-          maxTeams: 0, // Default to 0 teams, they will be added via QR scanning
         });
       });
       createForm.appendChild(createButton);

@@ -124,7 +124,6 @@ def init_db():
         name TEXT NOT NULL,
         start_time INTEGER,
         end_time INTEGER,
-        max_teams INTEGER NOT NULL,
         status TEXT NOT NULL,
         FOREIGN KEY (host_id) REFERENCES hosts (id)
     )
@@ -396,9 +395,9 @@ def create_game():
     game_id = generate_unique_game_code()
 
     cursor.execute('''
-    INSERT INTO games (id, host_id, name, max_teams, status)
-    VALUES (?, ?, ?, ?, ?)
-    ''', (game_id, host_id, data['name'], data.get('max_teams', 0), 'setup'))
+    INSERT INTO games (id, host_id, name, status)
+    VALUES (?, ?, ?, ?)
+    ''', (game_id, host_id, data['name'], 'setup'))
 
     conn.commit()
     conn.close()
@@ -477,7 +476,6 @@ def get_game(game_id):
         'id': game['id'],
         'name': game['name'],
         'status': game['status'],
-        'maxTeams': game['max_teams'],
         'hostId': game['host_id'],
         'hostName': game['host_name'],
         'teams': teams,
@@ -1033,7 +1031,7 @@ def get_host_games(host_id):
     
     # Get all games for this host
     cursor.execute('''
-    SELECT id, name, status, start_time, end_time, max_teams
+    SELECT id, name, status, start_time, end_time
     FROM games
     WHERE host_id = ?
     ORDER BY 
@@ -1057,7 +1055,6 @@ def get_host_games(host_id):
             'status': game['status'],
             'start_time': game['start_time'],
             'end_time': game['end_time'],
-            'max_teams': game['max_teams'],
             'team_count': team_count
         })
     
