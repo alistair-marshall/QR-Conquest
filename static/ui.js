@@ -150,9 +150,9 @@ function getHexColorForTailwind(tailwindColorClass) {
 }
 
 function initGameMap() {
-  const mapElement = document.getElementById('game-map-container');
+  const mapElement = document.getElementById('map-container');
   if (!mapElement) {
-    console.error('Map container (game-map-container) not found.');
+    console.error('Map container (map-container) not found.');
     return;
   }
 
@@ -686,7 +686,7 @@ function renderGameView() {
   mapSection.appendChild(mapTitle);
 
   const mapContainerElement = document.createElement('div');
-  mapContainerElement.id = 'game-map-container';
+  mapContainerElement.id = 'map-container';
   mapContainerElement.className = 'bg-gray-200 rounded-lg shadow-md h-80 md:h-96 relative';
   mapSection.appendChild(mapContainerElement);
   container.appendChild(mapSection);

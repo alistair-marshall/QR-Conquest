@@ -4,7 +4,7 @@ function renderHostPanel() {
 
   // If game is not loaded, show form to create or join
   if (!appState.gameData.id) {
-    container.className = 'max-w-md mx-auto';
+    container.className = 'max-w-md mx-auto px-4';
 
     const title = document.createElement('h2');
     title.className = 'text-2xl font-bold mb-6 text-center';
@@ -64,7 +64,7 @@ function renderHostPanel() {
 
       // Create Game Button
       const createButton = document.createElement('button');
-      createButton.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors';
+      createButton.className = 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium';
       createButton.textContent = 'Create Game';
       createButton.addEventListener('click', function() {
         const gameName = nameInput.value.trim();
@@ -87,7 +87,7 @@ function renderHostPanel() {
       joinLink.className = 'text-center';
 
       const joinButton = document.createElement('button');
-      joinButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
+      joinButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors py-2';
       joinButton.textContent = 'Join Existing Game Instead';
       joinButton.addEventListener('click', toggleForm);
       joinLink.appendChild(joinButton);
@@ -122,7 +122,7 @@ function renderHostPanel() {
 
       // Join Button
       const joinButton = document.createElement('button');
-      joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
+      joinButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium';
       joinButton.textContent = 'Join Game';
       joinButton.addEventListener('click', function() {
         const gameId = idInput.value.trim();
@@ -143,7 +143,7 @@ function renderHostPanel() {
       createLink.className = 'text-center';
 
       const createButton = document.createElement('button');
-      createButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors';
+      createButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors py-2';
       createButton.textContent = 'Create New Game Instead';
       createButton.addEventListener('click', toggleForm);
       createLink.appendChild(createButton);
@@ -156,7 +156,7 @@ function renderHostPanel() {
     backContainer.className = 'text-center mt-6';
 
     const backButton = document.createElement('button');
-    backButton.className = 'text-gray-600 hover:text-gray-800 transition-colors';
+    backButton.className = 'text-gray-600 hover:text-gray-800 transition-colors py-2';
     backButton.textContent = 'Back to Home';
     backButton.addEventListener('click', function() { navigateTo('landing'); });
     backContainer.appendChild(backButton);
@@ -165,45 +165,67 @@ function renderHostPanel() {
 
     return container;
   }
-
-  // Game Management Panel (if game is loaded)
-  container.className = 'max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6';
+// Game Management Panel (if game is loaded)
+  container.className = 'max-w-4xl mx-auto px-4 pb-4';
 
   const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6';
+  title.className = 'text-2xl font-bold mb-6 text-center';
   title.textContent = 'Game Administration';
   container.appendChild(title);
 
   const grid = document.createElement('div');
-  grid.className = 'grid gap-6';
+  grid.className = 'space-y-6';
 
   // Game Info Section
   const infoSection = document.createElement('div');
+  infoSection.className = 'bg-white rounded-lg shadow-md p-4';
 
   const infoTitle = document.createElement('h3');
   infoTitle.className = 'text-xl font-semibold mb-3';
   infoTitle.textContent = 'Game Info';
   infoSection.appendChild(infoTitle);
 
-  const gameId = document.createElement('p');
-  const gameIdStrong = document.createElement('strong');
-  gameIdStrong.textContent = 'Game ID: ';
-  gameId.appendChild(gameIdStrong);
-  const gameIdText = document.createTextNode(appState.gameData.id);
-  gameId.appendChild(gameIdText);
-  infoSection.appendChild(gameId);
+  const gameInfoGrid = document.createElement('div');
+  gameInfoGrid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-4';
 
-  const gameStatus = document.createElement('p');
-  const statusStrong = document.createElement('strong');
-  statusStrong.textContent = 'Status: ';
-  gameStatus.appendChild(statusStrong);
-  const statusText = document.createTextNode(appState.gameData.status);
-  infoSection.appendChild(gameStatus);
+  const gameIdCard = document.createElement('div');
+  gameIdCard.className = 'bg-gray-50 p-3 rounded-lg';
+  const gameIdLabel = document.createElement('div');
+  gameIdLabel.className = 'text-sm text-gray-600 font-medium';
+  gameIdLabel.textContent = 'Game ID';
+  gameIdCard.appendChild(gameIdLabel);
+  const gameIdValue = document.createElement('div');
+  gameIdValue.className = 'text-lg font-bold text-blue-600';
+  gameIdValue.textContent = appState.gameData.id;
+  gameIdCard.appendChild(gameIdValue);
+  gameInfoGrid.appendChild(gameIdCard);
 
+  const statusCard = document.createElement('div');
+  statusCard.className = 'bg-gray-50 p-3 rounded-lg';
+  const statusLabel = document.createElement('div');
+  statusLabel.className = 'text-sm text-gray-600 font-medium';
+  statusLabel.textContent = 'Status';
+  statusCard.appendChild(statusLabel);
+  const statusValue = document.createElement('div');
+  statusValue.className = 'text-lg font-bold capitalize';
+  // Color code the status
+  if (appState.gameData.status === 'active') {
+    statusValue.className += ' text-green-600';
+  } else if (appState.gameData.status === 'setup') {
+    statusValue.className += ' text-orange-600';
+  } else {
+    statusValue.className += ' text-gray-600';
+  }
+  statusValue.textContent = appState.gameData.status;
+  statusCard.appendChild(statusValue);
+  gameInfoGrid.appendChild(statusCard);
+
+  infoSection.appendChild(gameInfoGrid);
   grid.appendChild(infoSection);
 
   // QR Code Management Section
   const qrSection = document.createElement('div');
+  qrSection.className = 'bg-white rounded-lg shadow-md p-4';
 
   const qrTitle = document.createElement('h3');
   qrTitle.className = 'text-xl font-semibold mb-3';
@@ -211,16 +233,16 @@ function renderHostPanel() {
   qrSection.appendChild(qrTitle);
 
   const qrDescription = document.createElement('p');
-  qrDescription.className = 'text-gray-600 mb-4';
+  qrDescription.className = 'text-gray-600 mb-4 text-sm';
   qrDescription.textContent = 'Scan QR codes to add them as teams or bases for the game.';
   qrSection.appendChild(qrDescription);
 
   const scanQRButton = document.createElement('button');
-  scanQRButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors';
+  scanQRButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors text-lg font-medium';
 
   const qrIcon = document.createElement('i');
   qrIcon.setAttribute('data-lucide', 'qr-code');
-  qrIcon.className = 'mr-2';
+  qrIcon.className = 'mr-2 w-5 h-5';
   scanQRButton.appendChild(qrIcon);
 
   const buttonText = document.createElement('span');
@@ -235,230 +257,289 @@ function renderHostPanel() {
   
   // Add instruction text to emphasise the QR-first approach
   const instructionText = document.createElement('p');
-  instructionText.className = 'text-amber-600 text-sm mt-2';
+  instructionText.className = 'text-amber-600 text-sm mt-2 text-center';
   instructionText.textContent = 'Note: Teams and bases can only be created by scanning QR codes first.';
   qrSection.appendChild(instructionText);
   
   grid.appendChild(qrSection);
 
-  // Team Management Section
+  // Team Management Section - Mobile Optimized
   const teamSection = document.createElement('div');
+  teamSection.className = 'bg-white rounded-lg shadow-md p-4';
 
   const teamTitle = document.createElement('h3');
-  teamTitle.className = 'text-xl font-semibold mb-3';
+  teamTitle.className = 'text-xl font-semibold mb-4';
   teamTitle.textContent = 'Team Management';
   teamSection.appendChild(teamTitle);
 
-  const teamTableContainer = document.createElement('div');
-  teamTableContainer.className = 'overflow-auto max-h-60';
-
-  const teamTable = document.createElement('table');
-  teamTable.className = 'min-w-full divide-y divide-gray-200';
-
-  // Table header
-  const thead = document.createElement('thead');
-  thead.className = 'bg-gray-50';
-
-  const headerRow = document.createElement('tr');
-
-  const headers = ['Team', 'Players', 'Score', 'Actions'];
-  headers.forEach(function(headerText) {
-    const th = document.createElement('th');
-    th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
-    th.textContent = headerText;
-    headerRow.appendChild(th);
-  });
-
-  thead.appendChild(headerRow);
-  teamTable.appendChild(thead);
-
-  // Table body
-  const tbody = document.createElement('tbody');
-  tbody.className = 'bg-white divide-y divide-gray-200';
-
   if (appState.gameData.teams && appState.gameData.teams.length > 0) {
+    const teamsContainer = document.createElement('div');
+    teamsContainer.className = 'space-y-3';
+
     appState.gameData.teams.forEach(function(team) {
-      const row = document.createElement('tr');
+      const teamCard = document.createElement('div');
+      teamCard.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
 
-      // Team name cell
-      const nameCell = document.createElement('td');
-      nameCell.className = 'px-6 py-4 whitespace-nowrap';
+      // Team header with color and name
+      const teamHeader = document.createElement('div');
+      teamHeader.className = 'flex items-center justify-between mb-3';
 
-      const nameContainer = document.createElement('div');
-      nameContainer.className = 'flex items-center';
+      const teamNameContainer = document.createElement('div');
+      teamNameContainer.className = 'flex items-center';
 
       const colorDot = document.createElement('div');
-      colorDot.className = 'w-3 h-3 rounded-full ' + team.color + ' mr-2';
-      nameContainer.appendChild(colorDot);
+      colorDot.className = 'w-4 h-4 rounded-full ' + team.color + ' mr-3 flex-shrink-0';
+      teamNameContainer.appendChild(colorDot);
 
-      const name = document.createElement('span');
-      name.textContent = team.name;
-      nameContainer.appendChild(name);
+      const teamName = document.createElement('h4');
+      teamName.className = 'text-lg font-semibold text-gray-900';
+      teamName.textContent = team.name;
+      teamNameContainer.appendChild(teamName);
 
-      nameCell.appendChild(nameContainer);
-      row.appendChild(nameCell);
-
-      // Players count cell
-      const playersCell = document.createElement('td');
-      playersCell.className = 'px-6 py-4 whitespace-nowrap';
-      playersCell.textContent = team.playerCount || 0;
-      row.appendChild(playersCell);
-
-      // Score cell
-      const scoreCell = document.createElement('td');
-      scoreCell.className = 'px-6 py-4 whitespace-nowrap';
-      scoreCell.textContent = team.score || 0;
-      row.appendChild(scoreCell);
-
-      // Actions cell
-      const actionsCell = document.createElement('td');
-      actionsCell.className = 'px-6 py-4 whitespace-nowrap flex gap-2';
+      teamHeader.appendChild(teamNameContainer);
 
       // Edit button
       const editButton = document.createElement('button');
-      editButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
-      editButton.textContent = 'Edit';
+      editButton.className = 'bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors flex items-center';
+      
+      const editIcon = document.createElement('i');
+      editIcon.setAttribute('data-lucide', 'edit-2');
+      editIcon.className = 'w-4 h-4 mr-1';
+      editButton.appendChild(editIcon);
+      
+      const editText = document.createElement('span');
+      editText.textContent = 'Edit';
+      editButton.appendChild(editText);
+      
       editButton.addEventListener('click', function() {
         renderTeamEditModal(team);
       });
-      actionsCell.appendChild(editButton);
+      teamHeader.appendChild(editButton);
 
-      row.appendChild(actionsCell);
+      teamCard.appendChild(teamHeader);
 
-      tbody.appendChild(row);
+      // Team stats
+      const teamStats = document.createElement('div');
+      teamStats.className = 'grid grid-cols-2 gap-4';
+
+      const playersContainer = document.createElement('div');
+      playersContainer.className = 'text-center bg-white p-3 rounded-lg';
+      const playersLabel = document.createElement('div');
+      playersLabel.className = 'text-sm text-gray-600 font-medium';
+      playersLabel.textContent = 'Players';
+      playersContainer.appendChild(playersLabel);
+      const playersValue = document.createElement('div');
+      playersValue.className = 'text-2xl font-bold text-blue-600';
+      playersValue.textContent = team.playerCount || 0;
+      playersContainer.appendChild(playersValue);
+
+      const scoreContainer = document.createElement('div');
+      scoreContainer.className = 'text-center bg-white p-3 rounded-lg';
+      const scoreLabel = document.createElement('div');
+      scoreLabel.className = 'text-sm text-gray-600 font-medium';
+      scoreLabel.textContent = 'Score';
+      scoreContainer.appendChild(scoreLabel);
+      const scoreValue = document.createElement('div');
+      scoreValue.className = 'text-2xl font-bold text-green-600';
+      scoreValue.textContent = team.score || 0;
+      scoreContainer.appendChild(scoreValue);
+
+      teamStats.appendChild(playersContainer);
+      teamStats.appendChild(scoreContainer);
+      teamCard.appendChild(teamStats);
+
+      teamsContainer.appendChild(teamCard);
     });
+
+    teamSection.appendChild(teamsContainer);
   } else {
     // Show prompt to add teams when there are none
-    const emptyRow = document.createElement('tr');
-    const emptyCell = document.createElement('td');
-    emptyCell.colSpan = 4;
-    emptyCell.className = 'px-6 py-4 text-center text-gray-500';
-    emptyCell.textContent = 'No teams available. Scan QR codes to add teams.';
-    emptyRow.appendChild(emptyCell);
-    tbody.appendChild(emptyRow);
-  }
+    const emptyState = document.createElement('div');
+    emptyState.className = 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
+    
+    const emptyIcon = document.createElement('i');
+    emptyIcon.setAttribute('data-lucide', 'users');
+    emptyIcon.className = 'w-12 h-12 text-gray-400 mx-auto mb-3';
+    emptyState.appendChild(emptyIcon);
+    
+    const emptyTitle = document.createElement('h4');
+    emptyTitle.className = 'text-lg font-medium text-gray-900 mb-2';
+    emptyTitle.textContent = 'No Teams Yet';
+    emptyState.appendChild(emptyTitle);
+    
+    const emptyText = document.createElement('p');
+    emptyText.className = 'text-gray-600 mb-4';
+    emptyText.textContent = 'Scan QR codes to add teams to your game.';
+    emptyState.appendChild(emptyText);
+    
+    const addTeamButton = document.createElement('button');
+    addTeamButton.className = 'bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center';
+    
+    const addIcon = document.createElement('i');
+    addIcon.setAttribute('data-lucide', 'qr-code');
+    addIcon.className = 'w-4 h-4 mr-2';
+    addTeamButton.appendChild(addIcon);
+    
+    const addText = document.createElement('span');
+    addText.textContent = 'Scan QR Code';
+    addTeamButton.appendChild(addText);
+    
+    addTeamButton.addEventListener('click', function() {
+      navigateTo('scanQR');
+    });
+    emptyState.appendChild(addTeamButton);
 
-  teamTable.appendChild(tbody);
-  teamTableContainer.appendChild(teamTable);
-  teamSection.appendChild(teamTableContainer);
+    teamSection.appendChild(emptyState);
+  }
 
   grid.appendChild(teamSection);
 
-  // Base Management Section
+  // Base Management Section - Mobile Optimized with Map
   const baseSection = document.createElement('div');
+  baseSection.className = 'bg-white rounded-lg shadow-md p-4';
 
   const baseTitle = document.createElement('h3');
-  baseTitle.className = 'text-xl font-semibold mb-3';
+  baseTitle.className = 'text-xl font-semibold mb-4';
   baseTitle.textContent = 'Base Management';
   baseSection.appendChild(baseTitle);
 
-  const baseTableContainer = document.createElement('div');
-  baseTableContainer.className = 'overflow-auto max-h-60';
-
-  const baseTable = document.createElement('table');
-  baseTable.className = 'min-w-full divide-y divide-gray-200';
-
-  // Table header
-  const baseThead = document.createElement('thead');
-  baseThead.className = 'bg-gray-50';
-
-  const baseHeaderRow = document.createElement('tr');
-
-  const baseHeaders = ['Base', 'Location', 'Current Owner'];
-  baseHeaders.forEach(function(headerText) {
-    const th = document.createElement('th');
-    th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
-    th.textContent = headerText;
-    baseHeaderRow.appendChild(th);
-  });
-
-  baseThead.appendChild(baseHeaderRow);
-  baseTable.appendChild(baseThead);
-
-  // Table body
-  const baseTbody = document.createElement('tbody');
-  baseTbody.className = 'bg-white divide-y divide-gray-200';
-
   if (appState.gameData.bases && appState.gameData.bases.length > 0) {
+    // Map container
+    const mapContainer = document.createElement('div');
+    mapContainer.id = 'map-container';
+    mapContainer.className = 'bg-gray-200 rounded-lg shadow-sm h-64 mb-4 relative';
+    baseSection.appendChild(mapContainer);
+
+    // Bases list
+    const basesContainer = document.createElement('div');
+    basesContainer.className = 'space-y-3';
+
     appState.gameData.bases.forEach(function(base) {
-      const row = document.createElement('tr');
+      const baseCard = document.createElement('div');
+      baseCard.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
 
-      // Base name cell
-      const nameCell = document.createElement('td');
-      nameCell.className = 'px-6 py-4 whitespace-nowrap';
-      nameCell.textContent = base.name;
-      row.appendChild(nameCell);
+      // Base header
+      const baseHeader = document.createElement('div');
+      baseHeader.className = 'flex items-center justify-between mb-3';
 
-      // Location cell
-      const locationCell = document.createElement('td');
-      locationCell.className = 'px-6 py-4 whitespace-nowrap';
-      locationCell.textContent = base.lat.toFixed(6) + ', ' + base.lng.toFixed(6);
-      row.appendChild(locationCell);
+      const baseName = document.createElement('h4');
+      baseName.className = 'text-lg font-semibold text-gray-900';
+      baseName.textContent = base.name;
+      baseHeader.appendChild(baseName);
 
-      // Owner cell
-      const ownerCell = document.createElement('td');
-      ownerCell.className = 'px-6 py-4 whitespace-nowrap';
+      // Owner indicator
+      const ownerContainer = document.createElement('div');
+      ownerContainer.className = 'flex items-center text-sm';
       
       if (base.ownedBy) {
         const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
         if (owningTeam) {
-          const ownerContainer = document.createElement('div');
-          ownerContainer.className = 'flex items-center';
+          const ownerDot = document.createElement('div');
+          ownerDot.className = 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2';
+          ownerContainer.appendChild(ownerDot);
           
-          const colorDot = document.createElement('div');
-          colorDot.className = 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2';
-          ownerContainer.appendChild(colorDot);
-          
-          const name = document.createElement('span');
-          name.textContent = owningTeam.name;
-          ownerContainer.appendChild(name);
-          
-          ownerCell.appendChild(ownerContainer);
+          const ownerName = document.createElement('span');
+          ownerName.className = 'font-medium text-gray-700';
+          ownerName.textContent = owningTeam.name;
+          ownerContainer.appendChild(ownerName);
         } else {
-          ownerCell.textContent = 'Unknown Team';
+          const unknownOwner = document.createElement('span');
+          unknownOwner.className = 'text-gray-500';
+          unknownOwner.textContent = 'Unknown Team';
+          ownerContainer.appendChild(unknownOwner);
         }
       } else {
-        ownerCell.textContent = 'Uncaptured';
+        const uncaptured = document.createElement('span');
+        uncaptured.className = 'text-gray-500 italic';
+        uncaptured.textContent = 'Uncaptured';
+        ownerContainer.appendChild(uncaptured);
       }
       
-      row.appendChild(ownerCell);
+      baseHeader.appendChild(ownerContainer);
+      baseCard.appendChild(baseHeader);
 
-      baseTbody.appendChild(row);
+      // Base coordinates (smaller, less prominent)
+      const coordinates = document.createElement('div');
+      coordinates.className = 'text-xs text-gray-500 font-mono bg-white px-2 py-1 rounded';
+      coordinates.textContent = `${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}`;
+      baseCard.appendChild(coordinates);
+
+      basesContainer.appendChild(baseCard);
     });
+
+    baseSection.appendChild(basesContainer);
+
+    // Initialize game map after section is added to DOM
+    setTimeout(() => initGameMap(), 100);
   } else {
     // Show prompt to add bases when there are none
-    const emptyRow = document.createElement('tr');
-    const emptyCell = document.createElement('td');
-    emptyCell.colSpan = 3;
-    emptyCell.className = 'px-6 py-4 text-center text-gray-500';
-    emptyCell.textContent = 'No bases available. Scan QR codes to add bases.';
-    emptyRow.appendChild(emptyCell);
-    baseTbody.appendChild(emptyRow);
-  }
+    const emptyState = document.createElement('div');
+    emptyState.className = 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
+    
+    const emptyIcon = document.createElement('i');
+    emptyIcon.setAttribute('data-lucide', 'map-pin');
+    emptyIcon.className = 'w-12 h-12 text-gray-400 mx-auto mb-3';
+    emptyState.appendChild(emptyIcon);
+    
+    const emptyTitle = document.createElement('h4');
+    emptyTitle.className = 'text-lg font-medium text-gray-900 mb-2';
+    emptyTitle.textContent = 'No Bases Yet';
+    emptyState.appendChild(emptyTitle);
+    
+    const emptyText = document.createElement('p');
+    emptyText.className = 'text-gray-600 mb-4';
+    emptyText.textContent = 'Scan QR codes to add bases to your game.';
+    emptyState.appendChild(emptyText);
+    
+    const addBaseButton = document.createElement('button');
+    addBaseButton.className = 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center';
+    
+    const addIcon = document.createElement('i');
+    addIcon.setAttribute('data-lucide', 'qr-code');
+    addIcon.className = 'w-4 h-4 mr-2';
+    addBaseButton.appendChild(addIcon);
+    
+    const addText = document.createElement('span');
+    addText.textContent = 'Scan QR Code';
+    addBaseButton.appendChild(addText);
+    
+    addBaseButton.addEventListener('click', function() {
+      navigateTo('scanQR');
+    });
+    emptyState.appendChild(addBaseButton);
 
-  baseTable.appendChild(baseTbody);
-  baseTableContainer.appendChild(baseTable);
-  baseSection.appendChild(baseTableContainer);
+    baseSection.appendChild(emptyState);
+  }
 
   grid.appendChild(baseSection);
 
-  // Game Control Section
+  // Game Control Section - Mobile Optimized
   const controlSection = document.createElement('div');
+  controlSection.className = 'bg-white rounded-lg shadow-md p-4';
 
   const controlTitle = document.createElement('h3');
-  controlTitle.className = 'text-xl font-semibold mb-3';
+  controlTitle.className = 'text-xl font-semibold mb-4';
   controlTitle.textContent = 'Game Control';
   controlSection.appendChild(controlTitle);
 
   const controlButtons = document.createElement('div');
-  controlButtons.className = 'flex gap-4';
+  controlButtons.className = 'space-y-3';
 
   // Show different buttons based on game status
   if (appState.gameData.status === 'active') {
     // Game is running - show only End Game button
     const endButton = document.createElement('button');
-    endButton.className = 'flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors';
-    endButton.textContent = 'End Game';
+    endButton.className = 'w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-lg font-medium flex items-center justify-center';
+    
+    const endIcon = document.createElement('i');
+    endIcon.setAttribute('data-lucide', 'stop-circle');
+    endIcon.className = 'w-5 h-5 mr-2';
+    endButton.appendChild(endIcon);
+    
+    const endText = document.createElement('span');
+    endText.textContent = 'End Game';
+    endButton.appendChild(endText);
+    
     endButton.addEventListener('click', function() {
       // Confirm before ending
       if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
@@ -471,17 +552,25 @@ function renderHostPanel() {
   } else if (appState.gameData.status === 'setup') {
     // Game is in setup - show only Start Game button
     const startButton = document.createElement('button');
-    startButton.className = 'flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors';
+    startButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium flex items-center justify-center';
     
     // Disable button if fewer than 2 teams
     const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
     startButton.disabled = !hasEnoughTeams;
     
-    startButton.textContent = 'Start Game';
     if (!hasEnoughTeams) {
       startButton.title = 'At least 2 teams required to start game';
-      startButton.className += ' opacity-50 cursor-not-allowed';
+      startButton.className = 'w-full bg-gray-400 text-white py-3 px-4 rounded-lg cursor-not-allowed text-lg font-medium flex items-center justify-center';
     }
+    
+    const startIcon = document.createElement('i');
+    startIcon.setAttribute('data-lucide', 'play-circle');
+    startIcon.className = 'w-5 h-5 mr-2';
+    startButton.appendChild(startIcon);
+    
+    const startText = document.createElement('span');
+    startText.textContent = hasEnoughTeams ? 'Start Game' : 'Need 2+ Teams to Start';
+    startButton.appendChild(startText);
     
     startButton.addEventListener('click', function() {
       // Double check team count before starting
@@ -497,19 +586,36 @@ function renderHostPanel() {
   } else if (appState.gameData.status === 'ended') {
     // Game is ended - show message
     const gameEndedMsg = document.createElement('div');
-    gameEndedMsg.className = 'bg-gray-100 rounded-lg p-3 text-gray-600 mb-4';
-    gameEndedMsg.textContent = 'This game has ended. QR codes have been released and can be reused in other games.';
+    gameEndedMsg.className = 'bg-gray-100 rounded-lg p-4 text-gray-600 mb-4 text-center';
+    
+    const endedIcon = document.createElement('i');
+    endedIcon.setAttribute('data-lucide', 'check-circle');
+    endedIcon.className = 'w-6 h-6 mx-auto mb-2 text-gray-500';
+    gameEndedMsg.appendChild(endedIcon);
+    
+    const endedText = document.createElement('p');
+    endedText.textContent = 'This game has ended. QR codes have been released and can be reused in other games.';
+    gameEndedMsg.appendChild(endedText);
+    
     controlSection.appendChild(gameEndedMsg);
   }
 
   const exitButton = document.createElement('button');
-  exitButton.className = 'flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors';
-  exitButton.textContent = 'Exit Host Panel';
+  exitButton.className = 'w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors text-lg font-medium flex items-center justify-center';
+  
+  const exitIcon = document.createElement('i');
+  exitIcon.setAttribute('data-lucide', 'log-out');
+  exitIcon.className = 'w-5 h-5 mr-2';
+  exitButton.appendChild(exitIcon);
+  
+  const exitText = document.createElement('span');
+  exitText.textContent = 'Exit Host Panel';
+  exitButton.appendChild(exitText);
+  
   exitButton.addEventListener('click', function() { navigateTo('landing'); });
   controlButtons.appendChild(exitButton);
 
   controlSection.appendChild(controlButtons);
-
   grid.appendChild(controlSection);
 
   container.appendChild(grid);
