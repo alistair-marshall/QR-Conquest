@@ -1141,14 +1141,6 @@ function renderBaseCreationForm(qrId, container) {
   });
   locationGroup.appendChild(locationLabel);
 
-  // Coordinates display
-  const coordinatesDisplay = UIBuilder.createElement('div', {
-    id: 'coordinates-display',
-    className: 'text-xs text-gray-600 font-mono mb-4 p-2 bg-gray-50 rounded',
-    textContent: 'No location set'
-  });
-  locationGroup.appendChild(coordinatesDisplay);
-
   // Location source toggle
   const locationSourceGroup = UIBuilder.createElement('div', {
     className: 'mb-4 flex items-center space-x-4',
@@ -1444,7 +1436,6 @@ function renderBaseCreationForm(qrId, container) {
   }
   
   function updateLocationDisplay() {
-    const coordinatesDisplay = document.getElementById('coordinates-display');
     const locationSourceGroup = document.getElementById('location-source-group');
     const mapInstructions = document.getElementById('map-instructions');
     const resetBtn = document.getElementById('reset-to-gps');
@@ -1454,12 +1445,8 @@ function renderBaseCreationForm(qrId, container) {
     const accuracy = parseFloat(document.getElementById('accuracy').value);
     
     if (isNaN(currentLat) || isNaN(currentLng)) {
-      coordinatesDisplay.textContent = 'No location set';
       return;
     }
-    
-    // Update coordinates display
-    coordinatesDisplay.textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
     
     // Show/hide elements based on state
     const hasGpsData = !isNaN(parseFloat(document.getElementById('gps-latitude').value));
@@ -1475,22 +1462,6 @@ function renderBaseCreationForm(qrId, container) {
         mapInstructions.style.display = 'none';
       } else {
         mapInstructions.style.display = 'none';
-      }
-      
-      // Add distance indicator for manual coordinates
-      if (currentLocationSource === 'manual') {
-        const gpsLat = parseFloat(document.getElementById('gps-latitude').value);
-        const gpsLng = parseFloat(document.getElementById('gps-longitude').value);
-        
-        if (!isNaN(gpsLat) && !isNaN(gpsLng)) {
-          const distance = calculateDistance(gpsLat, gpsLng, currentLat, currentLng);
-          if (distance > 0.001) { // Only show if moved more than 1mm
-            const distanceText = distance < 1 ? 
-              `${(distance * 1000).toFixed(0)}m from GPS` : 
-              `${distance.toFixed(2)}km from GPS`;
-            coordinatesDisplay.textContent += ` (${distanceText})`;
-          }
-        }
       }
     }
     
@@ -1535,9 +1506,15 @@ function renderBaseCreationForm(qrId, container) {
       document.getElementById('gps-longitude').value = longitude;
       document.getElementById('accuracy').value = accuracy;
       
-      // Set current coordinates to GPS initially
-      document.getElementById('latitude').value = latitude;
-      document.getElementById('longitude').value = longitude;
+      // Only update current coordinates if we don't have a manual position yet
+      const hasManualPosition = currentLocationSource === 'manual' && 
+                               !isNaN(parseFloat(document.getElementById('latitude').value));
+      
+      if (!hasManualPosition) {
+        // Set current coordinates to GPS initially
+        document.getElementById('latitude').value = latitude;
+        document.getElementById('longitude').value = longitude;
+      }
       
       // Initialize or update map
       initBaseLocationMap(latitude, longitude);
@@ -1561,8 +1538,8 @@ function renderBaseCreationForm(qrId, container) {
       getLocationBtn.disabled = false;
       updateLocationButtonContent(getLocationBtn, 'navigation', 'Update GPS Location');
       
-      // Set initial location source based on accuracy
-      if (accuracy > 15) {
+      // Only suggest manual adjustment for new GPS readings without manual position
+      if (!hasManualPosition && accuracy > 15) {
         // Poor accuracy - suggest manual adjustment
         currentLocationSource = 'gps'; // Start with GPS but show adjustment options
       }
@@ -1589,10 +1566,6 @@ function renderBaseCreationForm(qrId, container) {
           break;
       }
       
-      const coordinatesDisplay = document.getElementById('coordinates-display');
-      coordinatesDisplay.textContent = errorMessage;
-      coordinatesDisplay.className = 'text-xs text-red-600 font-mono mb-4 p-2 bg-red-50 rounded';
-      
       // Update button state
       getLocationBtn.disabled = false;
       updateLocationButtonContent(getLocationBtn, 'navigation', 'Try Again');
@@ -1615,18 +1588,6 @@ function renderBaseCreationForm(qrId, container) {
     
     // Store watch ID
     document.getElementById('location-watch-id').value = watchId;
-  }
-
-  // Calculate distance between two points in kilometres
-  function calculateDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
   }
 
   // Add event listener for get location button
