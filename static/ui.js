@@ -112,9 +112,9 @@ function navigateTo(page) {
     }
   }
 
-  // Clear host data when leaving site admin
+  // Clear admin data when leaving site admin
   if (appState.page !== 'siteAdminPanel' && appState.page !== 'siteAdminLogin') {
-    clearSiteAdminHosts();
+    clearSiteAdminData();
   }
 
   renderApp();
