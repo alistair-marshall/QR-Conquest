@@ -187,6 +187,15 @@ function renderHostPanel() {
   }, 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-purple-700 transition-colors text-lg font-medium', 'qr-code');
   qrSection.appendChild(scanQRButton);
 
+  // Print QR Codes button
+  const printQRButton = UIBuilder.createButton('Print QR Codes', function() {
+    // Open QR code generator in new tab
+    window.open('/code-generator/', '_blank');
+  }, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-green-700 transition-colors text-lg font-medium', 'printer');
+  qrActionsContainer.appendChild(printQRButton);
+
+  qrSection.appendChild(qrActionsContainer);
+
   // Add instruction text to emphasise the QR-first approach
   const instructionText = UIBuilder.createElement('p', {
     className: 'text-amber-600 text-sm mt-2 text-center',
