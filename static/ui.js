@@ -1,9 +1,74 @@
 // DOM elements cache
 const elements = {};
 
+// =============================================================================
+// REUSABLE UI COMPONENT BUILDERS
+// =============================================================================
+
+const UIBuilder = {
+  // Create element with properties and children
+  createElement(tag, props = {}, children = []) {
+    const element = document.createElement(tag);
+    
+    // Set properties
+    Object.entries(props).forEach(([key, value]) => {
+      if (key === 'onClick' && typeof value === 'function') {
+        // Special handling for onClick to ensure it works
+        element.addEventListener('click', value);
+      } else if (key.startsWith('on') && typeof value === 'function') {
+        // Other event handlers
+        const eventName = key.slice(2).toLowerCase();
+        element.addEventListener(eventName, value);
+      } else if (key === 'className') {
+        element.className = value;
+      } else if (key === 'textContent') {
+        element.textContent = value;
+      } else if (key === 'innerHTML') {
+        element.innerHTML = value;
+      } else if (key === 'style' && typeof value === 'object') {
+        Object.assign(element.style, value);
+      } else {
+        element.setAttribute(key, value);
+      }
+    });
+    
+    // Add children
+    children.forEach(child => {
+      if (typeof child === 'string') {
+        element.appendChild(document.createTextNode(child));
+      } else if (child && child.nodeType) {
+        element.appendChild(child);
+      }
+    });
+    
+    return element;
+  },
+
+  // Create a simple button
+  createButton(text, onClick, className = '', icon = null) {
+    const button = document.createElement('button');
+    button.className = `font-medium rounded-lg transition-colors flex items-center justify-center ${className}`;
+    
+    if (icon) {
+      const iconEl = document.createElement('i');
+      iconEl.setAttribute('data-lucide', icon);
+      iconEl.className = 'mr-2';
+      button.appendChild(iconEl);
+    }
+    
+    button.appendChild(document.createTextNode(text));
+    
+    if (onClick) {
+      button.addEventListener('click', onClick);
+    }
+    
+    return button;
+  }
+};
+
 // Initialize app immediately when script is loaded
 (function initializeApp() {
-  console.log('app-core.js and app-ui.js loaded, initializing app immediately');
+  console.log('UI system loaded, initializing app immediately');
 
   // Cache main elements
   elements.root = document.getElementById('root');
@@ -16,17 +81,16 @@ const elements = {};
 
   // Parse URL parameters for QR code
   const urlParams = new URLSearchParams(window.location.search);
-  let qrIdToProcess = urlParams.get('id'); // Get QR ID from URL
+  let qrIdToProcess = urlParams.get('id');
 
   if (qrIdToProcess) {
     console.log('QR code ID found in URL:', qrIdToProcess);
-    // Clean the URL immediately to remove the 'id' parameter
+    // Clean the URL immediately
     try {
       const baseUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
       window.history.replaceState({ path: baseUrl }, "", baseUrl);
       console.log('URL cleaned. Proceeding with QR ID:', qrIdToProcess);
     } catch (e) {
-      // Fallback or warning if history.replaceState is not supported or fails
       console.warn('Could not clean URL using history.replaceState:', e);
     }
   }
@@ -44,7 +108,6 @@ const elements = {};
     console.log('Found game ID in localStorage:', authState.gameId);
     fetchGameData(authState.gameId)
       .then(() => {
-        // After game data is loaded, check if we had a QR ID from the URL
         if (qrIdToProcess) {
           console.log('Processing stored QR ID after game data load:', qrIdToProcess);
           handleQRCode(qrIdToProcess);
@@ -53,7 +116,6 @@ const elements = {};
       })
       .catch(err => {
         console.error('Error loading game data:', err);
-        // Even if game data fails to load, try to handle QR code if it was from URL
         if (qrIdToProcess) {
           console.log('Processing stored QR ID after game data load error:', qrIdToProcess);
           handleQRCode(qrIdToProcess);
@@ -61,12 +123,10 @@ const elements = {};
         }
       });
   } else if (qrIdToProcess) {
-    // No game in localStorage, but we have a QR code from the URL
     console.log('No game loaded, processing stored QR ID:', qrIdToProcess);
     handleQRCode(qrIdToProcess);
     qrIdToProcess = null;
   } else {
-    // No game, no QR code from URL, just render landing page normally
     renderApp();
   }
 
@@ -90,7 +150,6 @@ const elements = {};
 // NAVIGATION AND STATE MANAGEMENT
 // =============================================================================
 
-// Navigation function
 function navigateTo(page) {
   console.log('Navigating to:', page);
   appState.page = page;
@@ -120,378 +179,14 @@ function navigateTo(page) {
   renderApp();
 }
 
-// Clear error
 function clearError() {
   appState.error = null;
   renderApp();
 }
 
 // =============================================================================
-// MAP FUNCTIONALITY
-// =============================================================================
-
-let gameMapInstance = null; // Keep track of the Leaflet map instance
-
-// Helper function to map Tailwind colors to hex for Leaflet
-function getHexColorForTailwind(tailwindColorClass) {
-  const colorMap = {
-    'bg-red-500': '#ef4444',
-    'bg-blue-500': '#3b82f6',
-    'bg-green-500': '#22c55e',
-    'bg-yellow-500': '#eab308',
-    'bg-purple-500': '#a855f7',
-    'bg-pink-500': '#ec4899',
-    'bg-indigo-500': '#6366f1',
-    'bg-teal-500': '#14b8a6',
-    'bg-gray-400': '#9ca3af', // A slightly different gray for uncaptured
-    'bg-gray-500': '#6b7280'  // Default if color not in map
-  };
-  return colorMap[tailwindColorClass] || colorMap['bg-gray-500'];
-}
-
-function initGameMap() {
-  const mapElement = document.getElementById('map-container');
-  if (!mapElement) {
-    console.error('Map container (map-container) not found.');
-    return;
-  }
-
-  // If a map instance already exists, remove it to prevent Leaflet errors on re-render.
-  if (gameMapInstance) {
-    gameMapInstance.remove();
-    gameMapInstance = null;
-  }
-
-  // Check if there are bases to display
-  if (!appState.gameData.bases || appState.gameData.bases.length === 0) {
-    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No bases to display on the map.</div>`;
-    return;
-  }
-
-  // Initialize the map
-  gameMapInstance = L.map(mapElement);
-
-  // Add OpenStreetMap tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  }).addTo(gameMapInstance);
-
-  const latLngs = [];
-  const markers = [];
-
-  appState.gameData.bases.forEach(base => {
-    if (typeof base.lat !== 'number' || typeof base.lng !== 'number') {
-      console.warn('Base has invalid coordinates:', base.name, base.lat, base.lng);
-      return; // Skip this base
-    }
-    const latLng = [base.lat, base.lng];
-    latLngs.push(latLng);
-
-    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
-    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
-
-    if (base.ownedBy) {
-      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
-      if (owningTeam) {
-        markerColor = getHexColorForTailwind(owningTeam.color);
-        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
-      } else {
-        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
-      }
-    }
-
-    const circleMarker = L.circleMarker(latLng, {
-      radius: 15, // Same size as capture zone
-      fillColor: markerColor,
-      color: '#000000', // Border color for the circle
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.75
-    }).addTo(gameMapInstance);
-
-    circleMarker.bindPopup(popupContent);
-    circleMarker.baseId = base.id;
-    markers.push(circleMarker);
-  });
-
-  gameMapInstance.baseMarkers = markers;
-
-  // Zoom and center the map to fit all base markers
-  if (latLngs.length > 0) {
-    const bounds = L.latLngBounds(latLngs);
-    gameMapInstance.fitBounds(bounds.pad(0.2)); // .pad(0.2) adds 20% padding around bounds
-  } else {
-    // Fallback if no valid bases were processed (e.g. all had bad coords)
-    // Centering on Edinburgh, UK as a generic fallback.
-    gameMapInstance.setView([55.94763, -3.16202], 16);
-    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
-  }
-}
-
-function updateMapMarkers() {
-  // If no map instance or no bases, return
-  if (!gameMapInstance || !appState.gameData.bases || appState.gameData.bases.length === 0) {
-    return;
-  }
-
-  // Get all markers (we'll store them in a new property of gameMapInstance)
-  if (!gameMapInstance.baseMarkers) {
-    console.warn('No markers to update. Reinitialize map.');
-    initGameMap()
-    return;
-  }
-
-  // Update each marker based on current base ownership
-  appState.gameData.bases.forEach(base => {
-    const marker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
-    if (!marker) return;
-
-    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
-    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
-
-    if (base.ownedBy) {
-      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
-      if (owningTeam) {
-        markerColor = getHexColorForTailwind(owningTeam.color);
-        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
-      } else {
-        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
-      }
-    }
-
-    // Update marker color
-    marker.setStyle({
-      fillColor: markerColor
-    });
-
-    // Update popup content
-    marker.getPopup().setContent(popupContent);
-  });
-}
-
-// =============================================================================
-// MAIN RENDER FUNCTION
-// =============================================================================
-
-// Main render function
-function renderApp() {
-  console.log('Rendering app, current page:', appState.page);
-
-  // Render loop protection
-  if (window.renderingInProgress) {
-      console.warn('Render already in progress, preventing loop');
-      return;
-  }
-  window.renderingInProgress = true;
-
-  try{
-    // Clear the root element
-    elements.root.innerHTML = '';
-
-    // Add header
-    const header = document.createElement('header');
-    header.className = 'bg-blue-600 text-white p-4 shadow-md relative';
-
-    // Create a container for the header content
-    const headerContent = document.createElement('div');
-    headerContent.className = 'flex justify-between items-start';
-
-    // Left side: Title and status
-    const leftSection = document.createElement('div');
-    leftSection.className = 'flex-1';
-
-    const title = document.createElement('h1');
-    title.className = 'text-2xl font-bold';
-    title.textContent = appState.gameData.name || 'QR Conquest';
-    leftSection.appendChild(title);
-
-    if (appState.gameData.status === 'active') {
-      const statusDiv = document.createElement('div');
-      statusDiv.className = 'flex justify-between items-center mt-1';
-
-      const statusText = document.createElement('p');
-      statusText.className = 'text-sm';
-      statusText.textContent = 'Game in progress';
-      statusDiv.appendChild(statusText);
-
-      if (appState.gameData.currentTeam) {
-        const teamText = document.createElement('p');
-        teamText.className = 'text-sm';
-        teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
-        statusDiv.appendChild(teamText);
-      }
-
-      leftSection.appendChild(statusDiv);
-    }
-
-    headerContent.appendChild(leftSection);
-
-    // Right side: Admin button
-    const rightSection = document.createElement('div');
-    rightSection.className = 'flex items-center';
-
-    // Show different buttons based on context
-    if (appState.page.startsWith('siteAdmin')) {
-      // If we're in site admin pages, show a label
-      const adminBadge = document.createElement('div');
-      adminBadge.className = 'bg-purple-800 text-white py-1 px-3 rounded-lg text-sm';
-      adminBadge.textContent = 'Site Admin';
-      rightSection.appendChild(adminBadge);
-    } else {
-      // Regular host button
-      const hostButton = document.createElement('button');
-      hostButton.className = 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200 flex items-center';
-
-      const hostIcon = document.createElement('i');
-      hostIcon.setAttribute('data-lucide', 'shield');
-      hostIcon.className = 'mr-2';
-      hostButton.appendChild(hostIcon);
-
-      const hostText = document.createElement('span');
-      hostText.textContent = 'Host Menu';
-      hostButton.appendChild(hostText);
-
-      hostButton.addEventListener('click', handleHostButtonClick);
-      rightSection.appendChild(hostButton);
-    }
-    headerContent.appendChild(rightSection);
-    header.appendChild(headerContent);
-
-    elements.root.appendChild(header);
-
-    // Main content container
-    const main = document.createElement('main');
-    main.className = 'p-4';
-
-    // Show loading screen if loading
-    if (appState.loading) {
-      main.appendChild(renderLoadingScreen());
-    }
-    // Show error screen if error
-    else if (appState.error) {
-      main.appendChild(renderErrorScreen());
-    }
-    // Render the current page
-    else {
-      switch (appState.page) {
-        case 'landing':
-          main.appendChild(renderLandingPage());
-          break;
-        case 'gameView':
-          main.appendChild(renderGameView());
-          break;
-        case 'hostPanel':
-          main.appendChild(renderHostPanel());
-          break;
-        case 'scanQR':
-          main.appendChild(renderQRScanner());
-          break;
-        case 'results':
-          main.appendChild(renderResultsPage());
-          break;
-        case 'qrAssignment':
-          main.appendChild(renderQRAssignmentPage());
-          break;
-        case 'playerRegistration':
-          main.appendChild(renderPlayerRegistrationPage());
-          break;
-        case 'firstTime':
-          main.appendChild(renderFirstTimePage());
-          break;
-        case 'joinGame':
-          main.appendChild(renderJoinGamePage());
-          break;
-        case 'siteAdminLogin':
-          main.appendChild(renderSiteAdminLogin());
-          break;
-        case 'siteAdminPanel':
-          main.appendChild(renderSiteAdminPanel());
-          break;
-        default:
-          main.appendChild(renderLandingPage());
-      }
-    }
-
-    elements.root.appendChild(main);
-
-    // Add footer
-    const footer = document.createElement('footer');
-    footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
-    
-    const footerContent = document.createElement('div');
-    footerContent.className = 'flex justify-between items-center';
-
-    const copyright = document.createElement('div');
-    copyright.textContent = 'QR Conquest © 2025';
-    footerContent.appendChild(copyright);
-
-    const adminLink = document.createElement('a');
-    adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
-    adminLink.textContent = 'Site Administration';
-    adminLink.href = '#';
-    adminLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      navigateTo('siteAdminLogin');
-    });
-    footerContent.appendChild(adminLink);
-
-    footer.appendChild(footerContent);
-    elements.root.appendChild(footer);
-
-    // Initialize Lucide icons if available
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
-  } finally {
-    // Always clear the render lock
-    window.renderingInProgress = false;
-  }
-}
-
-// =============================================================================
 // PAGE RENDERING COMPONENTS
 // =============================================================================
-
-// Loading Screen
-function renderLoadingScreen() {
-  const container = document.createElement('div');
-  container.className = 'flex flex-col items-center justify-center h-64';
-
-  const spinner = document.createElement('div');
-  spinner.className = 'animate-spin h-12 w-12 border-4 border-blue-600 rounded-full border-t-transparent mb-4';
-  container.appendChild(spinner);
-
-  const text = document.createElement('p');
-  text.textContent = 'Loading...';
-  container.appendChild(text);
-
-  return container;
-}
-
-// Error Screen
-function renderErrorScreen() {
-  const container = document.createElement('div');
-  container.className = 'bg-red-100 border border-red-400 rounded p-4 text-center';
-
-  const title = document.createElement('h2');
-  title.className = 'text-xl font-bold text-red-800 mb-2';
-  title.textContent = 'Error';
-  container.appendChild(title);
-
-  const message = document.createElement('p');
-  message.className = 'text-red-700 mb-4';
-  message.textContent = appState.error;
-  container.appendChild(message);
-
-  const button = document.createElement('button');
-  button.className = 'bg-blue-600 text-white py-2 px-4 rounded-lg';
-  button.textContent = 'Dismiss';
-  button.addEventListener('click', clearError);
-  container.appendChild(button);
-
-  return container;
-}
 
 // Landing Page
 function renderLandingPage() {
@@ -540,35 +235,31 @@ function renderLandingPage() {
     container.appendChild(instructionText);
     
     // Join Game button
-    const joinButton = document.createElement('button');
-    joinButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-    joinButton.textContent = 'Scan Team QR Code';
-    joinButton.addEventListener('click', function() { navigateTo('scanQR'); });
+    const joinButton = UIBuilder.createButton('Scan Team QR Code', function() { 
+      navigateTo('scanQR'); 
+    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
     buttonContainer.appendChild(joinButton);
 
     // Continue Game button (if in a team)
     if (authState.hasTeam) {
-      const continueButton = document.createElement('button');
-      continueButton.className = 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700';
-      continueButton.textContent = 'Continue Game';
-      continueButton.addEventListener('click', function() { navigateTo('gameView'); });
+      const continueButton = UIBuilder.createButton('Continue Game', function() { 
+        navigateTo('gameView'); 
+      }, 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 w-full');
       buttonContainer.appendChild(continueButton);
     }
 
     // Host Panel button (if host)
     if (authState.isHost) {
-      const hostButton = document.createElement('button');
-      hostButton.className = 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700';
-      hostButton.textContent = 'Game Management';
-      hostButton.addEventListener('click', function() { navigateTo('hostPanel'); });
+      const hostButton = UIBuilder.createButton('Game Management', function() { 
+        navigateTo('hostPanel'); 
+      }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
       buttonContainer.appendChild(hostButton);
     }
 
     // Leave Game button
-    const leaveButton = document.createElement('button');
-    leaveButton.className = 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700';
-    leaveButton.textContent = 'Leave Game';
-    leaveButton.addEventListener('click', clearGameData);
+    const leaveButton = UIBuilder.createButton('Leave Game', function() { 
+      clearGameData(); 
+    }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(leaveButton);
   } else if (authState.isHost) {
     // Host is authenticated but no game loaded
@@ -578,32 +269,28 @@ function renderLandingPage() {
     container.appendChild(hostWelcome);
     
     // Host Game button
-    const hostButton = document.createElement('button');
-    hostButton.className = 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700';
-    hostButton.textContent = 'Host a Game';
-    hostButton.addEventListener('click', function() { navigateTo('hostPanel'); });
+    const hostButton = UIBuilder.createButton('Host a Game', function() { 
+      navigateTo('hostPanel'); 
+    }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(hostButton);
     
     // Scan QR Code button
-    const scanButton = document.createElement('button');
-    scanButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-    scanButton.textContent = 'Scan QR Code';
-    scanButton.addEventListener('click', function() { navigateTo('scanQR'); });
+    const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
+      navigateTo('scanQR'); 
+    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
     buttonContainer.appendChild(scanButton);
     
     // Logout button
-    const logoutButton = document.createElement('button');
-    logoutButton.className = 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700';
-    logoutButton.textContent = 'Logout';
-    logoutButton.addEventListener('click', clearGameData);
+    const logoutButton = UIBuilder.createButton('Logout', function() { 
+      clearGameData(); 
+    }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(logoutButton);
   } else {
     // Not authenticated, not in a game
     // Scan QR Code button
-    const scanButton = document.createElement('button');
-    scanButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-    scanButton.textContent = 'Scan QR Code';
-    scanButton.addEventListener('click', function() { navigateTo('scanQR'); });
+    const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
+      navigateTo('scanQR'); 
+    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
     buttonContainer.appendChild(scanButton);
     
     // Host Login help text
@@ -695,24 +382,53 @@ function renderGameView() {
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'flex gap-4';
 
-  const scanButton = document.createElement('button');
-  scanButton.className = 'flex-1 bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 flex items-center justify-center';
-  scanButton.addEventListener('click', function () { navigateTo('scanQR'); });
-
-  const scanIcon = document.createElement('i');
-  scanIcon.setAttribute('data-lucide', 'qr-code');
-  scanIcon.className = 'mr-2';
-  scanButton.appendChild(scanIcon);
-
-  const scanText = document.createElement('span');
-  scanText.textContent = 'Scan QR Code';
-  scanButton.appendChild(scanText);
-
+  const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
+    navigateTo('scanQR'); 
+  }, 'flex-1 bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700', 'qr-code');
   actionsContainer.appendChild(scanButton);
   container.appendChild(actionsContainer);
 
   // Initialize the Leaflet map
   setTimeout(() => initGameMap(), 0);
+
+  return container;
+}
+
+// Loading Screen
+function renderLoadingScreen() {
+  const container = document.createElement('div');
+  container.className = 'flex flex-col items-center justify-center h-64';
+
+  const spinner = document.createElement('div');
+  spinner.className = 'animate-spin h-12 w-12 border-4 border-blue-600 rounded-full border-t-transparent mb-4';
+  container.appendChild(spinner);
+
+  const text = document.createElement('p');
+  text.textContent = 'Loading...';
+  container.appendChild(text);
+
+  return container;
+}
+
+// Error Screen
+function renderErrorScreen() {
+  const container = document.createElement('div');
+  container.className = 'bg-red-100 border border-red-400 rounded p-4 text-center';
+
+  const title = document.createElement('h2');
+  title.className = 'text-xl font-bold text-red-800 mb-2';
+  title.textContent = 'Error';
+  container.appendChild(title);
+
+  const message = document.createElement('p');
+  message.className = 'text-red-700 mb-4';
+  message.textContent = appState.error;
+  container.appendChild(message);
+
+  const button = UIBuilder.createButton('Dismiss', function() { 
+    clearError(); 
+  }, 'bg-blue-600 text-white py-2 px-4 rounded-lg');
+  container.appendChild(button);
 
   return container;
 }
@@ -745,25 +461,17 @@ function renderFirstTimePage() {
   optionsContainer.className = 'flex flex-col space-y-4 max-w-xs mx-auto';
 
   // Join existing game
-  const joinButton = document.createElement('button');
-  joinButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-  joinButton.textContent = 'Join a Game';
-  joinButton.addEventListener('click', function () {
-    // Store QR code in session storage for later use
+  const joinButton = UIBuilder.createButton('Join a Game', function() {
     sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
     navigateTo('joinGame');
-  });
+  }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
   optionsContainer.appendChild(joinButton);
 
   // Create new game (admin)
-  const createButton = document.createElement('button');
-  createButton.className = 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700';
-  createButton.textContent = 'Create a New Game';
-  createButton.addEventListener('click', function () {
-    // Store QR code in session storage for later use
+  const createButton = UIBuilder.createButton('Create a New Game', function() {
     sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
     navigateTo('hostPanel');
-  });
+  }, 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 w-full');
   optionsContainer.appendChild(createButton);
 
   // Information about QR code approach
@@ -807,15 +515,14 @@ function renderJoinGamePage() {
   idInput.type = 'text';
   idInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
   idInput.required = true;
+  idInput.placeholder = 'Enter game ID (e.g., brave-apple)';
   idGroup.appendChild(idInput);
 
   form.appendChild(idGroup);
 
   // Join button
-  const joinButton = document.createElement('button');
+  const joinButton = UIBuilder.createButton('Join Game', null, 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg');
   joinButton.type = 'submit';
-  joinButton.className = 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg';
-  joinButton.textContent = 'Join Game';
   form.appendChild(joinButton);
 
   // Handle form submission
@@ -845,18 +552,15 @@ function renderJoinGamePage() {
   container.appendChild(form);
 
   // Back button
-  const backButton = document.createElement('button');
-  backButton.className = 'text-blue-600 hover:underline';
-  backButton.textContent = '← Back to Home';
-  backButton.addEventListener('click', function() {
+  const backButton = UIBuilder.createButton('← Back to Home', function() {
     navigateTo('landing');
-  });
+  }, 'text-blue-600 hover:underline');
   container.appendChild(backButton);
 
   return container;
 }
 
-// QR Scanner - Consolidated and simplified
+// QR Scanner
 function renderQRScanner() {
   const container = document.createElement('div');
   container.className = 'text-center';
@@ -987,10 +691,7 @@ function renderQRScanner() {
   input.placeholder = 'Enter QR code value';
   inputContainer.appendChild(input);
 
-  const submitButton = document.createElement('button');
-  submitButton.className = 'bg-blue-600 text-white py-2 px-4 rounded-lg text-sm';
-  submitButton.textContent = 'Submit';
-  submitButton.addEventListener('click', function () {
+  const submitButton = UIBuilder.createButton('Submit', function() {
     const qrCode = input.value.trim();
     if (!qrCode) {
       setStatusMessage('Please enter a QR code value', 'error');
@@ -1000,7 +701,7 @@ function renderQRScanner() {
     // Determine context based on current page
     const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
     handleQRCode(qrCode, context);
-  });
+  }, 'bg-blue-600 text-white py-2 px-4 rounded-lg text-sm');
   inputContainer.appendChild(submitButton);
 
   manualInputContainer.appendChild(inputContainer);
@@ -1011,10 +712,7 @@ function renderQRScanner() {
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'flex gap-4';
 
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-gray-700';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', function () {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     // Stop camera before navigating away
     stopCamera();
 
@@ -1026,7 +724,7 @@ function renderQRScanner() {
     } else {
       navigateTo('gameView');
     }
-  });
+  }, 'flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-gray-700');
   actionsContainer.appendChild(cancelButton);
 
   container.appendChild(actionsContainer);
@@ -1326,7 +1024,320 @@ function renderQRScanner() {
 }
 
 // =============================================================================
-// HOST BUTTON FUNCTIONALITY (moved from core.js)
+// MAP FUNCTIONALITY
+// =============================================================================
+
+let gameMapInstance = null;
+
+// Helper function to map Tailwind colors to hex for Leaflet
+function getHexColorForTailwind(tailwindColorClass) {
+  const colorMap = {
+    'bg-red-500': '#ef4444',
+    'bg-blue-500': '#3b82f6',
+    'bg-green-500': '#22c55e',
+    'bg-yellow-500': '#eab308',
+    'bg-purple-500': '#a855f7',
+    'bg-pink-500': '#ec4899',
+    'bg-indigo-500': '#6366f1',
+    'bg-teal-500': '#14b8a6',
+    'bg-gray-400': '#9ca3af', // A slightly different gray for uncaptured
+    'bg-gray-500': '#6b7280'  // Default if color not in map
+  };
+  return colorMap[tailwindColorClass] || colorMap['bg-gray-500'];
+}
+
+function initGameMap() {
+  const mapElement = document.getElementById('map-container');
+  if (!mapElement) {
+    console.error('Map container (map-container) not found.');
+    return;
+  }
+
+  // If a map instance already exists, remove it to prevent Leaflet errors on re-render.
+  if (gameMapInstance) {
+    gameMapInstance.remove();
+    gameMapInstance = null;
+  }
+
+  // Check if there are bases to display
+  if (!appState.gameData.bases || appState.gameData.bases.length === 0) {
+    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No bases to display on the map.</div>`;
+    return;
+  }
+
+  // Initialize the map
+  gameMapInstance = L.map(mapElement);
+
+  // Add OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(gameMapInstance);
+
+  const latLngs = [];
+  const markers = [];
+
+  appState.gameData.bases.forEach(base => {
+    if (typeof base.lat !== 'number' || typeof base.lng !== 'number') {
+      console.warn('Base has invalid coordinates:', base.name, base.lat, base.lng);
+      return; // Skip this base
+    }
+    const latLng = [base.lat, base.lng];
+    latLngs.push(latLng);
+
+    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
+    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
+
+    if (base.ownedBy) {
+      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
+      if (owningTeam) {
+        markerColor = getHexColorForTailwind(owningTeam.color);
+        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
+      } else {
+        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
+      }
+    }
+
+    const circleMarker = L.circleMarker(latLng, {
+      radius: 15, // Same size as capture zone
+      fillColor: markerColor,
+      color: '#000000', // Border color for the circle
+      weight: 1,
+      opacity: 1,
+      fillOpacity: 0.75
+    }).addTo(gameMapInstance);
+
+    circleMarker.bindPopup(popupContent);
+    circleMarker.baseId = base.id;
+    markers.push(circleMarker);
+  });
+
+  gameMapInstance.baseMarkers = markers;
+
+  // Zoom and center the map to fit all base markers
+  if (latLngs.length > 0) {
+    const bounds = L.latLngBounds(latLngs);
+    gameMapInstance.fitBounds(bounds.pad(0.2)); // .pad(0.2) adds 20% padding around bounds
+  } else {
+    // Fallback if no valid bases were processed (e.g. all had bad coords)
+    // Centering on Edinburgh, UK as a generic fallback.
+    gameMapInstance.setView([55.94763, -3.16202], 16);
+    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
+  }
+}
+
+function updateMapMarkers() {
+  // If no map instance or no bases, return
+  if (!gameMapInstance || !appState.gameData.bases || appState.gameData.bases.length === 0) {
+    return;
+  }
+
+  // Get all markers (we'll store them in a new property of gameMapInstance)
+  if (!gameMapInstance.baseMarkers) {
+    console.warn('No markers to update. Reinitialize map.');
+    initGameMap()
+    return;
+  }
+
+  // Update each marker based on current base ownership
+  appState.gameData.bases.forEach(base => {
+    const marker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
+    if (!marker) return;
+
+    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
+    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
+
+    if (base.ownedBy) {
+      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
+      if (owningTeam) {
+        markerColor = getHexColorForTailwind(owningTeam.color);
+        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
+      } else {
+        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
+      }
+    }
+
+    // Update marker color
+    marker.setStyle({
+      fillColor: markerColor
+    });
+
+    // Update popup content
+    marker.getPopup().setContent(popupContent);
+  });
+}
+
+// =============================================================================
+// MAIN RENDER FUNCTION
+// =============================================================================
+
+// Main render function
+function renderApp() {
+  console.log('Rendering app, current page:', appState.page);
+
+  // Render loop protection
+  if (window.renderingInProgress) {
+      console.warn('Render already in progress, preventing loop');
+      return;
+  }
+  window.renderingInProgress = true;
+
+  try{
+    // Clear the root element
+    elements.root.innerHTML = '';
+
+    // Add header
+    const header = document.createElement('header');
+    header.className = 'bg-blue-600 text-white p-4 shadow-md relative';
+
+    // Create a container for the header content
+    const headerContent = document.createElement('div');
+    headerContent.className = 'flex justify-between items-start';
+
+    // Left side: Title and status
+    const leftSection = document.createElement('div');
+    leftSection.className = 'flex-1';
+
+    const title = document.createElement('h1');
+    title.className = 'text-2xl font-bold';
+    title.textContent = appState.gameData.name || 'QR Conquest';
+    leftSection.appendChild(title);
+
+    if (appState.gameData.status === 'active') {
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'flex justify-between items-center mt-1';
+
+      const statusText = document.createElement('p');
+      statusText.className = 'text-sm';
+      statusText.textContent = 'Game in progress';
+      statusDiv.appendChild(statusText);
+
+      if (appState.gameData.currentTeam) {
+        const teamText = document.createElement('p');
+        teamText.className = 'text-sm';
+        teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
+        statusDiv.appendChild(teamText);
+      }
+
+      leftSection.appendChild(statusDiv);
+    }
+
+    headerContent.appendChild(leftSection);
+
+    // Right side: Admin button
+    const rightSection = document.createElement('div');
+    rightSection.className = 'flex items-center';
+
+    // Show different buttons based on context
+    if (appState.page.startsWith('siteAdmin')) {
+      // If we're in site admin pages, show a label
+      const adminBadge = document.createElement('div');
+      adminBadge.className = 'bg-purple-800 text-white py-1 px-3 rounded-lg text-sm';
+      adminBadge.textContent = 'Site Admin';
+      rightSection.appendChild(adminBadge);
+    } else {
+      // Regular host button
+      const hostButton = UIBuilder.createButton('Host Menu', function() {
+        handleHostButtonClick();
+      }, 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200', 'shield');
+      rightSection.appendChild(hostButton);
+    }
+    headerContent.appendChild(rightSection);
+    header.appendChild(headerContent);
+
+    elements.root.appendChild(header);
+
+    // Main content container
+    const main = document.createElement('main');
+    main.className = 'p-4';
+
+    // Show loading screen if loading
+    if (appState.loading) {
+      main.appendChild(renderLoadingScreen());
+    }
+    // Show error screen if error
+    else if (appState.error) {
+      main.appendChild(renderErrorScreen());
+    }
+    // Render the current page
+    else {
+      switch (appState.page) {
+        case 'landing':
+          main.appendChild(renderLandingPage());
+          break;
+        case 'gameView':
+          main.appendChild(renderGameView());
+          break;
+        case 'hostPanel':
+          main.appendChild(renderHostPanel());
+          break;
+        case 'scanQR':
+          main.appendChild(renderQRScanner());
+          break;
+        case 'results':
+          main.appendChild(renderResultsPage());
+          break;
+        case 'qrAssignment':
+          main.appendChild(renderQRAssignmentPage());
+          break;
+        case 'playerRegistration':
+          main.appendChild(renderPlayerRegistrationPage());
+          break;
+        case 'firstTime':
+          main.appendChild(renderFirstTimePage());
+          break;
+        case 'joinGame':
+          main.appendChild(renderJoinGamePage());
+          break;
+        case 'siteAdminLogin':
+          main.appendChild(renderSiteAdminLogin());
+          break;
+        case 'siteAdminPanel':
+          main.appendChild(renderSiteAdminPanel());
+          break;
+        default:
+          main.appendChild(renderLandingPage());
+      }
+    }
+
+    elements.root.appendChild(main);
+
+    // Add footer
+    const footer = document.createElement('footer');
+    footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
+    
+    const footerContent = document.createElement('div');
+    footerContent.className = 'flex justify-between items-center';
+
+    const copyright = document.createElement('div');
+    copyright.textContent = 'QR Conquest © 2025';
+    footerContent.appendChild(copyright);
+
+    const adminLink = document.createElement('a');
+    adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
+    adminLink.textContent = 'Site Administration';
+    adminLink.href = '#';
+    adminLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      navigateTo('siteAdminLogin');
+    });
+    footerContent.appendChild(adminLink);
+
+    footer.appendChild(footerContent);
+    elements.root.appendChild(footer);
+
+    // Initialize Lucide icons if available
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  } finally {
+    // Always clear the render lock
+    window.renderingInProgress = false;
+  }
+}
+
+// =============================================================================
+// HOST BUTTON FUNCTIONALITY
 // =============================================================================
 
 // Function to handle host button click
@@ -1367,32 +1378,16 @@ function showHostScanPrompt() {
   modalContainer.appendChild(instructions);
 
   // Scan button
-  const scanButton = document.createElement('button');
-  scanButton.className = 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg flex items-center justify-center mb-4';
-
-  const scanIcon = document.createElement('i');
-  scanIcon.setAttribute('data-lucide', 'qr-code');
-  scanIcon.className = 'mr-2';
-  scanButton.appendChild(scanIcon);
-
-  const scanText = document.createElement('span');
-  scanText.textContent = 'Scan Host QR Code';
-  scanButton.appendChild(scanText);
-
-  scanButton.addEventListener('click', function () {
+  const scanButton = UIBuilder.createButton('Scan Host QR Code', function() {
     document.body.removeChild(modalBackdrop);
     navigateTo('scanQR');
-  });
-
+  }, 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg mb-4', 'qr-code');
   modalContainer.appendChild(scanButton);
 
   // Close button
-  const closeButton = document.createElement('button');
-  closeButton.className = 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg';
-  closeButton.textContent = 'Cancel';
-  closeButton.addEventListener('click', function () {
+  const closeButton = UIBuilder.createButton('Cancel', function() {
     document.body.removeChild(modalBackdrop);
-  });
+  }, 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg');
   modalContainer.appendChild(closeButton);
 
   // Initialize Lucide icons
@@ -1439,20 +1434,10 @@ function showInstallButton() {
   if (document.getElementById('pwa-install-btn')) return;
 
   // Create install button
-  const installButton = document.createElement('button');
+  const installButton = UIBuilder.createButton('Install QR Conquest', function() {
+    showInstallPrompt();
+  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full', 'download');
   installButton.id = 'pwa-install-btn';
-  installButton.className = 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 flex items-center justify-center';
-
-  const installIcon = document.createElement('i');
-  installIcon.setAttribute('data-lucide', 'download');
-  installIcon.className = 'mr-2';
-  installButton.appendChild(installIcon);
-
-  const installText = document.createElement('span');
-  installText.textContent = 'Install QR Conquest';
-  installButton.appendChild(installText);
-
-  installButton.addEventListener('click', showInstallPrompt);
 
   // Insert at the beginning of the container
   container.prepend(installButton);
@@ -1487,16 +1472,6 @@ function showInstallPrompt() {
     if (installButton) installButton.remove();
   });
 }
-
-// Add to renderApp function to check for showing install button
-const originalRenderApp = renderApp;
-renderApp = function () {
-  // Call the original function
-  originalRenderApp.apply(this, arguments);
-
-  // Check if we should show the install button
-  setTimeout(showInstallButton, 100);
-};
 
 // Online/offline status handling
 function setupOnlineStatusMonitoring() {
@@ -1573,5 +1548,4 @@ document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
 // Export UI functions to global scope so core.js can call them
 window.navigateTo = navigateTo;
 window.renderApp = renderApp;
-window.showNotification = showNotification;
 window.updateMapMarkers = updateMapMarkers;
