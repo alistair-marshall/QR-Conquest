@@ -1,5 +1,28 @@
 // Site Admin module for managing hosts - UI components only, API calls handled by core.js
 
+function loadQRCodeLibrary() {
+  return new Promise((resolve, reject) => {
+    // Check if QRCode library is already loaded
+    if (window.QRCode) {
+      resolve();
+      return;
+    }
+
+    // Create script element to load QRCode.js
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    script.onload = () => {
+      console.log('QRCode library loaded successfully');
+      resolve();
+    };
+    script.onerror = () => {
+      console.error('Failed to load QRCode library');
+      reject(new Error('Failed to load QR code library'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
 // Site admin logout - UI handling only
 function logoutSiteAdmin() {
   // Reset site admin state - core.js handles this
@@ -288,7 +311,7 @@ function buildHostsTable(container, hosts) {
     
     const headerRow = document.createElement('tr');
     
-    const headers = ['Host Name', 'QR Code', 'Status', 'Expiry Date', 'Created', 'Actions'];
+    const headers = ['Host Name', 'Secret Link', 'Status', 'Expiry Date', 'Created', 'Actions'];
     headers.forEach(function(headerText) {
         const th = document.createElement('th');
         th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
@@ -331,22 +354,26 @@ function buildHostRow(host) {
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);
     
-    // QR Code cell
-    const qrCell = document.createElement('td');
-    qrCell.className = 'px-6 py-4 whitespace-nowrap';
+    // Secret Link cell
+    const linkCell = document.createElement('td');
+    linkCell.className = 'px-6 py-4 whitespace-nowrap';
     
-    const qrContainer = document.createElement('div');
-    qrContainer.className = 'flex items-center space-x-2';
+    const linkContainer = document.createElement('div');
+    linkContainer.className = 'flex items-center space-x-2';
     
-    const qrValue = document.createElement('span');
-    qrValue.className = 'text-sm text-gray-600 font-mono';
-    qrValue.textContent = host.qr_code.substring(0, 8) + '...';
-    qrValue.title = host.qr_code;
-    qrContainer.appendChild(qrValue);
+    // Generate the full secret link
+    const baseUrl = window.location.protocol + '//' + window.location.host;
+    const secretLink = `${baseUrl}/?id=${host.qr_code}`;
+    
+    const linkValue = document.createElement('span');
+    linkValue.className = 'text-sm text-gray-600 font-mono truncate max-w-xs';
+    linkValue.textContent = secretLink;
+    linkValue.title = secretLink;
+    linkContainer.appendChild(linkValue);
     
     const copyButton = document.createElement('button');
     copyButton.className = 'text-blue-600 hover:text-blue-800 transition-colors';
-    copyButton.title = 'Copy QR Code';
+    copyButton.title = 'Copy Secret Link';
     
     const copyIcon = document.createElement('i');
     copyIcon.setAttribute('data-lucide', 'copy');
@@ -354,13 +381,13 @@ function buildHostRow(host) {
     copyButton.appendChild(copyIcon);
     
     copyButton.addEventListener('click', function() {
-        navigator.clipboard.writeText(host.qr_code);
-        showNotification('QR code copied to clipboard', 'success');
+        navigator.clipboard.writeText(secretLink);
+        showNotification('Secret link copied to clipboard', 'success');
     });
     
-    qrContainer.appendChild(copyButton);
-    qrCell.appendChild(qrContainer);
-    row.appendChild(qrCell);
+    linkContainer.appendChild(copyButton);
+    linkCell.appendChild(linkContainer);
+    row.appendChild(linkCell);
     
     // Status cell
     const statusCell = document.createElement('td');
@@ -713,11 +740,17 @@ function renderHostQRModal(host) {
   const qrContainer = document.createElement('div');
   qrContainer.className = 'bg-gray-50 p-6 rounded-lg flex flex-col items-center justify-center mb-6';
   
-  // QR code placeholder (will be replaced by actual QR code)
+  // QR code div (will contain the actual QR code)
   const qrDiv = document.createElement('div');
   qrDiv.id = `qr-host-${host.id}`;
-  qrDiv.className = 'mb-4 bg-white p-4 rounded-lg shadow-sm';
+  qrDiv.className = 'mb-4 bg-white p-4 rounded-lg shadow-sm flex items-center justify-center';
+  qrDiv.style.minHeight = '200px';
+  qrDiv.style.minWidth = '200px';
   qrContainer.appendChild(qrDiv);
+  
+  // Generate host secret link
+  const baseUrl = window.location.protocol + '//' + window.location.host;
+  const hostUrl = `${baseUrl}/?id=${host.qr_code}`;
   
   // Host QR code value display
   const qrValue = document.createElement('div');
@@ -735,16 +768,12 @@ function renderHostQRModal(host) {
   
   qrContainer.appendChild(qrValue);
   
-  // Generate QR code link
-  const baseUrl = window.location.href.split('?')[0];
-  const hostUrl = `${baseUrl}?id=${host.qr_code}`;
-  
   const linkContainer = document.createElement('div');
   linkContainer.className = 'text-center mb-4';
   
   const linkLabel = document.createElement('p');
   linkLabel.className = 'text-sm text-gray-600 mb-2';
-  linkLabel.textContent = 'Host Link:';
+  linkLabel.textContent = 'Secret Link:';
   linkContainer.appendChild(linkLabel);
   
   const hostLink = document.createElement('p');
@@ -809,58 +838,9 @@ function renderHostQRModal(host) {
   });
   modalContainer.appendChild(closeButton);
   
-  // Generate QR code using qrcodejs library if available
+  // Generate QR code after modal is in DOM
   setTimeout(() => {
-    if (window.QRCode) {
-      try {
-        new QRCode(qrDiv.id, {
-          text: hostUrl,
-          width: 200,
-          height: 200,
-          colorDark: "#000000",
-          colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.H
-        });
-      } catch (error) {
-        console.warn('Failed to generate QR code:', error);
-        const errorMsg = document.createElement('div');
-        errorMsg.className = 'text-center text-gray-600 p-8';
-        const errorIcon = document.createElement('i');
-        errorIcon.setAttribute('data-lucide', 'alert-circle');
-        errorIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-2';
-        errorMsg.appendChild(errorIcon);
-
-        const errorText = document.createElement('p');
-        errorText.textContent = 'QR Code generation unavailable';
-        errorMsg.appendChild(errorText);
-        qrDiv.appendChild(errorMsg);
-        
-        // Initialize lucide icons
-        if (window.lucide) window.lucide.createIcons();
-      }
-    } else {
-      // QR code library not available
-      const placeholder = document.createElement('div');
-      placeholder.className = 'text-center text-gray-600 p-8';
-      
-      const placeholderIcon = document.createElement('i');
-      placeholderIcon.setAttribute('data-lucide', 'qr-code');
-      placeholderIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-2';
-      placeholder.appendChild(placeholderIcon);
-
-      const placeholderText1 = document.createElement('p');
-      placeholderText1.textContent = 'QR Code library not loaded';
-      placeholder.appendChild(placeholderText1);
-
-      const placeholderText2 = document.createElement('p');
-      placeholderText2.className = 'text-xs';
-      placeholderText2.textContent = 'Use the link above instead';
-      placeholder.appendChild(placeholderText2);
-      qrDiv.appendChild(placeholder);
-      
-      // Initialize lucide icons
-      if (window.lucide) window.lucide.createIcons();
-    }
+    generateQRCodeForHost(qrDiv.id, hostUrl);
   }, 100);
 
   // Initialize Lucide icons
@@ -874,6 +854,60 @@ function renderHostQRModal(host) {
     }
   }
   document.addEventListener('keydown', handleEscapeKey);
+}
+
+// New function to generate QR codes with library loading
+async function generateQRCodeForHost(elementId, url) {
+  const qrDiv = document.getElementById(elementId);
+  if (!qrDiv) {
+    console.error('QR code container not found:', elementId);
+    return;
+  }
+
+  try {
+    // Load QR code library if not already loaded
+    await loadQRCodeLibrary();
+    
+    // Clear any existing content
+    qrDiv.innerHTML = '';
+    
+    // Generate QR code
+    new QRCode(qrDiv, {
+      text: url,
+      width: 200,
+      height: 200,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+    
+  } catch (error) {
+    console.error('Failed to generate QR code:', error);
+    
+    // Show fallback content
+    qrDiv.innerHTML = '';
+    const fallbackContainer = document.createElement('div');
+    fallbackContainer.className = 'text-center text-gray-600 p-8';
+    
+    const fallbackIcon = document.createElement('i');
+    fallbackIcon.setAttribute('data-lucide', 'alert-circle');
+    fallbackIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-2';
+    fallbackContainer.appendChild(fallbackIcon);
+
+    const fallbackText1 = document.createElement('p');
+    fallbackText1.textContent = 'QR Code generation failed';
+    fallbackContainer.appendChild(fallbackText1);
+
+    const fallbackText2 = document.createElement('p');
+    fallbackText2.className = 'text-xs mt-1';
+    fallbackText2.textContent = 'Use the link above instead';
+    fallbackContainer.appendChild(fallbackText2);
+    
+    qrDiv.appendChild(fallbackContainer);
+    
+    // Initialize lucide icons for fallback
+    if (window.lucide) window.lucide.createIcons();
+  }
 }
 
 // Host edit modal
