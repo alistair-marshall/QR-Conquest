@@ -118,16 +118,21 @@ def init_db():
     ''')
 
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS games (
-        id TEXT PRIMARY KEY,
-        host_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        start_time INTEGER,
-        end_time INTEGER,
-        status TEXT NOT NULL,
-        FOREIGN KEY (host_id) REFERENCES hosts (id)
-    )
-    ''')
+        CREATE TABLE IF NOT EXISTS games (
+            id TEXT PRIMARY KEY,
+            host_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            start_time INTEGER,
+            end_time INTEGER,
+            status TEXT NOT NULL,
+            capture_radius_meters INTEGER DEFAULT 15,
+            points_interval_seconds INTEGER DEFAULT 15,
+            auto_start_time INTEGER,
+            game_duration_minutes INTEGER,
+            created_time INTEGER NOT NULL,
+            FOREIGN KEY (host_id) REFERENCES hosts (id)
+        )
+        ''')
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS teams (
@@ -368,6 +373,33 @@ def verify_host(qr_code):
 # API Routes - Game Management
 # ==========================================================
 
+# Helper function to validate game settings
+def validate_game_settings(capture_radius, points_interval, game_duration):
+    """Validate game settings and return error message if invalid"""
+    
+    # Validate capture radius (5m to 100m)
+    if not (5 <= capture_radius <= 100):
+        return 'Capture radius must be between 5 and 100 metres'
+    
+    # Validate points interval (5 seconds to 1 hour)
+    if not (5 <= points_interval <= 3600):
+        return 'Points interval must be between 5 seconds and 1 hour'
+    
+    # Validate game duration if provided (5 minutes to 30 days for festivals)
+    if game_duration is not None and not (5 <= game_duration <= 43200):  # 30 days = 43200 minutes
+        return 'Game duration must be between 5 minutes and 30 days'
+    
+    # Ensure game duration is significantly longer than points interval
+    if game_duration is not None:
+        game_duration_seconds = game_duration * 60
+        # Game should be at least 10x longer than points interval
+        min_duration_seconds = points_interval * 10
+        if game_duration_seconds < min_duration_seconds:
+            min_duration_minutes = min_duration_seconds // 60
+            return f'Game duration must be at least 10x the points interval (minimum {min_duration_minutes} minutes for {points_interval}s interval)'
+    
+    return None  # No validation errors
+
 @app.route('/api/games', methods=['POST'])
 def create_game():
     data = request.json
@@ -393,16 +425,114 @@ def create_game():
         return jsonify({'error': 'Host account has expired'}), 400
     
     game_id = generate_unique_game_code()
+    
+    # Extract game settings with defaults
+    capture_radius = data.get('capture_radius_meters', 15)
+    points_interval = data.get('points_interval_seconds', 15)
+    auto_start_time = data.get('auto_start_time')  # Can be None
+    game_duration = data.get('game_duration_minutes')  # Can be None
+    
+    # Validate settings
+    validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
+    if validation_error:
+        conn.close()
+        return jsonify({'error': validation_error}), 400
+    
+    if auto_start_time is not None and auto_start_time <= int(time.time()):
+        conn.close()
+        return jsonify({'error': 'Auto-start time must be in the future'}), 400
 
+    current_time = int(time.time())
+    
     cursor.execute('''
-    INSERT INTO games (id, host_id, name, status)
-    VALUES (?, ?, ?, ?)
-    ''', (game_id, host_id, data['name'], 'setup'))
+    INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds, 
+                      auto_start_time, game_duration_minutes, created_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval, 
+          auto_start_time, game_duration, current_time))
 
     conn.commit()
     conn.close()
 
     return jsonify({'game_id': game_id}), 201
+
+# Update game settings
+@app.route('/api/games/<game_id>/settings', methods=['PUT'])
+def update_game_settings(game_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Verify game exists and host is authorized
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    # Can only update settings for games in setup status
+    if game['status'] != 'setup':
+        conn.close()
+        return jsonify({'error': 'Cannot update settings for games that have started'}), 400
+
+    # Extract current settings for validation
+    capture_radius = data.get('capture_radius_meters', game['capture_radius_meters'])
+    points_interval = data.get('points_interval_seconds', game['points_interval_seconds'])
+    game_duration = data.get('game_duration_minutes', game['game_duration_minutes'])
+    
+    # Validate all settings together
+    validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
+    if validation_error:
+        conn.close()
+        return jsonify({'error': validation_error}), 400
+
+    # Extract and validate individual settings
+    update_fields = []
+    params = []
+    
+    if 'capture_radius_meters' in data:
+        update_fields.append('capture_radius_meters = ?')
+        params.append(data['capture_radius_meters'])
+    
+    if 'points_interval_seconds' in data:
+        update_fields.append('points_interval_seconds = ?')
+        params.append(data['points_interval_seconds'])
+    
+    if 'auto_start_time' in data:
+        auto_start_time = data['auto_start_time']
+        if auto_start_time is not None and auto_start_time <= int(time.time()):
+            conn.close()
+            return jsonify({'error': 'Auto-start time must be in the future'}), 400
+        update_fields.append('auto_start_time = ?')
+        params.append(auto_start_time)
+    
+    if 'game_duration_minutes' in data:
+        update_fields.append('game_duration_minutes = ?')
+        params.append(data['game_duration_minutes'])
+    
+    if not update_fields:
+        conn.close()
+        return jsonify({'error': 'No settings to update'}), 400
+    
+    params.append(game_id)
+    
+    cursor.execute(
+        f"UPDATE games SET {', '.join(update_fields)} WHERE id = ?", 
+        params
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True})
 
 # Get game details
 @app.route('/api/games/<game_id>', methods=['GET'])
@@ -470,13 +600,84 @@ def get_game(game_id):
             'qrCode': base['qr_code']
         })
 
+# Check for auto-start
+    current_time = int(time.time())
+    if (game['status'] == 'setup' and 
+        game['auto_start_time'] and 
+        current_time >= game['auto_start_time']):
+        
+        # Auto-start the game
+        cursor.execute('''
+        UPDATE games
+        SET status = 'active', start_time = ?
+        WHERE id = ?
+        ''', (current_time, game_id))
+        conn.commit()
+        
+        # Refresh game data
+        cursor.execute('''
+        SELECT g.*, h.name as host_name 
+        FROM games g
+        JOIN hosts h ON g.host_id = h.id
+        WHERE g.id = ?
+        ''', (game_id,))
+        game = cursor.fetchone()
+
+    # Check for auto-end
+    if (game['status'] == 'active' and 
+        game['start_time'] and 
+        game['game_duration_minutes']):
+        
+        end_time = game['start_time'] + (game['game_duration_minutes'] * 60)
+        if current_time >= end_time:
+            # Auto-end the game
+            cursor.execute('''
+            UPDATE games
+            SET status = 'ended', end_time = ?
+            WHERE id = ?
+            ''', (end_time, game_id))
+            conn.commit()
+            
+            # Clear QR code assignments
+            cursor.execute('''
+            UPDATE bases SET qr_code = NULL WHERE game_id = ?
+            ''', (game_id,))
+            
+            cursor.execute('''
+            DELETE FROM team_qr_codes
+            WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+            ''', (game_id,))
+            
+            conn.commit()
+            
+            # Refresh game data
+            cursor.execute('''
+            SELECT g.*, h.name as host_name 
+            FROM games g
+            JOIN hosts h ON g.host_id = h.id
+            WHERE g.id = ?
+            ''', (game_id,))
+            game = cursor.fetchone()
+
     conn.close()
+
+    # Calculate end time if duration is set
+    calculated_end_time = None
+    if game['start_time'] and game['game_duration_minutes']:
+        calculated_end_time = game['start_time'] + (game['game_duration_minutes'] * 60)
 
     return jsonify({
         'id': game['id'],
         'name': game['name'],
         'status': game['status'],
         'hostName': game['host_name'],
+        'settings': {
+            'capture_radius_meters': game['capture_radius_meters'],
+            'points_interval_seconds': game['points_interval_seconds'],
+            'auto_start_time': game['auto_start_time'],
+            'game_duration_minutes': game['game_duration_minutes'],
+            'calculated_end_time': calculated_end_time
+        },
         'teams': teams,
         'bases': bases
     })
@@ -491,6 +692,9 @@ def calculate_team_score(cursor, team_id, game):
 
     # Calculate current time or end time if game is over
     current_time = game['end_time'] if game['status'] == 'ended' else int(time.time())
+    
+    # Get the points interval from game settings
+    points_interval = game['points_interval_seconds']
 
     # For each base, calculate points earned by this team
     for base in bases:
@@ -516,9 +720,9 @@ def calculate_team_score(cursor, team_id, game):
                 else:
                     end_time = current_time
 
-                # Calculate points (15 seconds = 1 point)
+                # Calculate points using configurable interval
                 duration = end_time - start_time
-                points = duration // 15
+                points = duration // points_interval
                 total_score += points
 
     return total_score
@@ -693,11 +897,15 @@ def capture_base(base_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get base location
-    cursor.execute('SELECT * FROM bases WHERE id = ?', (base_id,))
-    base = cursor.fetchone()
+    # Get base location and game settings
+    cursor.execute('''
+    SELECT b.*, g.capture_radius_meters FROM bases b
+    JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    base_data = cursor.fetchone()
 
-    if not base:
+    if not base_data:
         conn.close()
         return jsonify({'error': 'Base not found'}), 404
 
@@ -711,10 +919,13 @@ def capture_base(base_id):
 
     team_id = player['team_id']
 
-    # This allows captures within roughly 15 meters of the base
-    if calculate_distance(player_lat,player_lng,base['latitude'],base['longitude'])>15:
+    # Use configurable capture radius
+    capture_radius = base_data['capture_radius_meters']
+    distance = calculate_distance(player_lat, player_lng, base_data['latitude'], base_data['longitude'])
+    
+    if distance > capture_radius:
         conn.close()
-        return jsonify({'error': 'Player is not at the base location'}), 403
+        return jsonify({'error': f'Player is not within {capture_radius}m of the base location'}), 403
 
     # Record the capture
     capture_id = str(uuid.uuid4())

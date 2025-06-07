@@ -318,6 +318,145 @@ function renderLandingPage() {
 function renderGameView() {
   const container = document.createElement('div');
 
+  // Game Timer/Settings Info
+  const gameInfoSection = UIBuilder.createElement('div', { className: 'mb-4' });
+
+  // Check if we have game settings and show timer/info
+  if (appState.gameData.settings) {
+    const settings = appState.gameData.settings;
+    
+    // Countdown timer for timed games
+    if (settings.calculated_end_time && appState.gameData.status === 'active') {
+      const timerContainer = UIBuilder.createElement('div', {
+        className: 'bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg p-4 text-center mb-4'
+      });
+
+      const timerTitle = UIBuilder.createElement('h3', {
+        className: 'text-lg font-semibold mb-2',
+        textContent: 'Time Remaining'
+      });
+      timerContainer.appendChild(timerTitle);
+
+      const timerDisplay = UIBuilder.createElement('div', {
+        className: 'text-3xl font-bold font-mono',
+        id: 'countdown-timer'
+      });
+      timerContainer.appendChild(timerDisplay);
+
+      gameInfoSection.appendChild(timerContainer);
+
+      // Start countdown timer
+      startCountdownTimer(settings.calculated_end_time);
+    }
+
+    // Game settings info (collapsible)
+    const settingsToggle = UIBuilder.createElement('button', {
+      className: 'flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors mb-2',
+      id: 'game-settings-toggle'
+    });
+
+    const settingsIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'info',
+      className: 'w-4 h-4 mr-2'
+    });
+    settingsToggle.appendChild(settingsIcon);
+
+    const settingsText = UIBuilder.createElement('span', {
+      textContent: 'Game Settings'
+    });
+    settingsToggle.appendChild(settingsText);
+
+    gameInfoSection.appendChild(settingsToggle);
+
+    // Settings info (initially hidden)
+    const settingsInfo = UIBuilder.createElement('div', {
+      className: 'bg-gray-50 rounded-lg p-3 text-sm grid grid-cols-2 gap-2',
+      style: { display: 'none' },
+      id: 'game-settings-info'
+    });
+
+    // Helper functions for formatting
+    function formatPointsInterval(seconds) {
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
+    }
+
+    // Capture radius
+    const radiusInfo = UIBuilder.createElement('div');
+    radiusInfo.innerHTML = `<strong>Capture Range:</strong> ${settings.capture_radius_meters || 15}m`;
+    settingsInfo.appendChild(radiusInfo);
+
+    // Points interval
+    const intervalInfo = UIBuilder.createElement('div');
+    intervalInfo.innerHTML = `<strong>Points Every:</strong> ${formatPointsInterval(settings.points_interval_seconds || 15)}`;
+    settingsInfo.appendChild(intervalInfo);
+
+    gameInfoSection.appendChild(settingsInfo);
+
+    // Toggle settings visibility
+    settingsToggle.addEventListener('click', function() {
+      const info = document.getElementById('game-settings-info');
+      if (info.style.display === 'none') {
+        info.style.display = 'grid';
+      } else {
+        info.style.display = 'none';
+      }
+    });
+  }
+
+  container.appendChild(gameInfoSection);
+
+  // Countdown timer function
+  function startCountdownTimer(endTime) {
+    function updateTimer() {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = endTime - now;
+
+      const timerElement = document.getElementById('countdown-timer');
+      if (!timerElement) return; // Timer element no longer exists
+
+      if (remaining <= 0) {
+        timerElement.textContent = 'GAME ENDED';
+        timerElement.parentElement.className = 'bg-gradient-to-r from-red-600 to-red-800 text-white rounded-lg p-4 text-center mb-4';
+        
+        // Refresh game data to get updated status
+        if (appState.gameData.id) {
+          fetchGameData(appState.gameData.id);
+        }
+        return;
+      }
+
+      // Calculate time components
+      const hours = Math.floor(remaining / 3600);
+      const minutes = Math.floor((remaining % 3600) / 60);
+      const seconds = remaining % 60;
+
+      // Format display
+      let timeString;
+      if (hours > 0) {
+        timeString = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      timerElement.textContent = timeString;
+
+      // Change color when time is running low
+      const container = timerElement.parentElement;
+      if (remaining <= 300) { // 5 minutes
+        container.className = 'bg-gradient-to-r from-red-600 to-red-800 text-white rounded-lg p-4 text-center mb-4';
+      } else if (remaining <= 600) { // 10 minutes
+        container.className = 'bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg p-4 text-center mb-4';
+      }
+
+      // Continue updating
+      setTimeout(updateTimer, 1000);
+    }
+
+    updateTimer();
+  }
   // Scoreboard section
   const scoreboardSection = document.createElement('div');
   scoreboardSection.className = 'mb-6';
