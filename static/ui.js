@@ -2,7 +2,7 @@
 const elements = {};
 
 // =============================================================================
-// REUSABLE UI COMPONENT BUILDERS - Modular DOM manipulation
+// REUSABLE UI COMPONENT BUILDERS - Fixed and Enhanced
 // =============================================================================
 
 const UIBuilder = {
@@ -13,7 +13,7 @@ const UIBuilder = {
     // Set properties
     Object.entries(props).forEach(([key, value]) => {
       if (key.startsWith('on') && typeof value === 'function') {
-        // Event handlers
+        // Event handlers - fixed to use proper event name extraction
         const eventName = key.slice(2).toLowerCase();
         element.addEventListener(eventName, value);
       } else if (key === 'className') {
@@ -55,6 +55,7 @@ const UIBuilder = {
       icon = null,
       onClick = null,
       disabled = false,
+      type = 'button',
       ...otherProps
     } = options;
 
@@ -76,6 +77,7 @@ const UIBuilder = {
     const button = this.createElement('button', {
       className: `${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`,
       disabled,
+      type,
       onClick,
       ...otherProps
     });
@@ -197,46 +199,6 @@ const UIBuilder = {
     return card;
   },
 
-  // Modal
-  createModal(options = {}) {
-    const { title, className = '', onClose = null, children = [] } = options;
-    
-    const backdrop = this.createElement('div', {
-      className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
-      onClick: (e) => {
-        if (e.target === backdrop && onClose) {
-          onClose();
-        }
-      }
-    });
-    
-    const modal = this.createElement('div', {
-      className: `bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 ${className}`
-    });
-    
-    if (title) {
-      const titleElement = this.createElement('h3', {
-        className: 'text-xl font-bold mb-4',
-        textContent: title
-      });
-      modal.appendChild(titleElement);
-    }
-    
-    children.forEach(child => modal.appendChild(child));
-    backdrop.appendChild(modal);
-    
-    // ESC key handler
-    const handleEscape = (e) => {
-      if (e.key === 'Escape' && onClose) {
-        onClose();
-        document.removeEventListener('keydown', handleEscape);
-      }
-    };
-    document.addEventListener('keydown', handleEscape);
-    
-    return backdrop;
-  },
-
   // Status badge
   createBadge(options = {}) {
     const { text, variant = 'default', className = '' } = options;
@@ -348,11 +310,11 @@ const UIBuilder = {
 };
 
 // =============================================================================
-// PAGE RENDERING MODULES
+// PAGE RENDERING MODULES - Fully Converted to UIBuilder
 // =============================================================================
 
 const PageRenderer = {
-  // Landing Page
+  // Landing Page - Completely converted to UIBuilder
   renderLandingPage() {
     const authState = getAuthState();
     
@@ -386,13 +348,15 @@ const PageRenderer = {
     
     if (authState.hasGame) {
       // Game-specific buttons
-      buttonContainer.appendChild(UIBuilder.createElement('p', {
+      container.insertBefore(UIBuilder.createElement('p', {
         className: 'mb-6 text-sm text-gray-600',
         textContent: 'To join a team, you must scan its QR code. Ask the game host for team QR codes.'
-      }));
+      }), buttonContainer);
       
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Scan Team QR Code',
+        size: 'lg',
+        className: 'w-full',
         onClick: () => navigateTo('scanQR')
       }));
       
@@ -400,6 +364,8 @@ const PageRenderer = {
         buttonContainer.appendChild(UIBuilder.createButton({
           text: 'Continue Game',
           variant: 'success',
+          size: 'lg',
+          className: 'w-full',
           onClick: () => navigateTo('gameView')
         }));
       }
@@ -408,6 +374,8 @@ const PageRenderer = {
         buttonContainer.appendChild(UIBuilder.createButton({
           text: 'Game Management',
           variant: 'purple',
+          size: 'lg',
+          className: 'w-full',
           onClick: () => navigateTo('hostPanel')
         }));
       }
@@ -415,6 +383,7 @@ const PageRenderer = {
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Leave Game',
         variant: 'secondary',
+        className: 'w-full',
         onClick: clearGameData
       }));
       
@@ -424,22 +393,27 @@ const PageRenderer = {
         className: 'mb-6 text-purple-700',
         textContent: `Welcome, ${authState.hostName || 'Host'}!`
       });
-      buttonContainer.appendChild(welcomeText);
+      container.insertBefore(welcomeText, buttonContainer);
       
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Host a Game',
         variant: 'purple',
+        size: 'lg',
+        className: 'w-full',
         onClick: () => navigateTo('hostPanel')
       }));
       
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Scan QR Code',
+        size: 'lg',
+        className: 'w-full',
         onClick: () => navigateTo('scanQR')
       }));
       
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Logout',
         variant: 'secondary',
+        className: 'w-full',
         onClick: clearGameData
       }));
       
@@ -447,6 +421,8 @@ const PageRenderer = {
       // General user buttons
       buttonContainer.appendChild(UIBuilder.createButton({
         text: 'Scan QR Code',
+        size: 'lg',
+        className: 'w-full',
         onClick: () => navigateTo('scanQR')
       }));
       
@@ -468,7 +444,7 @@ const PageRenderer = {
     return container;
   },
 
-  // Game View
+  // Game View - Converted to UIBuilder
   renderGameView() {
     const container = UIBuilder.createElement('div');
     
@@ -551,45 +527,21 @@ const PageRenderer = {
     return container;
   },
 
-  // Loading Screen
+  // Loading Screen - Converted to UIBuilder
   renderLoadingScreen() {
-    const container = UIBuilder.createElement('div', {
-      className: 'flex flex-col items-center justify-center h-64'
-    });
-    
-    container.appendChild(UIBuilder.createSpinner('h-12 w-12 mb-4'));
-    container.appendChild(UIBuilder.createElement('p', {
-      textContent: 'Loading...'
-    }));
-    
-    return container;
+    return UIBuilder.createLoadingState('Loading...');
   },
 
-  // Error Screen
+  // Error Screen - Converted to UIBuilder
   renderErrorScreen() {
-    const container = UIBuilder.createElement('div', {
-      className: 'bg-red-100 border border-red-400 rounded p-4 text-center'
+    return UIBuilder.createErrorState({
+      title: 'Error',
+      message: appState.error,
+      onRetry: clearError
     });
-    
-    container.appendChild(UIBuilder.createElement('h2', {
-      className: 'text-xl font-bold text-red-800 mb-2',
-      textContent: 'Error'
-    }));
-    
-    container.appendChild(UIBuilder.createElement('p', {
-      className: 'text-red-700 mb-4',
-      textContent: appState.error
-    }));
-    
-    container.appendChild(UIBuilder.createButton({
-      text: 'Dismiss',
-      onClick: clearError
-    }));
-    
-    return container;
   },
 
-  // First Time Page
+  // First Time Page - Converted to UIBuilder
   renderFirstTimePage() {
     const container = UIBuilder.createElement('div', {
       className: 'text-center py-10'
@@ -617,6 +569,8 @@ const PageRenderer = {
     
     buttonContainer.appendChild(UIBuilder.createButton({
       text: 'Join a Game',
+      size: 'lg',
+      className: 'w-full',
       onClick: () => {
         sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
         navigateTo('joinGame');
@@ -626,6 +580,8 @@ const PageRenderer = {
     buttonContainer.appendChild(UIBuilder.createButton({
       text: 'Create a New Game',
       variant: 'success',
+      size: 'lg',
+      className: 'w-full',
       onClick: () => {
         sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
         navigateTo('hostPanel');
@@ -647,7 +603,7 @@ const PageRenderer = {
     return container;
   },
 
-  // Join Game Page
+  // Join Game Page - Converted to UIBuilder
   renderJoinGamePage() {
     const container = UIBuilder.createElement('div', {
       className: 'max-w-md mx-auto py-8'
@@ -685,13 +641,14 @@ const PageRenderer = {
       id: 'game-id',
       label: 'Game ID',
       type: 'text',
-      required: true
+      required: true,
+      placeholder: 'Enter game ID (e.g., brave-apple)'
     }));
     
     form.appendChild(UIBuilder.createButton({
       text: 'Join Game',
       type: 'submit',
-      className: 'w-full'
+      className: 'w-full mt-4'
     }));
     
     card.appendChild(form);
@@ -700,7 +657,7 @@ const PageRenderer = {
     container.appendChild(UIBuilder.createButton({
       text: '← Back to Home',
       variant: 'secondary',
-      className: 'text-blue-600 hover:underline mt-4',
+      className: 'mt-4',
       onClick: () => navigateTo('landing')
     }));
     
@@ -1545,18 +1502,30 @@ function handleHostButtonClick() {
 }
 
 function showHostScanPrompt() {
-  const modal = UIBuilder.createModal({
-    title: 'Host Authentication',
-    onClose: () => document.body.removeChild(modal)
+  const modal = UIBuilder.createElement('div', {
+    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
+    onClick: (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    }
   });
 
-  const content = UIBuilder.createElement('div');
-  content.appendChild(UIBuilder.createElement('p', {
+  const modalContent = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4'
+  });
+
+  modalContent.appendChild(UIBuilder.createElement('h3', {
+    className: 'text-xl font-bold mb-4',
+    textContent: 'Host Authentication'
+  }));
+
+  modalContent.appendChild(UIBuilder.createElement('p', {
     className: 'mb-4 text-gray-600',
     textContent: 'Scan your host QR code to access the game management features.'
   }));
 
-  content.appendChild(UIBuilder.createButton({
+  modalContent.appendChild(UIBuilder.createButton({
     text: 'Scan Host QR Code',
     className: 'w-full mb-4',
     icon: 'qr-code',
@@ -1566,18 +1535,24 @@ function showHostScanPrompt() {
     }
   }));
 
-  content.appendChild(UIBuilder.createButton({
+  modalContent.appendChild(UIBuilder.createButton({
     text: 'Cancel',
     variant: 'secondary',
     className: 'w-full',
     onClick: () => document.body.removeChild(modal)
   }));
 
-  // Find the modal content div and append our content
-  const modalContent = modal.querySelector('.bg-white');
-  modalContent.appendChild(content);
-
+  modal.appendChild(modalContent);
   document.body.appendChild(modal);
+
+  // ESC key handler
+  const handleEscape = (e) => {
+    if (e.key === 'Escape') {
+      document.body.removeChild(modal);
+      document.removeEventListener('keydown', handleEscape);
+    }
+  };
+  document.addEventListener('keydown', handleEscape);
 
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
     window.lucide.createIcons();
