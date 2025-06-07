@@ -155,10 +155,6 @@ function renderSiteAdminPanel() {
 
     container.appendChild(headerSection);
 
-    // Stats section - placeholder initially
-    const statsSection = buildStatsSection();
-    container.appendChild(statsSection);
-
     // Add navigation tabs for Hosts and Games
     const tabsSection = UIBuilder.createElement('div', { className: 'mb-6' });
     
@@ -549,80 +545,6 @@ function buildGamesError(container, errorMessage) {
     errorDiv.appendChild(retryButton);
     
     container.appendChild(errorDiv);
-}
-
-function buildStatsSection() {
-  const statsSection = UIBuilder.createElement('div', {
-    className: 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-6'
-  });
-  
-  if (appState.siteAdmin.hostsLoading) {
-    // Show loading state
-    for (let i = 0; i < 3; i++) {
-      const statCard = UIBuilder.createElement('div', {
-        className: 'bg-white rounded-lg shadow-md p-6'
-      });
-      
-      const statLabel = UIBuilder.createElement('div', {
-        className: 'text-sm font-medium text-gray-500 uppercase tracking-wide',
-        textContent: 'Loading...'
-      });
-      statCard.appendChild(statLabel);
-      
-      const statValue = UIBuilder.createElement('div', {
-        className: 'mt-2 text-3xl font-bold text-gray-400',
-        innerHTML: '<div class="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>'
-      });
-      statCard.appendChild(statValue);
-      
-      statsSection.appendChild(statCard);
-    }
-  } else if (appState.siteAdmin.hostsError) {
-    // Show error state
-    const errorCard = UIBuilder.createElement('div', {
-      className: 'col-span-3 bg-red-50 border border-red-200 rounded-lg p-4'
-    });
-    const errorText = UIBuilder.createElement('p', {
-      className: 'text-red-800',
-      textContent: `Error loading stats: ${appState.siteAdmin.hostsError}`
-    });
-    errorCard.appendChild(errorText);
-    statsSection.appendChild(errorCard);
-  } else {
-    // Show actual stats
-    const hosts = appState.siteAdmin.hosts;
-    const totalHosts = hosts.length;
-    const activeHosts = hosts.filter(host => !host.expiry_date || host.expiry_date > Date.now() / 1000);
-    const expiredHosts = hosts.filter(host => host.expiry_date && host.expiry_date <= Date.now() / 1000);
-    
-    const stats = [
-      { label: 'Total Hosts', value: totalHosts, color: 'text-gray-900' },
-      { label: 'Active Hosts', value: activeHosts.length, color: 'text-green-600' },
-      { label: 'Expired Hosts', value: expiredHosts.length, color: 'text-red-600' }
-    ];
-    
-    stats.forEach(stat => {
-      const statCard = UIBuilder.createElement('div', {
-        className: 'bg-white rounded-lg shadow-md p-6'
-      });
-      
-      const statLabel = UIBuilder.createElement('div', {
-        className: 'text-sm font-medium text-gray-500 uppercase tracking-wide',
-        textContent: stat.label
-      });
-      statCard.appendChild(statLabel);
-      
-      const statValue = UIBuilder.createElement('div', {
-        className: `mt-2 text-3xl font-bold ${stat.color}`,
-        textContent: stat.value
-      });
-      statCard.appendChild(statValue);
-      
-      statsSection.appendChild(statCard);
-    });
-  }
-  
-  return statsSection;
 }
 
 function buildHostListSection() {
