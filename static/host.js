@@ -2,9 +2,9 @@
 function renderHostPanel() {
   const container = UIBuilder.createElement('div');
 
-  // If game is not loaded, show form to create or join
+  // If game is not loaded, show form to create or list existing games
   if (!appState.gameData.id) {
-    container.className = 'max-w-md mx-auto px-4';
+    container.className = 'max-w-2xl mx-auto px-4';
 
     const title = UIBuilder.createElement('h2', {
       className: 'text-2xl font-bold mb-6 text-center',
@@ -12,135 +12,87 @@ function renderHostPanel() {
     });
     container.appendChild(title);
 
-    // State for showing create or join form
-    let showCreateGame = true;
+    // Create Game Section
+    const createSection = UIBuilder.createElement('div', {
+      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    });
 
-    // Function to toggle between create and join forms
-    function toggleForm() {
-      showCreateGame = !showCreateGame;
-      renderApp();
-    }
+    const createTitle = UIBuilder.createElement('h3', {
+      className: 'text-xl font-semibold mb-4',
+      textContent: 'Create New Game'
+    });
+    createSection.appendChild(createTitle);
 
-    if (showCreateGame) {
-      // Create Game Form
-      const createForm = UIBuilder.createElement('div', {
-        className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    // Game Name
+    const nameGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+
+    const nameLabel = UIBuilder.createElement('label', {
+      className: 'block text-gray-700 mb-2',
+      textContent: 'Game Name'
+    });
+    nameGroup.appendChild(nameLabel);
+
+    const nameInput = UIBuilder.createElement('input', {
+      type: 'text',
+      value: 'QR Conquest',
+      className: 'w-full px-3 py-2 border rounded-lg'
+    });
+    nameGroup.appendChild(nameInput);
+
+    createSection.appendChild(nameGroup);
+
+    // Note about teams
+    const teamsNoteGroup = UIBuilder.createElement('div', {
+      className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
+    });
+    
+    const teamsNoteText = UIBuilder.createElement('p');
+    const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
+    teamsNoteText.appendChild(noteStrong);
+    teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
+    teamsNoteGroup.appendChild(teamsNoteText);
+    
+    createSection.appendChild(teamsNoteGroup);
+
+    // Create Game Button
+    const createButton = UIBuilder.createButton('Create Game', function() {
+      const gameName = nameInput.value.trim();
+      if (!gameName) {
+        showNotification('Please enter a game name', 'warning');
+        return;
+      }
+
+      // Call the API function from core.js
+      createGame({
+        name: gameName,
       });
+    }, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium');
+    createSection.appendChild(createButton);
 
-      const createTitle = UIBuilder.createElement('h3', {
-        className: 'text-xl font-semibold mb-4',
-        textContent: 'Create New Game'
-      });
-      createForm.appendChild(createTitle);
+    container.appendChild(createSection);
 
-      // Game Name
-      const nameGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+    // Existing Games Section
+    const existingGamesSection = UIBuilder.createElement('div', {
+      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    });
 
-      const nameLabel = UIBuilder.createElement('label', {
-        className: 'block text-gray-700 mb-2',
-        textContent: 'Game Name'
-      });
-      nameGroup.appendChild(nameLabel);
+    const existingGamesTitle = UIBuilder.createElement('h3', {
+      className: 'text-xl font-semibold mb-4',
+      textContent: 'Your Existing Games'
+    });
+    existingGamesSection.appendChild(existingGamesTitle);
 
-      const nameInput = UIBuilder.createElement('input', {
-        type: 'text',
-        value: 'QR Conquest',
-        className: 'w-full px-3 py-2 border rounded-lg'
-      });
-      nameGroup.appendChild(nameInput);
+    // Games list container - will be populated by loadHostGames
+    const gamesListContainer = UIBuilder.createElement('div', {
+      id: 'host-games-list',
+      className: 'space-y-3'
+    });
+    existingGamesSection.appendChild(gamesListContainer);
 
-      createForm.appendChild(nameGroup);
+    container.appendChild(existingGamesSection);
 
-      // Note about teams
-      const teamsNoteGroup = UIBuilder.createElement('div', {
-        className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
-      });
-      
-      const teamsNoteText = UIBuilder.createElement('p');
-      const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
-      teamsNoteText.appendChild(noteStrong);
-      teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
-      teamsNoteGroup.appendChild(teamsNoteText);
-      
-      createForm.appendChild(teamsNoteGroup);
-
-      // Create Game Button
-      const createButton = UIBuilder.createButton('Create Game', function() {
-        const gameName = nameInput.value.trim();
-        if (!gameName) {
-          showNotification('Please enter a game name', 'warning');
-          return;
-        }
-
-        // Call the API function from core.js
-        createGame({
-          name: gameName,
-        });
-      }, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium');
-      createForm.appendChild(createButton);
-
-      container.appendChild(createForm);
-
-      // Join link
-      const joinLink = UIBuilder.createElement('div', { className: 'text-center' });
-
-      const joinButton = UIBuilder.createButton('Join Existing Game Instead', toggleForm, 'text-blue-600 underline hover:text-blue-800 transition-colors py-2');
-      joinLink.appendChild(joinButton);
-
-      container.appendChild(joinLink);
-    } else {
-      // Join Game Form
-      const joinForm = UIBuilder.createElement('div', {
-        className: 'bg-white rounded-lg shadow-md p-6 mb-6'
-      });
-
-      const joinTitle = UIBuilder.createElement('h3', {
-        className: 'text-xl font-semibold mb-4',
-        textContent: 'Join Existing Game'
-      });
-      joinForm.appendChild(joinTitle);
-
-      // Game ID
-      const idGroup = UIBuilder.createElement('div', { className: 'mb-4' });
-
-      const idLabel = UIBuilder.createElement('label', {
-        className: 'block text-gray-700 mb-2',
-        textContent: 'Game ID'
-      });
-      idGroup.appendChild(idLabel);
-
-      const idInput = UIBuilder.createElement('input', {
-        type: 'text',
-        className: 'w-full px-3 py-2 border rounded-lg',
-        placeholder: 'Enter game ID (e.g., brave-apple)'
-      });
-      idGroup.appendChild(idInput);
-
-      joinForm.appendChild(idGroup);
-
-      // Join Button
-      const joinButton = UIBuilder.createButton('Join Game', function() {
-        const gameId = idInput.value.trim();
-        if (!gameId) {
-          showNotification('Please enter a Game ID', 'warning');
-          return;
-        }
-
-        // Call the API function from core.js
-        fetchGameData(gameId);
-      }, 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium');
-      joinForm.appendChild(joinButton);
-
-      container.appendChild(joinForm);
-
-      // Create Game link
-      const createLink = UIBuilder.createElement('div', { className: 'text-center' });
-
-      const createButton = UIBuilder.createButton('Create New Game Instead', toggleForm, 'text-blue-600 underline hover:text-blue-800 transition-colors py-2');
-      createLink.appendChild(createButton);
-
-      container.appendChild(createLink);
-    }
+    // Load host games after rendering
+    setTimeout(() => loadHostGames(), 100);
 
     // Back to Home link
     const backContainer = UIBuilder.createElement('div', { className: 'text-center mt-6' });
@@ -155,7 +107,7 @@ function renderHostPanel() {
     return container;
   }
 
-  // Game Management Panel (if game is loaded)
+  // Game Management Panel (if game is loaded) - rest of function remains the same
   container.className = 'max-w-4xl mx-auto px-4 pb-4';
 
   const title = UIBuilder.createElement('h2', {
@@ -571,6 +523,208 @@ function renderHostPanel() {
   container.appendChild(grid);
 
   return container;
+}
+
+// New function to load and display host games
+async function loadHostGames() {
+  const authState = getAuthState();
+  if (!authState.isHost) {
+    return;
+  }
+
+  const gamesListContainer = document.getElementById('host-games-list');
+  if (!gamesListContainer) {
+    console.error('Games list container not found');
+    return;
+  }
+
+  try {
+    // Show loading state
+    gamesListContainer.innerHTML = '';
+    const loadingDiv = UIBuilder.createElement('div', {
+      className: 'flex items-center justify-center py-6'
+    });
+    
+    const loadingSpinner = UIBuilder.createElement('div', {
+      className: 'animate-spin h-6 w-6 border-2 border-gray-300 rounded-full border-t-blue-600 mr-3'
+    });
+    loadingDiv.appendChild(loadingSpinner);
+    
+    const loadingText = UIBuilder.createElement('span', {
+      className: 'text-gray-600',
+      textContent: 'Loading your games...'
+    });
+    loadingDiv.appendChild(loadingText);
+    
+    gamesListContainer.appendChild(loadingDiv);
+
+    // Fetch games for this host
+    const games = await fetchHostGames(authState.hostId);
+
+    // Clear loading state
+    gamesListContainer.innerHTML = '';
+
+    if (games.length === 0) {
+      // Show empty state
+      const emptyDiv = UIBuilder.createElement('div', {
+        className: 'text-center py-6 text-gray-500'
+      });
+      
+      const emptyIcon = UIBuilder.createElement('i', {
+        'data-lucide': 'gamepad-2',
+        className: 'w-8 h-8 mx-auto mb-2 text-gray-400'
+      });
+      emptyDiv.appendChild(emptyIcon);
+      
+      const emptyText = UIBuilder.createElement('p', {
+        textContent: 'You haven\'t created any games yet. Create your first game above!'
+      });
+      emptyDiv.appendChild(emptyText);
+      
+      gamesListContainer.appendChild(emptyDiv);
+    } else {
+      // Show games list
+      games.forEach(function(game) {
+        const gameCard = UIBuilder.createElement('div', {
+          className: 'border border-gray-200 rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-colors'
+        });
+
+        // Game header
+        const gameHeader = UIBuilder.createElement('div', {
+          className: 'flex items-center justify-between mb-2'
+        });
+
+        const gameInfo = UIBuilder.createElement('div');
+        
+        const gameName = UIBuilder.createElement('h4', {
+          className: 'text-lg font-semibold text-gray-900',
+          textContent: game.name
+        });
+        gameInfo.appendChild(gameName);
+        
+        const gameId = UIBuilder.createElement('p', {
+          className: 'text-sm text-gray-600',
+          textContent: `ID: ${game.id}`
+        });
+        gameInfo.appendChild(gameId);
+
+        gameHeader.appendChild(gameInfo);
+
+        // Status badge
+        let statusClass = 'px-2 py-1 text-xs font-medium rounded-full';
+        let statusText = game.status;
+        
+        switch (game.status) {
+          case 'active':
+            statusClass += ' bg-green-100 text-green-800';
+            statusText = 'Active';
+            break;
+          case 'setup':
+            statusClass += ' bg-yellow-100 text-yellow-800';
+            statusText = 'Setup';
+            break;
+          case 'ended':
+            statusClass += ' bg-gray-100 text-gray-800';
+            statusText = 'Ended';
+            break;
+          default:
+            statusClass += ' bg-blue-100 text-blue-800';
+        }
+        
+        const statusBadge = UIBuilder.createElement('span', {
+          className: statusClass,
+          textContent: statusText
+        });
+        gameHeader.appendChild(statusBadge);
+
+        gameCard.appendChild(gameHeader);
+
+        // Game stats
+        const gameStats = UIBuilder.createElement('div', {
+          className: 'flex items-center text-sm text-gray-600 mb-3'
+        });
+        
+        const teamCount = UIBuilder.createElement('span', {
+          className: 'mr-4',
+          textContent: `${game.team_count || 0} teams`
+        });
+        gameStats.appendChild(teamCount);
+        
+        // Add creation date if available
+        if (game.start_time) {
+          const startDate = new Date(game.start_time * 1000);
+          const dateSpan = UIBuilder.createElement('span', {
+            textContent: `Started: ${startDate.toLocaleDateString()}`
+          });
+          gameStats.appendChild(dateSpan);
+        } else {
+          const notStartedSpan = UIBuilder.createElement('span', {
+            textContent: 'Not started yet'
+          });
+          gameStats.appendChild(notStartedSpan);
+        }
+
+        gameCard.appendChild(gameStats);
+
+        // Action button
+        const actionButton = UIBuilder.createElement('div');
+        
+        if (game.status === 'setup' || game.status === 'active') {
+          const manageButton = UIBuilder.createButton('Continue Managing', function() {
+            // Load this game and navigate to host panel
+            localStorage.setItem('gameId', game.id);
+            fetchGameData(game.id).then(() => {
+              // The fetchGameData will trigger a re-render showing the game management interface
+            });
+          }, 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium');
+          actionButton.appendChild(manageButton);
+        } else if (game.status === 'ended') {
+          const resultsButton = UIBuilder.createButton('View Results', function() {
+            // Load this game and navigate to results
+            localStorage.setItem('gameId', game.id);
+            fetchGameData(game.id).then(() => {
+              navigateTo('results');
+            });
+          }, 'bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium');
+          actionButton.appendChild(resultsButton);
+        }
+
+        gameCard.appendChild(actionButton);
+        gamesListContainer.appendChild(gameCard);
+      });
+    }
+
+    // Initialize Lucide icons
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+
+  } catch (error) {
+    // Show error state
+    gamesListContainer.innerHTML = '';
+    const errorDiv = UIBuilder.createElement('div', {
+      className: 'text-center py-6'
+    });
+    
+    const errorIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'alert-circle',
+      className: 'w-8 h-8 mx-auto mb-2 text-red-400'
+    });
+    errorDiv.appendChild(errorIcon);
+    
+    const errorText = UIBuilder.createElement('p', {
+      className: 'text-red-600',
+      textContent: 'Failed to load your games. Please try refreshing the page.'
+    });
+    errorDiv.appendChild(errorText);
+    
+    gamesListContainer.appendChild(errorDiv);
+    
+    // Initialize Lucide icons for error state
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  }
 }
 
 // QR Assignment Page

@@ -1130,6 +1130,33 @@ async function authenticateSiteAdmin(password) {
   }
 }
 
+// Fetch games for a specific host
+async function fetchHostGames(hostId) {
+  if (!hostId) {
+    throw new Error('Host ID is required to fetch games.');
+  }
+
+  try {
+    setLoading(true);
+    console.log('Fetching games for host:', hostId);
+
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
+    const data = await handleApiResponse(response, 'Failed to fetch host games');
+    
+    console.log('Host games received:', data);
+    return data;
+  } catch (err) {
+    console.error('Error fetching host games:', err);
+    const userMessage = err.message || 'Unable to load your games. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
 // Site admin host management functions
 async function fetchHosts() {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
