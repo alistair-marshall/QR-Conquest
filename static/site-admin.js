@@ -744,10 +744,6 @@ function buildHostRow(host) {
       className: 'px-6 py-4 whitespace-nowrap'
     });
 
-    const linkContainer = UIBuilder.createElement('div', {
-      className: 'flex justify-center'
-    });
-
     // Generate the full secret link
     const baseUrl = window.location.protocol + '//' + window.location.host;
     const secretLink = `${baseUrl}/?id=${host.qr_code}`;
@@ -755,11 +751,10 @@ function buildHostRow(host) {
     const copyButton = UIBuilder.createButton('Copy Secret Link', function() {
       navigator.clipboard.writeText(secretLink);
       showNotification('Secret link copied to clipboard', 'success');
-    }, 'bg-blue-100 text-blue-700 hover:bg-blue-200 py-1 px-3 rounded-md text-sm font-medium transition-colors flex items-center', 'copy');
+    }, 'bg-blue-100 text-blue-700 hover:bg-blue-200 py-1 px-3 rounded-md text-sm font-medium transition-colors flex', 'copy');
     copyButton.title = secretLink; // Show full link on hover
-    linkContainer.appendChild(copyButton);
 
-    linkCell.appendChild(linkContainer);
+    linkCell.appendChild(copyButton);
     row.appendChild(linkCell);
     
     // Status cell
