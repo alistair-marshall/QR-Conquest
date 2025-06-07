@@ -1141,47 +1141,99 @@ function renderBaseCreationForm(qrId, container) {
   });
   locationGroup.appendChild(locationLabel);
 
-  // Current location display
-  const locationDisplay = UIBuilder.createElement('div', {
-    className: 'mb-4 p-3 bg-gray-100 rounded flex justify-between items-center',
-    id: 'location-display'
+  // Location status display
+  const locationStatus = UIBuilder.createElement('div', {
+    className: 'mb-4 p-3 bg-gray-100 rounded',
+    id: 'location-status'
   });
   
-  const locationText = UIBuilder.createElement('span', {
-    id: 'location-text',
-    textContent: 'No location data yet. Click "Get Current Location" button.'
+  const statusText = UIBuilder.createElement('div', {
+    id: 'status-text',
+    className: 'text-sm font-medium mb-2',
+    textContent: 'Getting GPS location...'
   });
-  locationDisplay.appendChild(locationText);
+  locationStatus.appendChild(statusText);
   
-  // Add accuracy indicator
-  const accuracyBadge = UIBuilder.createElement('span', {
-    id: 'accuracy-badge',
-    className: 'hidden px-2 py-1 text-xs rounded-full'
+  const coordinatesDisplay = UIBuilder.createElement('div', {
+    id: 'coordinates-display',
+    className: 'text-xs text-gray-600 font-mono'
   });
-  locationDisplay.appendChild(accuracyBadge);
+  locationStatus.appendChild(coordinatesDisplay);
   
-  locationGroup.appendChild(locationDisplay);
+  locationGroup.appendChild(locationStatus);
+
+  // Location source toggle
+  const locationSourceGroup = UIBuilder.createElement('div', {
+    className: 'mb-4 flex items-center space-x-4',
+    id: 'location-source-group',
+    style: { display: 'none' }
+  });
+
+  const gpsRadio = UIBuilder.createElement('label', {
+    className: 'flex items-center cursor-pointer'
+  });
+  const gpsInput = UIBuilder.createElement('input', {
+    type: 'radio',
+    name: 'location-source',
+    value: 'gps',
+    className: 'mr-2',
+    checked: true
+  });
+  gpsRadio.appendChild(gpsInput);
+  gpsRadio.appendChild(document.createTextNode('Use GPS Location'));
+
+  const manualRadio = UIBuilder.createElement('label', {
+    className: 'flex items-center cursor-pointer'
+  });
+  const manualInput = UIBuilder.createElement('input', {
+    type: 'radio',
+    name: 'location-source',
+    value: 'manual',
+    className: 'mr-2'
+  });
+  manualRadio.appendChild(manualInput);
+  manualRadio.appendChild(document.createTextNode('Use Adjusted Location'));
+
+  locationSourceGroup.appendChild(gpsRadio);
+  locationSourceGroup.appendChild(manualRadio);
+  locationGroup.appendChild(locationSourceGroup);
 
   // Map container for location preview
   const mapPreviewContainer = UIBuilder.createElement('div', {
     id: 'base-location-map',
-    className: 'h-48 bg-gray-200 rounded mb-4 hidden'
+    className: 'h-64 bg-gray-200 rounded mb-4 relative'
   });
+  
+  // Map instructions overlay
+  const mapInstructions = UIBuilder.createElement('div', {
+    id: 'map-instructions',
+    className: 'absolute top-2 left-2 right-2 bg-blue-100 border border-blue-300 text-blue-700 px-3 py-2 rounded text-sm z-10',
+    style: { display: 'none' }
+  });
+  mapInstructions.innerHTML = '<strong>Drag the marker</strong> to adjust the base location, or <strong>click on the map</strong> to place it.';
+  mapPreviewContainer.appendChild(mapInstructions);
+  
   locationGroup.appendChild(mapPreviewContainer);
 
   // Get location button group
   const locationButtonGroup = UIBuilder.createElement('div', { className: 'flex gap-2' });
 
   // Get location button
-  const getLocationBtn = UIBuilder.createButton('Get Current Location', null, 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded', 'navigation');
+  const getLocationBtn = UIBuilder.createButton('Get GPS Location', null, 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded', 'navigation');
   
-  // Button for high accuracy mode
-  const highAccuracyBtn = UIBuilder.createButton('', null, 'bg-amber-500 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded', 'crosshair');
+  // Reset to GPS button (initially hidden)
+  const resetToGpsBtn = UIBuilder.createButton('Reset to GPS', null, 'bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded', 'rotate-ccw');
+  resetToGpsBtn.id = 'reset-to-gps';
+  resetToGpsBtn.style.display = 'none';
+  
+  // High accuracy toggle button
+  const highAccuracyBtn = UIBuilder.createButton('', null, 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded', 'crosshair');
   highAccuracyBtn.id = 'high-accuracy-toggle';
-  highAccuracyBtn.title = 'Toggle High Accuracy Mode';
+  highAccuracyBtn.title = 'High Accuracy Mode: ON';
   
   // Add to button group
   locationButtonGroup.appendChild(getLocationBtn);
+  locationButtonGroup.appendChild(resetToGpsBtn);
   locationButtonGroup.appendChild(highAccuracyBtn);
   locationGroup.appendChild(locationButtonGroup);
 
@@ -1198,17 +1250,26 @@ function renderBaseCreationForm(qrId, container) {
     name: 'longitude'
   });
   
-  // New hidden field for accuracy
   const accuracyInput = UIBuilder.createElement('input', {
     type: 'hidden',
     id: 'accuracy',
     name: 'accuracy'
   });
 
-  // Location watch ID storage
   const watchIdInput = UIBuilder.createElement('input', {
     type: 'hidden',
     id: 'location-watch-id'
+  });
+
+  // GPS coordinates storage
+  const gpsLatInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'gps-latitude'
+  });
+
+  const gpsLngInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'gps-longitude'
   });
 
   // Add all hidden inputs
@@ -1216,13 +1277,21 @@ function renderBaseCreationForm(qrId, container) {
   locationGroup.appendChild(lngInput);
   locationGroup.appendChild(accuracyInput);
   locationGroup.appendChild(watchIdInput);
+  locationGroup.appendChild(gpsLatInput);
+  locationGroup.appendChild(gpsLngInput);
 
-  // High accuracy mode state
+  // Location source state
+  let currentLocationSource = 'gps'; // 'gps' or 'manual'
   let highAccuracyMode = true;
   
   // Initialize high accuracy button state
-  highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
   updateHighAccuracyButtonContent(highAccuracyBtn, true);
+  
+  // Map instance and markers
+  let baseLocationMap = null;
+  let gpsMarker = null;
+  let manualMarker = null;
+  let accuracyCircle = null;
   
   // Toggle high accuracy mode
   highAccuracyBtn.addEventListener('click', function(e) {
@@ -1232,12 +1301,14 @@ function renderBaseCreationForm(qrId, container) {
     if (highAccuracyMode) {
       highAccuracyBtn.classList.remove('bg-amber-500', 'hover:bg-amber-700');
       highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-      updateHighAccuracyButtonContent(highAccuracyBtn, true);
+      highAccuracyBtn.title = 'High Accuracy Mode: ON';
     } else {
       highAccuracyBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
       highAccuracyBtn.classList.add('bg-amber-500', 'hover:bg-amber-700');
-      updateHighAccuracyButtonContent(highAccuracyBtn, false);
+      highAccuracyBtn.title = 'High Accuracy Mode: OFF';
     }
+    
+    updateHighAccuracyButtonContent(highAccuracyBtn, highAccuracyMode);
     
     // If we're currently watching location, restart with new settings
     const watchId = document.getElementById('location-watch-id').value;
@@ -1250,9 +1321,44 @@ function renderBaseCreationForm(qrId, container) {
     if (window.lucide) window.lucide.createIcons();
   });
 
-  // Map instance for preview
-  let baseLocationMap = null;
-  let locationMarker = null;
+  // Location source change handlers
+  gpsInput.addEventListener('change', function() {
+    if (this.checked) {
+      currentLocationSource = 'gps';
+      updateLocationDisplay();
+    }
+  });
+
+  manualInput.addEventListener('change', function() {
+    if (this.checked) {
+      currentLocationSource = 'manual';
+      updateLocationDisplay();
+    }
+  });
+
+  // Reset to GPS button handler
+  resetToGpsBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    const gpsLat = parseFloat(document.getElementById('gps-latitude').value);
+    const gpsLng = parseFloat(document.getElementById('gps-longitude').value);
+    
+    if (!isNaN(gpsLat) && !isNaN(gpsLng)) {
+      // Reset manual marker to GPS position
+      if (manualMarker) {
+        manualMarker.setLatLng([gpsLat, gpsLng]);
+      }
+      
+      // Update coordinates
+      document.getElementById('latitude').value = gpsLat;
+      document.getElementById('longitude').value = gpsLng;
+      
+      // Switch to GPS source
+      gpsInput.checked = true;
+      currentLocationSource = 'gps';
+      updateLocationDisplay();
+    }
+  });
   
   // Function to initialize the map 
   function initBaseLocationMap(lat, lng) {
@@ -1268,62 +1374,159 @@ function renderBaseCreationForm(qrId, container) {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(baseLocationMap);
+
+      // Add click handler to map for placing manual marker
+      baseLocationMap.on('click', function(e) {
+        const clickLat = e.latlng.lat;
+        const clickLng = e.latlng.lng;
+        
+        // Update manual marker position
+        if (manualMarker) {
+          manualMarker.setLatLng([clickLat, clickLng]);
+        } else {
+          createManualMarker(clickLat, clickLng);
+        }
+        
+        // Update coordinates and switch to manual mode
+        document.getElementById('latitude').value = clickLat;
+        document.getElementById('longitude').value = clickLng;
+        manualInput.checked = true;
+        currentLocationSource = 'manual';
+        updateLocationDisplay();
+      });
     } else {
       // Just pan to the new location
       baseLocationMap.setView([lat, lng], 18);
     }
     
-    // Update or create the marker
-    if (locationMarker) {
-      locationMarker.setLatLng([lat, lng]);
+    // Create or update GPS marker
+    if (gpsMarker) {
+      gpsMarker.setLatLng([lat, lng]);
     } else {
-      locationMarker = L.marker([lat, lng]).addTo(baseLocationMap);
+      gpsMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'gps-marker',
+          html: '<div style="background-color: #3b82f6; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        })
+      }).addTo(baseLocationMap);
+      
+      gpsMarker.bindTooltip('GPS Location', { permanent: false });
     }
     
-    // Remove previous accuracy circle if it exists
-    if (window.accuracyCircle) {
-      baseLocationMap.removeLayer(window.accuracyCircle);
+    // Create manual marker if it doesn't exist
+    if (!manualMarker) {
+      createManualMarker(lat, lng);
     }
-
-    // Add accuracy circle if available
+    
+    updateLocationDisplay();
+  }
+  
+  function createManualMarker(lat, lng) {
+    manualMarker = L.marker([lat, lng], {
+      draggable: true,
+      icon: L.divIcon({
+        className: 'manual-marker',
+        html: '<div style="background-color: #ef4444; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.4); cursor: move;"></div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      })
+    }).addTo(baseLocationMap);
+    
+    manualMarker.bindTooltip('Drag to adjust location', { permanent: false });
+    
+    // Handle marker drag
+    manualMarker.on('dragend', function(e) {
+      const newPos = e.target.getLatLng();
+      
+      // Update coordinates
+      document.getElementById('latitude').value = newPos.lat;
+      document.getElementById('longitude').value = newPos.lng;
+      
+      // Switch to manual mode
+      manualInput.checked = true;
+      currentLocationSource = 'manual';
+      updateLocationDisplay();
+    });
+  }
+  
+  function updateLocationDisplay() {
+    const statusText = document.getElementById('status-text');
+    const coordinatesDisplay = document.getElementById('coordinates-display');
+    const locationStatus = document.getElementById('location-status');
+    const locationSourceGroup = document.getElementById('location-source-group');
+    const mapInstructions = document.getElementById('map-instructions');
+    const resetBtn = document.getElementById('reset-to-gps');
+    
+    const currentLat = parseFloat(document.getElementById('latitude').value);
+    const currentLng = parseFloat(document.getElementById('longitude').value);
     const accuracy = parseFloat(document.getElementById('accuracy').value);
-    if (accuracy && !isNaN(accuracy)) {
-      // Add new accuracy circle
-      window.accuracyCircle = L.circle([lat, lng], {
-        radius: accuracy,
-        color: 'blue',
-        fillColor: '#3388ff',
-        fillOpacity: 0.1,
-        weight: 1
-      }).addTo(baseLocationMap);
+    
+    if (isNaN(currentLat) || isNaN(currentLng)) {
+      return;
+    }
+    
+    // Update coordinates display
+    coordinatesDisplay.textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+    
+    // Show/hide elements based on state
+    const hasGpsData = !isNaN(parseFloat(document.getElementById('gps-latitude').value));
+    
+    if (hasGpsData) {
+      locationSourceGroup.style.display = 'flex';
+      resetBtn.style.display = currentLocationSource === 'manual' ? 'block' : 'none';
+    }
+    
+    // Update status based on current source and accuracy
+    locationStatus.className = 'mb-4 p-3 rounded';
+    
+    if (currentLocationSource === 'gps') {
+      if (accuracy <= 10) {
+        statusText.textContent = 'Using GPS location (Good accuracy)';
+        locationStatus.classList.add('bg-green-100', 'text-green-800');
+        mapInstructions.style.display = 'none';
+      } else if (accuracy <= 20) {
+        statusText.textContent = 'Using GPS location (Fair accuracy - consider adjusting)';
+        locationStatus.classList.add('bg-amber-100', 'text-amber-800');
+        mapInstructions.style.display = 'block';
+      } else {
+        statusText.textContent = 'Using GPS location (Poor accuracy - please adjust)';
+        locationStatus.classList.add('bg-red-100', 'text-red-800');
+        mapInstructions.style.display = 'block';
+      }
+    } else {
+      statusText.textContent = 'Using manually adjusted location';
+      locationStatus.classList.add('bg-blue-100', 'text-blue-800');
+      mapInstructions.style.display = 'none';
+      
+      // Calculate distance from GPS if available
+      const gpsLat = parseFloat(document.getElementById('gps-latitude').value);
+      const gpsLng = parseFloat(document.getElementById('gps-longitude').value);
+      
+      if (!isNaN(gpsLat) && !isNaN(gpsLng)) {
+        const distance = calculateDistance(gpsLat, gpsLng, currentLat, currentLng);
+        if (distance > 0.001) { // Only show if moved more than 1mm
+          const distanceText = distance < 1 ? 
+            `${(distance * 1000).toFixed(0)}m from GPS` : 
+            `${distance.toFixed(2)}km from GPS`;
+          statusText.textContent += ` (${distanceText})`;
+        }
+      }
+    }
+    
+    // Update marker visibility and styling
+    if (gpsMarker && manualMarker) {
+      if (currentLocationSource === 'gps') {
+        gpsMarker.setOpacity(1);
+        manualMarker.setOpacity(0.5);
+      } else {
+        gpsMarker.setOpacity(0.5);
+        manualMarker.setOpacity(1);
+      }
     }
   }
   
-  // Format the accuracy display
-  function updateAccuracyDisplay(accuracy) {
-    const accuracyBadge = document.getElementById('accuracy-badge');
-    
-    if (!accuracyBadge) return;
-    
-    accuracyBadge.classList.remove('hidden', 'bg-red-500', 'bg-amber-500', 'bg-green-500');
-    
-    if (accuracy <= 5) {
-      // Excellent accuracy (< 5m)
-      accuracyBadge.classList.add('bg-green-500');
-      accuracyBadge.textContent = `±${accuracy.toFixed(1)}m (Excellent)`;
-    } else if (accuracy <= 15) {
-      // Good accuracy (5-15m)
-      accuracyBadge.classList.add('bg-amber-500');
-      accuracyBadge.textContent = `±${accuracy.toFixed(1)}m (Good)`;
-    } else {
-      // Poor accuracy (>15m)
-      accuracyBadge.classList.add('bg-red-500');
-      accuracyBadge.textContent = `±${accuracy.toFixed(1)}m (Poor)`;
-    }
-    
-    accuracyBadge.classList.remove('hidden');
-  }
-
   // Function to start continuous location tracking
   function startLocationTracking() {
     if (!navigator.geolocation) {
@@ -1348,36 +1551,44 @@ function renderBaseCreationForm(qrId, container) {
       const longitude = position.coords.longitude;
       const accuracy = position.coords.accuracy;
       
-      // Update display
-      document.getElementById('location-text').textContent = 
-        `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`;
-      
-      // Update accuracy display
-      updateAccuracyDisplay(accuracy);
-      
-      // Update hidden inputs
-      document.getElementById('latitude').value = latitude;
-      document.getElementById('longitude').value = longitude;
+      // Store GPS coordinates
+      document.getElementById('gps-latitude').value = latitude;
+      document.getElementById('gps-longitude').value = longitude;
       document.getElementById('accuracy').value = accuracy;
       
-      // Update location display styling based on accuracy
-      const locationDisplay = document.getElementById('location-display');
-      locationDisplay.className = 'mb-4 p-3 rounded flex justify-between items-center';
-      
-      if (accuracy <= 10) {
-        locationDisplay.classList.add('bg-green-100', 'text-green-800');
-      } else if (accuracy <= 30) {
-        locationDisplay.classList.add('bg-amber-100', 'text-amber-800');
-      } else {
-        locationDisplay.classList.add('bg-red-100', 'text-red-800');
-      }
+      // Set current coordinates to GPS initially
+      document.getElementById('latitude').value = latitude;
+      document.getElementById('longitude').value = longitude;
       
       // Initialize or update map
       initBaseLocationMap(latitude, longitude);
       
+      // Update accuracy circle
+      if (accuracyCircle) {
+        baseLocationMap.removeLayer(accuracyCircle);
+      }
+      
+      if (accuracy && !isNaN(accuracy)) {
+        accuracyCircle = L.circle([latitude, longitude], {
+          radius: accuracy,
+          color: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+          fillColor: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+          fillOpacity: 0.1,
+          weight: 1
+        }).addTo(baseLocationMap);
+      }
+      
       // Update button state
       getLocationBtn.disabled = false;
-      updateLocationButtonContent(getLocationBtn, 'navigation', 'Update Location')
+      updateLocationButtonContent(getLocationBtn, 'navigation', 'Update GPS Location');
+      
+      // Set initial location source based on accuracy
+      if (accuracy > 15) {
+        // Poor accuracy - suggest manual adjustment
+        currentLocationSource = 'gps'; // Start with GPS but show adjustment options
+      }
+      
+      updateLocationDisplay();
       
       // Update icons
       if (window.lucide) window.lucide.createIcons();
@@ -1399,13 +1610,15 @@ function renderBaseCreationForm(qrId, container) {
           break;
       }
       
-      document.getElementById('location-text').textContent = errorMessage;
-      document.getElementById('location-display').className = 
-        'mb-4 p-3 bg-red-100 text-red-800 rounded flex justify-between items-center';
+      const statusText = document.getElementById('status-text');
+      const locationStatus = document.getElementById('location-status');
+      
+      statusText.textContent = errorMessage;
+      locationStatus.className = 'mb-4 p-3 bg-red-100 text-red-800 rounded';
       
       // Update button state
       getLocationBtn.disabled = false;
-      getLocationBtn.textContent = 'Try Again';
+      updateLocationButtonContent(getLocationBtn, 'navigation', 'Try Again');
       
       showNotification(errorMessage, 'error');
     }
@@ -1427,6 +1640,18 @@ function renderBaseCreationForm(qrId, container) {
     document.getElementById('location-watch-id').value = watchId;
   }
 
+  // Calculate distance between two points in kilometres
+  function calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
   // Add event listener for get location button
   getLocationBtn.addEventListener('click', startLocationTracking);
 
@@ -1441,15 +1666,18 @@ function renderBaseCreationForm(qrId, container) {
   form.addEventListener('submit', function(e) {
     e.preventDefault();
 
-    if (!latInput.value || !lngInput.value) {
+    const lat = parseFloat(document.getElementById('latitude').value);
+    const lng = parseFloat(document.getElementById('longitude').value);
+
+    if (isNaN(lat) || isNaN(lng)) {
       showNotification('Please get the location for this base first.', 'error');
       return;
     }
     
-    // Get accuracy and warn if it's poor
-    const accuracy = parseFloat(accuracyInput.value);
-    if (accuracy > 20) {
-      const confirmPoor = confirm(`Warning: GPS accuracy is poor (±${accuracy.toFixed(1)}m). This may affect gameplay. Do you still want to create this base?`);
+    // Get accuracy for validation (only relevant for GPS coordinates)
+    const accuracy = parseFloat(document.getElementById('accuracy').value);
+    if (currentLocationSource === 'gps' && accuracy > 20) {
+      const confirmPoor = confirm(`Warning: GPS accuracy is poor (±${accuracy.toFixed(1)}m). Consider adjusting the marker position or do you want to proceed anyway?`);
       if (!confirmPoor) {
         return;
       }
@@ -1462,7 +1690,7 @@ function renderBaseCreationForm(qrId, container) {
     }
 
     // Call the API function from core.js
-    createBase(qrId, nameInput.value, parseFloat(latInput.value), parseFloat(lngInput.value));
+    createBase(qrId, nameInput.value, lat, lng);
   });
 
   container.appendChild(form);
