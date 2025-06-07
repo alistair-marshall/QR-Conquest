@@ -64,7 +64,7 @@ function renderSiteAdminLogin() {
   const passwordInput = UIBuilder.createElement('input', {
     type: 'password',
     id: 'site-admin-password',
-    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     required: true,
     placeholder: 'Enter admin password'
   });
@@ -110,7 +110,7 @@ function renderSiteAdminLogin() {
 
   const backButton = UIBuilder.createButton('Back to Home', function() { 
     navigateTo('landing'); 
-  }, 'text-blue-600 hover:text-blue-800 underline');
+  }, 'text-purple-600 hover:text-purple-800 underline');
   backLink.appendChild(backButton);
 
   container.appendChild(backLink);
@@ -200,11 +200,11 @@ function renderSiteAdminPanel() {
         sessionStorage.setItem('siteAdminActiveTab', tabName);
         
         if (tabName === 'hosts') {
-            hostsTab.className = 'py-2 px-1 border-b-2 border-blue-500 text-blue-600 font-medium text-sm';
+            hostsTab.className = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
             gamesTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
             showHostsSection();
         } else {
-            gamesTab.className = 'py-2 px-1 border-b-2 border-blue-500 text-blue-600 font-medium text-sm';
+            gamesTab.className = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
             hostsTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
             showGamesSection();
         }
@@ -272,7 +272,7 @@ function buildGameListSection() {
   // Refresh button
   const refreshButton = UIBuilder.createButton('Refresh', function() {
     refreshSiteAdminGames();
-  }, 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center', 'refresh-cw');
+  }, 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center', 'refresh-cw');
   
   gameListHeader.appendChild(refreshButton);
   gameListContainer.appendChild(gameListHeader);
@@ -285,7 +285,7 @@ function buildGameListSection() {
     });
     
     const loadingSpinner = UIBuilder.createElement('div', {
-      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600 mr-4'
+      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
     });
     loadingDiv.appendChild(loadingSpinner);
     
@@ -656,7 +656,7 @@ function buildHostListSection() {
     });
     
     const loadingSpinner = UIBuilder.createElement('div', {
-      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600 mr-4'
+      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
     });
     loadingDiv.appendChild(loadingSpinner);
     
@@ -1302,7 +1302,7 @@ function renderHostEditModal(host) {
   nameGroup.appendChild(nameLabel);
   
   const nameInput = UIBuilder.createElement('input', {
-    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'edit-host-name',
     type: 'text',
     value: host.name,
@@ -1323,7 +1323,7 @@ function renderHostEditModal(host) {
   expiryGroup.appendChild(expiryLabel);
   
   const expiryInput = UIBuilder.createElement('input', {
-    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'edit-host-expiry',
     type: 'date'
   });

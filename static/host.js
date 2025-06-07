@@ -140,7 +140,7 @@ function renderHostPanel() {
   });
   gameIdCard.appendChild(gameIdLabel);
   const gameIdValue = UIBuilder.createElement('div', {
-    className: 'text-lg font-bold text-blue-600',
+    className: 'text-lg font-bold text-purple-600',
     textContent: appState.gameData.id
   });
   gameIdCard.appendChild(gameIdValue);
@@ -184,7 +184,7 @@ function renderHostPanel() {
 
   const scanQRButton = UIBuilder.createButton('Scan QR Code', function() {
     navigateTo('scanQR');
-  }, 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors text-lg font-medium', 'qr-code');
+  }, 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-purple-700 transition-colors text-lg font-medium', 'qr-code');
   qrSection.appendChild(scanQRButton);
   
   // Add instruction text to emphasise the QR-first approach
@@ -240,7 +240,7 @@ function renderHostPanel() {
       // Edit button
       const editButton = UIBuilder.createButton('Edit', function() {
         renderTeamEditModal(team);
-      }, 'bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors flex items-center', 'edit-2');
+      }, 'bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors flex items-center', 'edit-2');
       teamHeader.appendChild(editButton);
 
       teamCard.appendChild(teamHeader);
@@ -257,7 +257,7 @@ function renderHostPanel() {
       });
       playersContainer.appendChild(playersLabel);
       const playersValue = UIBuilder.createElement('div', {
-        className: 'text-2xl font-bold text-blue-600',
+        className: 'text-2xl font-bold text-purple-600',
         textContent: team.playerCount || 0
       });
       playersContainer.appendChild(playersValue);
@@ -310,7 +310,7 @@ function renderHostPanel() {
     
     const addTeamButton = UIBuilder.createButton('Scan QR Code', function() {
       navigateTo('scanQR');
-    }, 'bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center', 'qr-code');
+    }, 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center', 'qr-code');
     emptyState.appendChild(addTeamButton);
 
     teamSection.appendChild(emptyState);
@@ -481,7 +481,7 @@ function renderHostPanel() {
         }
       },
       hasEnoughTeams 
-        ? 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium flex items-center justify-center'
+        ? 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors text-lg font-medium flex items-center justify-center'
         : 'w-full bg-gray-400 text-white py-3 px-4 rounded-lg cursor-not-allowed text-lg font-medium flex items-center justify-center',
       'play-circle'
     );
@@ -546,7 +546,7 @@ async function loadHostGames() {
     });
     
     const loadingSpinner = UIBuilder.createElement('div', {
-      className: 'animate-spin h-6 w-6 border-2 border-gray-300 rounded-full border-t-blue-600 mr-3'
+      className: 'animate-spin h-6 w-6 border-2 border-gray-300 rounded-full border-t-purple-600 mr-3'
     });
     loadingDiv.appendChild(loadingSpinner);
     
@@ -741,7 +741,7 @@ function renderQRAssignmentPage() {
     container.appendChild(errorDiv);
 
     const instructionDiv = UIBuilder.createElement('div', {
-      className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6'
+      className: 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-6'
     });
 
     const instructionTitle = UIBuilder.createElement('p');
@@ -768,7 +768,7 @@ function renderQRAssignmentPage() {
 
     const backButton = UIBuilder.createButton('Back to Host Panel', function() {
       navigateTo('hostPanel');
-    }, 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
+    }, 'mt-4 bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
     container.appendChild(backButton);
 
     return container;
@@ -783,7 +783,7 @@ function renderQRAssignmentPage() {
 
   // QR Code info
   const qrInfo = UIBuilder.createElement('div', {
-    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6',
+    className: 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-6',
     id: 'qr-display',
     textContent: `QR Code ID: ${qrId}`
   });
@@ -832,7 +832,7 @@ function renderTeamCreationForm(qrId, container) {
 
   // QR Info reminder
   const qrInfo = UIBuilder.createElement('div', {
-    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4',
+    className: 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-4',
     textContent: `Creating team from QR Code: ${qrId}`
   });
   container.appendChild(qrInfo);
@@ -1080,7 +1080,7 @@ function renderBaseCreationForm(qrId, container) {
 
   // QR Info reminder
   const qrInfo = UIBuilder.createElement('div', {
-    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4',
+    className: 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-4',
     textContent: `Creating base from QR Code: ${qrId}`
   });
   container.appendChild(qrInfo);
@@ -1501,7 +1501,7 @@ function renderPlayerRegistrationPage() {
 
     const backButton = UIBuilder.createButton('Back to Home', function() {
       navigateTo('landing');
-    }, 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded');
+    }, 'mt-4 bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded');
     container.appendChild(backButton);
 
     return container;
@@ -1704,7 +1704,7 @@ function renderResultsPage() {
 
   const homeButton = UIBuilder.createButton('Back to Home', function() { 
     navigateTo('landing'); 
-  }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700');
+  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700');
   actionsContainer.appendChild(homeButton);
 
   const newGameButton = UIBuilder.createButton('New Game', clearGameData, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700');
