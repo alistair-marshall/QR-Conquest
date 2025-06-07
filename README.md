@@ -115,6 +115,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 
 2. **Prepare physical materials**:
    - Count how many teams and bases you want (minimum 2 teams, recommended 3-10 bases)
+   - **Generate QR codes**: Use the built-in code generator at `/code-generator/` or click "Print QR Codes" in the host panel
    - Print QR codes: 1 per team + 1 per base (e.g., for 4 teams and 6 bases, print 10 QR codes)
    - Place base QR codes at strategic locations
    - Ensure locations are accessible and safe
@@ -181,6 +182,79 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Set expiry date (optional)
    - Generate host secret link
    - Share the secret link with the host (can be sent digitally or printed)
+
+## 🖨️ QR Code Generation
+
+QR Conquest includes a built-in QR code generator for creating printable codes needed for games. This tool is essential for hosts who need to prepare physical QR codes before running games.
+
+### Accessing the QR Code Generator
+
+- **Direct URL**: Visit `/code-generator/` on your QR Conquest installation
+- **From Host Panel**: Click the "Print QR Codes" button in the game management interface
+- **Standalone Use**: The generator works independently and doesn't require host authentication
+
+### QR Code Generator Features
+
+**Layout Options:**
+- **Paper Sizes**: A4, Letter, A3, and Tabloid formats
+- **Grid Layouts**: 2-6 columns with automatic row calculation
+- **Smart Sizing**: Automatically calculates optimal QR code size for maximum codes per page
+
+**Visual Customisation:**
+- **Plain White**: Simple, clean QR codes on white background
+- **Black Border**: QR codes with distinctive black borders
+- **Orienteering Flag**: Orange and white triangular pattern background (ideal for outdoor events)
+- **Custom Colours**: Choose your own background and border colours
+
+**Content Options:**
+- **Custom Headers**: Add text above each QR code (e.g., "Team Red", "Base Alpha")
+- **URL Display**: Optionally show the full URL below each QR code
+- **Unique IDs**: Each QR code gets a unique 11-character identifier
+
+**Print Optimisation:**
+- **Browser-friendly**: Works with standard browser print functions
+- **High Contrast**: Ensures QR codes remain scannable when printed
+- **Efficient Layouts**: Maximises codes per page while maintaining readability
+
+### Using Generated QR Codes
+
+1. **Generate Codes**: Create as many QR codes as needed (typically 2-10 teams + 5-20 bases)
+2. **Print**: Use your browser's print function for high-quality output
+3. **Deploy**: Place base QR codes at strategic locations around your game area
+4. **Distribute**: Give team QR codes to team captains or players
+5. **Assign in Game**: When hosting, scan each QR code to assign it as either a team or base
+
+### Best Practices for QR Code Preparation
+
+**Planning Your Codes:**
+- Print extra codes as spares (equipment failures, weather damage)
+- Use headers to pre-label codes by intended purpose
+- Consider laminating codes for outdoor use
+
+**Base Placement:**
+- Choose locations that are accessible but not too obvious
+- Ensure codes are visible and scannable
+- Protect from weather if playing outdoors
+- Consider GPS accuracy when placing codes
+
+**Team Distribution:**
+- Give one team QR code to each team captain
+- Keep digital copies as backup
+- Consider sharing team codes via secure messaging if needed
+
+### Technical Specifications
+
+**QR Code Details:**
+- **Format**: Standard QR codes with high error correction
+- **Size**: Automatically calculated based on layout (typically 80-300px)
+- **Content**: Full URLs in format `https://yoursite.com/?id={unique_id}`
+- **Compatibility**: Works with any QR code scanner or camera app
+
+**Browser Support:**
+- Modern web browsers with JavaScript enabled
+- Print functionality requires standard browser print capabilities
+- No special software or plugins required
+
 
 ## 🏗️ Technical Architecture
 
