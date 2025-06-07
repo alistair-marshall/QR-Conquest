@@ -472,7 +472,7 @@ function buildGameRow(game) {
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
       if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- All associated data\n\nThis action CANNOT be undone!`)) {
-          deleteGameAsAdmin(game.id);
+          deleteGameAsAdmin(game);
       }
     }, 'text-red-600 hover:text-red-900 transition-colors');
     deleteButton.title = 'Permanently delete game and all data';
