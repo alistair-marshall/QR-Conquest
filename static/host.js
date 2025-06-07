@@ -125,6 +125,9 @@ function renderHostPanel() {
       intervalSelect.appendChild(optionElement);
     });
 
+    // Set default value
+    intervalSelect.value = '15';
+
     intervalContainer.appendChild(intervalSelect);
 
     // Custom interval input (initially hidden)
@@ -1349,11 +1352,20 @@ function renderGameSettingsModal() {
 
   // Real-time validation
   function validateSettings() {
-    const radius = parseInt(document.getElementById('edit-capture-radius').value);
-    const interval = parseInt(document.getElementById('edit-points-interval').value);
-    const duration = document.getElementById('edit-duration').value ? parseInt(document.getElementById('edit-duration').value) : null;
-    
+    const radiusInput = document.getElementById('edit-capture-radius');
+    const intervalInput = document.getElementById('edit-points-interval');
+    const durationInput = document.getElementById('edit-duration');
     const warning = document.getElementById('validation-warning');
+    
+    // Safety checks
+    if (!radiusInput || !intervalInput || !durationInput || !warning) {
+      console.warn('Validation elements not ready yet');
+      return true; // Return true to prevent blocking
+    }
+    
+    const radius = parseInt(radiusInput.value);
+    const interval = parseInt(intervalInput.value);
+    const duration = durationInput.value ? parseInt(durationInput.value) : null;
     
     // Check duration vs interval ratio
     if (duration && interval) {
@@ -1373,8 +1385,20 @@ function renderGameSettingsModal() {
   }
 
   // Add validation listeners
-  document.getElementById('edit-points-interval').addEventListener('input', validateSettings);
-  document.getElementById('edit-duration').addEventListener('input', validateSettings);
+  setTimeout(() => {
+    const intervalInput = document.getElementById('edit-points-interval');
+    const durationInput = document.getElementById('edit-duration');
+    
+    if (intervalInput) {
+      intervalInput.addEventListener('input', validateSettings);
+    }
+    if (durationInput) {
+      durationInput.addEventListener('input', validateSettings);
+    }
+    
+    // Initial validation
+    validateSettings();
+  }, 100);
 
   // Handle form submission
   form.addEventListener('submit', async function(e) {
@@ -2611,6 +2635,9 @@ function validateGameCreation() {
   // Get game duration (optional)
   let gameDuration = null;
   const durationSelect = document.getElementById('duration-select');
+  const durationValue = durationSelect.value.trim();
+  console.log('Duration select value:', durationValue); // Debug log
+  
   if (durationSelect.value === 'custom') {
     gameDuration = parseInt(document.getElementById('custom-duration-input').value);
     if (isNaN(gameDuration) || gameDuration < 1 || gameDuration > 43200) {
