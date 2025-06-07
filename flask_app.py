@@ -1010,6 +1010,90 @@ def update_team(team_id):
 
     return jsonify({'success': True})
 
+# Delete game (host can delete their own games)
+@app.route('/api/games/<game_id>', methods=['DELETE'])
+def delete_game(game_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Verify game exists and host is authorized
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    try:
+        # Begin transaction for cascade deletion
+        cursor.execute('BEGIN')
+        
+        # Get all teams for this game to delete their QR code mappings
+        cursor.execute('SELECT id FROM teams WHERE game_id = ?', (game_id,))
+        team_ids = [row[0] for row in cursor.fetchall()]
+        
+        # Count what we're about to delete for reporting
+        cursor.execute('SELECT COUNT(*) FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
+        captures_count = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
+        players_count = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
+        bases_count = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
+        teams_count = cursor.fetchone()[0]
+        
+        # Delete team QR code mappings
+        for team_id in team_ids:
+            cursor.execute('DELETE FROM team_qr_codes WHERE team_id = ?', (team_id,))
+        
+        # Delete captures (must be deleted before bases and teams due to foreign keys)
+        cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
+        
+        # Delete players (must be deleted before teams due to foreign keys)
+        cursor.execute('DELETE FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
+        
+        # Delete teams
+        cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
+        
+        # Delete bases (this will also clear their QR codes)
+        cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
+        
+        # Finally delete the game itself
+        cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
+        
+        # Commit the transaction
+        cursor.execute('COMMIT')
+        
+    except sqlite3.Error as e:
+        # Rollback on error
+        cursor.execute('ROLLBACK')
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    
+    conn.close()
+    
+    return jsonify({
+        'success': True, 
+        'message': 'Game and all associated data deleted successfully',
+        'deleted': {
+            'teams': teams_count,
+            'bases': bases_count,
+            'players': players_count,
+            'captures': captures_count
+        }
+    })
+
 # generate QR code for a host
 @app.route('/api/hosts/<host_id>/qr-code', methods=['GET'])
 @require_site_admin

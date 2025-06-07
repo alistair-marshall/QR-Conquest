@@ -21,7 +21,11 @@ const appState = {
     hosts: [],           // Array of host objects
     hostsLoading: false, // Loading state for hosts
     hostsLoaded: false,  // Whether hosts have been loaded
-    hostsError: null     // Error state for host loading
+    hostsError: null,    // Error state for host loading
+    games: [],           // Array of game objects
+    gamesLoading: false, // Loading state for games
+    gamesLoaded: false,  // Whether games have been loaded
+    gamesError: null     // Error state for game loading
   }
 };
 
@@ -1020,6 +1024,59 @@ async function createBase(qrId, name, latitude, longitude) {
   }
 }
 
+// Delete game (host can delete their own games)
+async function deleteGame() {
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded to delete.');
+  }
+
+  try {
+    setLoading(true);
+    
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Only the game host can delete the game.');
+    }
+    
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to delete game');
+    
+    // Clear game data from local storage and app state
+    clearAuthState();
+    
+    // Show success message with details - UI will handle this
+    if (window.showNotification) {
+      const deleted = result.deleted;
+      const message = `Game deleted successfully!\n\nRemoved: ${deleted.teams} teams, ${deleted.bases} bases, ${deleted.players} players, ${deleted.captures} captures\n\nAll QR codes have been released for reuse.`;
+      window.showNotification(message, 'success');
+    }
+    
+    // Navigate to landing page - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('landing');
+    }
+  } catch (err) {
+    console.error('Error deleting game:', err);
+    const userMessage = err.message || 'Unable to delete game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+
 // =============================================================================
 // SITE ADMIN FUNCTIONS
 // =============================================================================
@@ -1297,6 +1354,188 @@ function refreshSiteAdminHosts() {
   // Force refresh by clearing loaded state
   appState.siteAdmin.hostsLoaded = false;
   loadSiteAdminHosts();
+}
+
+async function loadSiteAdminGames() {
+  // Prevent duplicate loading
+  if (appState.siteAdmin.gamesLoading || appState.siteAdmin.gamesLoaded) {
+    return;
+  }
+  
+  try {
+    appState.siteAdmin.gamesLoading = true;
+    appState.siteAdmin.gamesError = null;
+    
+    // Re-render to show loading state
+    if (window.renderApp) {
+      window.renderApp();
+    }
+    
+    // First, get all hosts to get their games
+    const hosts = await fetchHosts();
+    
+    let allGames = [];
+    
+    // For each host, get their games using existing API
+    for (const host of hosts) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`);
+        if (response.ok) {
+          const hostGames = await response.json();
+          
+          // Add host info to each game
+          const gamesWithHost = hostGames.map(game => ({
+            ...game,
+            host_id: host.id,
+            host_name: host.name,
+            host_qr_code: host.qr_code
+          }));
+          
+          allGames = allGames.concat(gamesWithHost);
+        }
+      } catch (error) {
+        console.warn(`Failed to load games for host ${host.name}:`, error);
+      }
+    }
+    
+    // For each game, get detailed info to get base/team/player counts
+    for (let i = 0; i < allGames.length; i++) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/games/${allGames[i].id}`);
+        if (response.ok) {
+          const gameDetails = await response.json();
+          allGames[i].bases_count = gameDetails.bases ? gameDetails.bases.length : 0;
+          allGames[i].teams_count = gameDetails.teams ? gameDetails.teams.length : 0;
+          
+          // Count total players across all teams
+          let totalPlayers = 0;
+          if (gameDetails.teams) {
+            totalPlayers = gameDetails.teams.reduce((sum, team) => sum + (team.playerCount || 0), 0);
+          }
+          allGames[i].players_count = totalPlayers;
+        }
+      } catch (error) {
+        console.warn(`Failed to load details for game ${allGames[i].id}:`, error);
+        // Set defaults if we can't get details
+        allGames[i].bases_count = 0;
+        allGames[i].teams_count = 0;
+        allGames[i].players_count = 0;
+      }
+    }
+    
+    // Sort games by status priority and start time
+    allGames.sort((a, b) => {
+      const statusPriority = { 'active': 1, 'setup': 2, 'ended': 3 };
+      const aPriority = statusPriority[a.status] || 4;
+      const bPriority = statusPriority[b.status] || 4;
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      // If same status, sort by start time (most recent first)
+      return (b.start_time || 0) - (a.start_time || 0);
+    });
+    
+    appState.siteAdmin.games = allGames;
+    appState.siteAdmin.gamesLoaded = true;
+    appState.siteAdmin.gamesError = null;
+  } catch (error) {
+    console.error('Error loading games:', error);
+    appState.siteAdmin.gamesError = error.message || 'Unable to load games. Please try again.';
+    appState.siteAdmin.games = [];
+  } finally {
+    appState.siteAdmin.gamesLoading = false;
+    
+    // Final render with data or error
+    if (window.renderApp) {
+      window.renderApp();
+    }
+  }
+}
+
+// Complete a game by impersonating the host
+async function completeGameAsAdmin(game) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to complete games.');
+  }
+
+  try {
+    setLoading(true);
+    
+    // Use existing end game API, passing the host_id from the game
+    const response = await fetch(`${API_BASE_URL}/games/${game.id}/end`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: game.host_id
+      })
+    });
+
+    await handleApiResponse(response, 'Failed to complete game');
+
+    // Show success message
+    if (window.showNotification) {
+      window.showNotification(`Game "${game.name}" completed successfully! QR codes have been released.`, 'success');
+    }
+
+    refreshSiteAdminGames();
+    return true;
+  } catch (err) {
+    console.error('Error completing game:', err);
+    const userMessage = err.message || 'Unable to complete game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Delete game as admin by impersonating the host
+async function deleteGameAsAdmin(game) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to delete games.');
+  }
+
+  try {
+    setLoading(true);
+    
+    // Use the host endpoint by providing the host_id (admin knows all host IDs)
+    const response = await fetch(`${API_BASE_URL}/games/${game.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: game.host_id
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to delete game');
+
+    // Show success message with details
+    if (window.showNotification) {
+      const deleted = result.deleted || {};
+      const message = `Game "${game.name}" deleted successfully!\n\nRemoved: ${deleted.teams || 0} teams, ${deleted.bases || 0} bases, ${deleted.players || 0} players, ${deleted.captures || 0} captures`;
+      window.showNotification(message, 'success');
+    }
+
+    refreshSiteAdminGames();
+    return true;
+  } catch (err) {
+    console.error('Error deleting game as host:', err);
+    const userMessage = err.message || 'Unable to delete game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
 }
 
 // =============================================================================

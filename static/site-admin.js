@@ -140,12 +140,12 @@ function renderSiteAdminPanel() {
     const titleSection = document.createElement('div');
     const title = document.createElement('h2');
     title.className = 'text-3xl font-bold text-gray-900';
-    title.textContent = 'Host Management';
+    title.textContent = 'Site Administration';
     titleSection.appendChild(title);
 
     const subtitle = document.createElement('p');
     subtitle.className = 'text-gray-600 mt-1';
-    subtitle.textContent = 'Manage game hosts and their permissions';
+    subtitle.textContent = 'Manage hosts and games across the system';
     titleSection.appendChild(subtitle);
 
     headerSection.appendChild(titleSection);
@@ -163,11 +163,388 @@ function renderSiteAdminPanel() {
     const statsSection = buildStatsSection();
     container.appendChild(statsSection);
 
-    // Host list section with placeholder
-    const hostListContainer = buildHostListSection();
-    container.appendChild(hostListContainer);
+    // Add navigation tabs for Hosts and Games
+    const tabsSection = document.createElement('div');
+    tabsSection.className = 'mb-6';
+    
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'border-b border-gray-200';
+    
+    const tabsList = document.createElement('nav');
+    tabsList.className = 'flex space-x-8';
+    
+    // Hosts tab
+    const hostsTab = document.createElement('button');
+    hostsTab.className = 'py-2 px-1 border-b-2 font-medium text-sm';
+    hostsTab.textContent = 'Host Management';
+    hostsTab.id = 'hosts-tab';
+    
+    // Games tab
+    const gamesTab = document.createElement('button');
+    gamesTab.className = 'py-2 px-1 border-b-2 font-medium text-sm';
+    gamesTab.textContent = 'Game Management';
+    gamesTab.id = 'games-tab';
+    
+    // Tab state management
+    const currentTab = sessionStorage.getItem('siteAdminActiveTab') || 'hosts';
+    
+    function setActiveTab(tabName) {
+        sessionStorage.setItem('siteAdminActiveTab', tabName);
+        
+        if (tabName === 'hosts') {
+            hostsTab.className = 'py-2 px-1 border-b-2 border-blue-500 text-blue-600 font-medium text-sm';
+            gamesTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
+            showHostsSection();
+        } else {
+            gamesTab.className = 'py-2 px-1 border-b-2 border-blue-500 text-blue-600 font-medium text-sm';
+            hostsTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
+            showGamesSection();
+        }
+    }
+    
+    hostsTab.addEventListener('click', () => setActiveTab('hosts'));
+    gamesTab.addEventListener('click', () => setActiveTab('games'));
+    
+    tabsList.appendChild(hostsTab);
+    tabsList.appendChild(gamesTab);
+    tabsContainer.appendChild(tabsList);
+    tabsSection.appendChild(tabsContainer);
+    container.appendChild(tabsSection);
+
+    // Content area for tabs
+    const contentArea = document.createElement('div');
+    contentArea.id = 'admin-content-area';
+    container.appendChild(contentArea);
+    
+    // Set initial active tab
+    setActiveTab(currentTab);
+    
+    function showHostsSection() {
+        const contentArea = document.getElementById('admin-content-area');
+        contentArea.innerHTML = '';
+        
+        const hostListContainer = buildHostListSection();
+        contentArea.appendChild(hostListContainer);
+    }
+    
+    function showGamesSection() {
+        const contentArea = document.getElementById('admin-content-area');
+        contentArea.innerHTML = '';
+        
+        const gameListContainer = buildGameListSection();
+        contentArea.appendChild(gameListContainer);
+        
+        // Trigger games loading if not already loaded/loading
+        if (!appState.siteAdmin.gamesLoaded && !appState.siteAdmin.gamesLoading) {
+            loadSiteAdminGames();
+        }
+    }
 
     return container;
+}
+
+// Build game list section
+function buildGameListSection() {
+  const gameListContainer = document.createElement('div');
+  gameListContainer.className = 'bg-white rounded-lg shadow-md p-6';
+
+  const gameListHeader = document.createElement('div');
+  gameListHeader.className = 'flex justify-between items-center mb-6';
+  
+  const gameListTitle = document.createElement('h3');
+  gameListTitle.className = 'text-xl font-semibold text-gray-900';
+  gameListTitle.textContent = 'All Games';
+  gameListHeader.appendChild(gameListTitle);
+
+  // Refresh button
+  const refreshButton = document.createElement('button');
+  refreshButton.className = 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center';
+  
+  const refreshIcon = document.createElement('i');
+  refreshIcon.setAttribute('data-lucide', 'refresh-cw');
+  refreshIcon.className = 'mr-2 h-4 w-4';
+  refreshButton.appendChild(refreshIcon);
+  
+  const refreshText = document.createElement('span');
+  refreshText.textContent = 'Refresh';
+  refreshButton.appendChild(refreshText);
+  
+  refreshButton.addEventListener('click', function() {
+    refreshSiteAdminGames();
+  });
+  
+  gameListHeader.appendChild(refreshButton);
+  gameListContainer.appendChild(gameListHeader);
+
+  // Content based on current state
+  if (appState.siteAdmin.gamesLoading) {
+    // Show loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'flex items-center justify-center py-12';
+    
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.className = 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600 mr-4';
+    loadingDiv.appendChild(loadingSpinner);
+    
+    const loadingText = document.createElement('p');
+    loadingText.className = 'text-gray-600';
+    loadingText.textContent = 'Loading games...';
+    loadingDiv.appendChild(loadingText);
+    
+    gameListContainer.appendChild(loadingDiv);
+  } else if (appState.siteAdmin.gamesError) {
+    // Show error state
+    buildGamesError(gameListContainer, appState.siteAdmin.gamesError);
+  } else if (appState.siteAdmin.games.length > 0) {
+    // Show games table
+    buildGamesTable(gameListContainer, appState.siteAdmin.games);
+  } else {
+    // Show empty state
+    buildEmptyGamesState(gameListContainer);
+  }
+
+  return gameListContainer;
+}
+
+// Build games table
+function buildGamesTable(container, games) {
+    const tableContainer = document.createElement('div');
+    tableContainer.className = 'overflow-x-auto';
+    
+    const table = document.createElement('table');
+    table.className = 'min-w-full divide-y divide-gray-200';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    thead.className = 'bg-gray-50';
+    
+    const headerRow = document.createElement('tr');
+    
+    const headers = ['Game Name', 'Host', 'Status', 'Teams', 'Bases', 'Players', 'Created', 'Actions'];
+    headers.forEach(function(headerText) {
+        const th = document.createElement('th');
+        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+        th.textContent = headerText;
+        headerRow.appendChild(th);
+    });
+    
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Table body
+    const tbody = document.createElement('tbody');
+    tbody.className = 'bg-white divide-y divide-gray-200';
+    
+    games.forEach(function(game) {
+        const row = buildGameRow(game);
+        tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+    tableContainer.appendChild(table);
+    container.appendChild(tableContainer);
+}
+
+// Build individual game row
+function buildGameRow(game) {
+    const row = document.createElement('tr');
+    row.className = 'hover:bg-gray-50';
+    
+    // Game name cell
+    const nameCell = document.createElement('td');
+    nameCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const nameContainer = document.createElement('div');
+    const gameName = document.createElement('div');
+    gameName.className = 'text-sm font-medium text-gray-900';
+    gameName.textContent = game.name;
+    nameContainer.appendChild(gameName);
+    
+    const gameId = document.createElement('div');
+    gameId.className = 'text-sm text-gray-500';
+    gameId.textContent = `ID: ${game.id}`;
+    nameContainer.appendChild(gameId);
+    
+    nameCell.appendChild(nameContainer);
+    row.appendChild(nameCell);
+    
+    // Host cell
+    const hostCell = document.createElement('td');
+    hostCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const hostName = document.createElement('div');
+    hostName.className = 'text-sm text-gray-900';
+    hostName.textContent = game.host_name;
+    hostCell.appendChild(hostName);
+    
+    row.appendChild(hostCell);
+    
+    // Status cell
+    const statusCell = document.createElement('td');
+    statusCell.className = 'px-6 py-4 whitespace-nowrap';
+    
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
+    
+    switch (game.status) {
+        case 'active':
+            statusBadge.className += ' bg-green-100 text-green-800';
+            statusBadge.textContent = 'Active';
+            break;
+        case 'setup':
+            statusBadge.className += ' bg-yellow-100 text-yellow-800';
+            statusBadge.textContent = 'Setup';
+            break;
+        case 'ended':
+            statusBadge.className += ' bg-gray-100 text-gray-800';
+            statusBadge.textContent = 'Ended';
+            break;
+        default:
+            statusBadge.className += ' bg-blue-100 text-blue-800';
+            statusBadge.textContent = game.status;
+    }
+    
+    statusCell.appendChild(statusBadge);
+    row.appendChild(statusCell);
+    
+    // Teams count cell
+    const teamsCell = document.createElement('td');
+    teamsCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+    teamsCell.textContent = game.teams_count || 0;
+    row.appendChild(teamsCell);
+    
+    // Bases count cell
+    const basesCell = document.createElement('td');
+    basesCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+    basesCell.textContent = game.bases_count || 0;
+    row.appendChild(basesCell);
+    
+    // Players count cell
+    const playersCell = document.createElement('td');
+    playersCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+    playersCell.textContent = game.players_count || 0;
+    row.appendChild(playersCell);
+    
+    // Created date cell
+    const createdCell = document.createElement('td');
+    createdCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+    
+    if (game.start_time) {
+        const createdDate = new Date(game.start_time * 1000);
+        createdCell.textContent = createdDate.toLocaleDateString();
+    } else {
+        createdCell.textContent = 'Not started';
+    }
+    row.appendChild(createdCell);
+    
+    // Actions cell
+    const actionsCell = document.createElement('td');
+    actionsCell.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
+    
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'flex space-x-2';
+    
+    // Complete button (only for active games)
+    if (game.status === 'active') {
+        const completeButton = document.createElement('button');
+        completeButton.className = 'text-green-600 hover:text-green-900 transition-colors';
+        completeButton.textContent = 'Complete';
+        completeButton.title = 'End game and release QR codes';
+        completeButton.addEventListener('click', function() {
+            if (confirm(`Are you sure you want to complete game "${game.name}"?\n\nThis will end the game and release all QR codes for reuse.`)) {
+                completeGameAsAdmin(game);
+            }
+        });
+        actionsContainer.appendChild(completeButton);
+    }
+    
+    // Delete button
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'text-red-600 hover:text-red-900 transition-colors';
+    deleteButton.textContent = 'Delete';
+    deleteButton.title = 'Permanently delete game and all data';
+    deleteButton.addEventListener('click', function() {
+        if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- All associated data\n\nThis action CANNOT be undone!`)) {
+            deleteGameAsAdmin(game.id);
+        }
+    });
+    actionsContainer.appendChild(deleteButton);
+    
+    actionsCell.appendChild(actionsContainer);
+    row.appendChild(actionsCell);
+    
+    return row;
+}
+
+// Build empty state for no games
+function buildEmptyGamesState(container) {
+    const noGames = document.createElement('div');
+    noGames.className = 'text-center py-12';
+    
+    const noGamesIcon = document.createElement('div');
+    noGamesIcon.className = 'mx-auto h-12 w-12 text-gray-400 mb-4';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'gamepad-2');
+    icon.className = 'h-12 w-12';
+    noGamesIcon.appendChild(icon);
+    noGames.appendChild(noGamesIcon);
+    
+    const noGamesTitle = document.createElement('h3');
+    noGamesTitle.className = 'text-lg font-medium text-gray-900 mb-2';
+    noGamesTitle.textContent = 'No games found';
+    noGames.appendChild(noGamesTitle);
+    
+    const noGamesText = document.createElement('p');
+    noGamesText.className = 'text-gray-500 mb-6';
+    noGamesText.textContent = 'No games have been created by any hosts yet.';
+    noGames.appendChild(noGamesText);
+    
+    container.appendChild(noGames);
+}
+
+// Show error state for games
+function buildGamesError(container, errorMessage) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'text-center py-12';
+    
+    const errorIcon = document.createElement('div');
+    errorIcon.className = 'mx-auto h-12 w-12 text-red-400 mb-4';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'alert-circle');
+    icon.className = 'h-12 w-12';
+    errorIcon.appendChild(icon);
+    errorDiv.appendChild(errorIcon);
+    
+    const errorTitle = document.createElement('h3');
+    errorTitle.className = 'text-lg font-medium text-gray-900 mb-2';
+    errorTitle.textContent = 'Error Loading Games';
+    errorDiv.appendChild(errorTitle);
+    
+    const errorText = document.createElement('p');
+    errorText.className = 'text-gray-500 mb-6';
+    errorText.textContent = errorMessage;
+    errorDiv.appendChild(errorText);
+    
+    const retryButton = document.createElement('button');
+    retryButton.className = 'bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors';
+    retryButton.textContent = 'Retry';
+    retryButton.addEventListener('click', function() {
+        refreshSiteAdminGames();
+    });
+    errorDiv.appendChild(retryButton);
+    
+    container.appendChild(errorDiv);
+}
+
+// Update clearSiteAdminHosts to also clear games when leaving admin
+function clearSiteAdminHosts() {
+  appState.siteAdmin.hosts = [];
+  appState.siteAdmin.hostsLoading = false;
+  appState.siteAdmin.hostsLoaded = false;
+  appState.siteAdmin.hostsError = null;
+  
+  // Also clear games data
+  clearSiteAdminGames();
 }
 
 function buildStatsSection() {
