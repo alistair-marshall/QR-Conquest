@@ -28,7 +28,7 @@ function logoutSiteAdmin() {
   // Reset site admin state - core.js handles this
   appState.siteAdmin.isAuthenticated = false;
   appState.siteAdmin.token = null;
-  clearSiteAdminHosts(); // Clear host data on logout
+  clearSiteAdminData(); // Clear data on logout
   
   navigateTo('landing');
   showNotification('Logged out successfully', 'info');
@@ -536,15 +536,16 @@ function buildGamesError(container, errorMessage) {
     container.appendChild(errorDiv);
 }
 
-// Update clearSiteAdminHosts to also clear games when leaving admin
-function clearSiteAdminHosts() {
+// Clear host and game data when leaving admin
+function clearSiteAdminData() {
   appState.siteAdmin.hosts = [];
   appState.siteAdmin.hostsLoading = false;
   appState.siteAdmin.hostsLoaded = false;
   appState.siteAdmin.hostsError = null;
-  
-  // Also clear games data
-  clearSiteAdminGames();
+  appState.siteAdmin.games = [];
+  appState.siteAdmin.gamesLoading = false;
+  appState.siteAdmin.gamesLoaded = false;
+  appState.siteAdmin.gamesError = null;
 }
 
 function buildStatsSection() {
