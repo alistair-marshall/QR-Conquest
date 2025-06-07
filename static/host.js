@@ -1,14 +1,15 @@
 // Host Panel - UI components only, API calls handled by core.js
 function renderHostPanel() {
-  const container = document.createElement('div');
+  const container = UIBuilder.createElement('div');
 
   // If game is not loaded, show form to create or join
   if (!appState.gameData.id) {
     container.className = 'max-w-md mx-auto px-4';
 
-    const title = document.createElement('h2');
-    title.className = 'text-2xl font-bold mb-6 text-center';
-    title.textContent = 'Host Panel';
+    const title = UIBuilder.createElement('h2', {
+      className: 'text-2xl font-bold mb-6 text-center',
+      textContent: 'Host Panel'
+    });
     container.appendChild(title);
 
     // State for showing create or join form
@@ -22,51 +23,49 @@ function renderHostPanel() {
 
     if (showCreateGame) {
       // Create Game Form
-      const createForm = document.createElement('div');
-      createForm.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
+      const createForm = UIBuilder.createElement('div', {
+        className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+      });
 
-      const createTitle = document.createElement('h3');
-      createTitle.className = 'text-xl font-semibold mb-4';
-      createTitle.textContent = 'Create New Game';
+      const createTitle = UIBuilder.createElement('h3', {
+        className: 'text-xl font-semibold mb-4',
+        textContent: 'Create New Game'
+      });
       createForm.appendChild(createTitle);
 
       // Game Name
-      const nameGroup = document.createElement('div');
-      nameGroup.className = 'mb-4';
+      const nameGroup = UIBuilder.createElement('div', { className: 'mb-4' });
 
-      const nameLabel = document.createElement('label');
-      nameLabel.className = 'block text-gray-700 mb-2';
-      nameLabel.textContent = 'Game Name';
+      const nameLabel = UIBuilder.createElement('label', {
+        className: 'block text-gray-700 mb-2',
+        textContent: 'Game Name'
+      });
       nameGroup.appendChild(nameLabel);
 
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.value = 'QR Conquest';
-      nameInput.className = 'w-full px-3 py-2 border rounded-lg';
+      const nameInput = UIBuilder.createElement('input', {
+        type: 'text',
+        value: 'QR Conquest',
+        className: 'w-full px-3 py-2 border rounded-lg'
+      });
       nameGroup.appendChild(nameInput);
 
       createForm.appendChild(nameGroup);
 
       // Note about teams
-      const teamsNoteGroup = document.createElement('div');
-      teamsNoteGroup.className = 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg';
+      const teamsNoteGroup = UIBuilder.createElement('div', {
+        className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
+      });
       
-      const teamsNoteText = document.createElement('p');
-      const noteStrong = document.createElement('strong');
-      noteStrong.textContent = 'Note:';
+      const teamsNoteText = UIBuilder.createElement('p');
+      const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
       teamsNoteText.appendChild(noteStrong);
-
-      const noteText = document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.');
-      teamsNoteText.appendChild(noteText);
+      teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
       teamsNoteGroup.appendChild(teamsNoteText);
       
       createForm.appendChild(teamsNoteGroup);
 
       // Create Game Button
-      const createButton = document.createElement('button');
-      createButton.className = 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium';
-      createButton.textContent = 'Create Game';
-      createButton.addEventListener('click', function() {
+      const createButton = UIBuilder.createButton('Create Game', function() {
         const gameName = nameInput.value.trim();
         if (!gameName) {
           showNotification('Please enter a game name', 'warning');
@@ -77,54 +76,50 @@ function renderHostPanel() {
         createGame({
           name: gameName,
         });
-      });
+      }, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium');
       createForm.appendChild(createButton);
 
       container.appendChild(createForm);
 
       // Join link
-      const joinLink = document.createElement('div');
-      joinLink.className = 'text-center';
+      const joinLink = UIBuilder.createElement('div', { className: 'text-center' });
 
-      const joinButton = document.createElement('button');
-      joinButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors py-2';
-      joinButton.textContent = 'Join Existing Game Instead';
-      joinButton.addEventListener('click', toggleForm);
+      const joinButton = UIBuilder.createButton('Join Existing Game Instead', toggleForm, 'text-blue-600 underline hover:text-blue-800 transition-colors py-2');
       joinLink.appendChild(joinButton);
 
       container.appendChild(joinLink);
     } else {
       // Join Game Form
-      const joinForm = document.createElement('div');
-      joinForm.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
+      const joinForm = UIBuilder.createElement('div', {
+        className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+      });
 
-      const joinTitle = document.createElement('h3');
-      joinTitle.className = 'text-xl font-semibold mb-4';
-      joinTitle.textContent = 'Join Existing Game';
+      const joinTitle = UIBuilder.createElement('h3', {
+        className: 'text-xl font-semibold mb-4',
+        textContent: 'Join Existing Game'
+      });
       joinForm.appendChild(joinTitle);
 
       // Game ID
-      const idGroup = document.createElement('div');
-      idGroup.className = 'mb-4';
+      const idGroup = UIBuilder.createElement('div', { className: 'mb-4' });
 
-      const idLabel = document.createElement('label');
-      idLabel.className = 'block text-gray-700 mb-2';
-      idLabel.textContent = 'Game ID';
+      const idLabel = UIBuilder.createElement('label', {
+        className: 'block text-gray-700 mb-2',
+        textContent: 'Game ID'
+      });
       idGroup.appendChild(idLabel);
 
-      const idInput = document.createElement('input');
-      idInput.type = 'text';
-      idInput.className = 'w-full px-3 py-2 border rounded-lg';
-      idInput.placeholder = 'Enter game ID (e.g., brave-apple)';
+      const idInput = UIBuilder.createElement('input', {
+        type: 'text',
+        className: 'w-full px-3 py-2 border rounded-lg',
+        placeholder: 'Enter game ID (e.g., brave-apple)'
+      });
       idGroup.appendChild(idInput);
 
       joinForm.appendChild(idGroup);
 
       // Join Button
-      const joinButton = document.createElement('button');
-      joinButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium';
-      joinButton.textContent = 'Join Game';
-      joinButton.addEventListener('click', function() {
+      const joinButton = UIBuilder.createButton('Join Game', function() {
         const gameId = idInput.value.trim();
         if (!gameId) {
           showNotification('Please enter a Game ID', 'warning');
@@ -133,90 +128,85 @@ function renderHostPanel() {
 
         // Call the API function from core.js
         fetchGameData(gameId);
-      });
+      }, 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium');
       joinForm.appendChild(joinButton);
 
       container.appendChild(joinForm);
 
       // Create Game link
-      const createLink = document.createElement('div');
-      createLink.className = 'text-center';
+      const createLink = UIBuilder.createElement('div', { className: 'text-center' });
 
-      const createButton = document.createElement('button');
-      createButton.className = 'text-blue-600 underline hover:text-blue-800 transition-colors py-2';
-      createButton.textContent = 'Create New Game Instead';
-      createButton.addEventListener('click', toggleForm);
+      const createButton = UIBuilder.createButton('Create New Game Instead', toggleForm, 'text-blue-600 underline hover:text-blue-800 transition-colors py-2');
       createLink.appendChild(createButton);
 
       container.appendChild(createLink);
     }
 
     // Back to Home link
-    const backContainer = document.createElement('div');
-    backContainer.className = 'text-center mt-6';
+    const backContainer = UIBuilder.createElement('div', { className: 'text-center mt-6' });
 
-    const backButton = document.createElement('button');
-    backButton.className = 'text-gray-600 hover:text-gray-800 transition-colors py-2';
-    backButton.textContent = 'Back to Home';
-    backButton.addEventListener('click', function() { navigateTo('landing'); });
+    const backButton = UIBuilder.createButton('Back to Home', function() { 
+      navigateTo('landing'); 
+    }, 'text-gray-600 hover:text-gray-800 transition-colors py-2');
     backContainer.appendChild(backButton);
 
     container.appendChild(backContainer);
 
     return container;
   }
-// Game Management Panel (if game is loaded)
+
+  // Game Management Panel (if game is loaded)
   container.className = 'max-w-4xl mx-auto px-4 pb-4';
 
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Game Administration';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold mb-6 text-center',
+    textContent: 'Game Administration'
+  });
   container.appendChild(title);
 
-  const grid = document.createElement('div');
-  grid.className = 'space-y-6';
+  const grid = UIBuilder.createElement('div', { className: 'space-y-6' });
 
   // Game Info Section
-  const infoSection = document.createElement('div');
-  infoSection.className = 'bg-white rounded-lg shadow-md p-4';
+  const infoSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
+  });
 
-  const infoTitle = document.createElement('h3');
-  infoTitle.className = 'text-xl font-semibold mb-3';
-  infoTitle.textContent = 'Game Info';
+  const infoTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-3',
+    textContent: 'Game Info'
+  });
   infoSection.appendChild(infoTitle);
 
-  const gameInfoGrid = document.createElement('div');
-  gameInfoGrid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-4';
+  const gameInfoGrid = UIBuilder.createElement('div', {
+    className: 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+  });
 
-  const gameIdCard = document.createElement('div');
-  gameIdCard.className = 'bg-gray-50 p-3 rounded-lg';
-  const gameIdLabel = document.createElement('div');
-  gameIdLabel.className = 'text-sm text-gray-600 font-medium';
-  gameIdLabel.textContent = 'Game ID';
+  const gameIdCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
+  const gameIdLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Game ID'
+  });
   gameIdCard.appendChild(gameIdLabel);
-  const gameIdValue = document.createElement('div');
-  gameIdValue.className = 'text-lg font-bold text-blue-600';
-  gameIdValue.textContent = appState.gameData.id;
+  const gameIdValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-blue-600',
+    textContent: appState.gameData.id
+  });
   gameIdCard.appendChild(gameIdValue);
   gameInfoGrid.appendChild(gameIdCard);
 
-  const statusCard = document.createElement('div');
-  statusCard.className = 'bg-gray-50 p-3 rounded-lg';
-  const statusLabel = document.createElement('div');
-  statusLabel.className = 'text-sm text-gray-600 font-medium';
-  statusLabel.textContent = 'Status';
+  const statusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
+  const statusLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Status'
+  });
   statusCard.appendChild(statusLabel);
-  const statusValue = document.createElement('div');
-  statusValue.className = 'text-lg font-bold capitalize';
-  // Color code the status
-  if (appState.gameData.status === 'active') {
-    statusValue.className += ' text-green-600';
-  } else if (appState.gameData.status === 'setup') {
-    statusValue.className += ' text-orange-600';
-  } else {
-    statusValue.className += ' text-gray-600';
-  }
-  statusValue.textContent = appState.gameData.status;
+  const statusValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold capitalize' + (
+      appState.gameData.status === 'active' ? ' text-green-600' :
+      appState.gameData.status === 'setup' ? ' text-orange-600' : ' text-gray-600'
+    ),
+    textContent: appState.gameData.status
+  });
   statusCard.appendChild(statusValue);
   gameInfoGrid.appendChild(statusCard);
 
@@ -224,124 +214,114 @@ function renderHostPanel() {
   grid.appendChild(infoSection);
 
   // QR Code Management Section
-  const qrSection = document.createElement('div');
-  qrSection.className = 'bg-white rounded-lg shadow-md p-4';
-
-  const qrTitle = document.createElement('h3');
-  qrTitle.className = 'text-xl font-semibold mb-3';
-  qrTitle.textContent = 'QR Code Management';
-  qrSection.appendChild(qrTitle);
-
-  const qrDescription = document.createElement('p');
-  qrDescription.className = 'text-gray-600 mb-4 text-sm';
-  qrDescription.textContent = 'Scan QR codes to add them as teams or bases for the game.';
-  qrSection.appendChild(qrDescription);
-
-  const scanQRButton = document.createElement('button');
-  scanQRButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors text-lg font-medium';
-
-  const qrIcon = document.createElement('i');
-  qrIcon.setAttribute('data-lucide', 'qr-code');
-  qrIcon.className = 'mr-2 w-5 h-5';
-  scanQRButton.appendChild(qrIcon);
-
-  const buttonText = document.createElement('span');
-  buttonText.textContent = 'Scan QR Code';
-  scanQRButton.appendChild(buttonText);
-
-  scanQRButton.addEventListener('click', function() {
-    navigateTo('scanQR');
+  const qrSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
   });
 
+  const qrTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-3',
+    textContent: 'QR Code Management'
+  });
+  qrSection.appendChild(qrTitle);
+
+  const qrDescription = UIBuilder.createElement('p', {
+    className: 'text-gray-600 mb-4 text-sm',
+    textContent: 'Scan QR codes to add them as teams or bases for the game.'
+  });
+  qrSection.appendChild(qrDescription);
+
+  const scanQRButton = UIBuilder.createButton('Scan QR Code', function() {
+    navigateTo('scanQR');
+  }, 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors text-lg font-medium', 'qr-code');
   qrSection.appendChild(scanQRButton);
   
   // Add instruction text to emphasise the QR-first approach
-  const instructionText = document.createElement('p');
-  instructionText.className = 'text-amber-600 text-sm mt-2 text-center';
-  instructionText.textContent = 'Note: Teams and bases can only be created by scanning QR codes first.';
+  const instructionText = UIBuilder.createElement('p', {
+    className: 'text-amber-600 text-sm mt-2 text-center',
+    textContent: 'Note: Teams and bases can only be created by scanning QR codes first.'
+  });
   qrSection.appendChild(instructionText);
   
   grid.appendChild(qrSection);
 
   // Team Management Section - Mobile Optimized
-  const teamSection = document.createElement('div');
-  teamSection.className = 'bg-white rounded-lg shadow-md p-4';
+  const teamSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
+  });
 
-  const teamTitle = document.createElement('h3');
-  teamTitle.className = 'text-xl font-semibold mb-4';
-  teamTitle.textContent = 'Team Management';
+  const teamTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-4',
+    textContent: 'Team Management'
+  });
   teamSection.appendChild(teamTitle);
 
   if (appState.gameData.teams && appState.gameData.teams.length > 0) {
-    const teamsContainer = document.createElement('div');
-    teamsContainer.className = 'space-y-3';
+    const teamsContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
 
     appState.gameData.teams.forEach(function(team) {
-      const teamCard = document.createElement('div');
-      teamCard.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
+      const teamCard = UIBuilder.createElement('div', {
+        className: 'border border-gray-200 rounded-lg p-4 bg-gray-50'
+      });
 
       // Team header with color and name
-      const teamHeader = document.createElement('div');
-      teamHeader.className = 'flex items-center justify-between mb-3';
+      const teamHeader = UIBuilder.createElement('div', {
+        className: 'flex items-center justify-between mb-3'
+      });
 
-      const teamNameContainer = document.createElement('div');
-      teamNameContainer.className = 'flex items-center';
+      const teamNameContainer = UIBuilder.createElement('div', {
+        className: 'flex items-center'
+      });
 
-      const colorDot = document.createElement('div');
-      colorDot.className = 'w-4 h-4 rounded-full ' + team.color + ' mr-3 flex-shrink-0';
+      const colorDot = UIBuilder.createElement('div', {
+        className: 'w-4 h-4 rounded-full ' + team.color + ' mr-3 flex-shrink-0'
+      });
       teamNameContainer.appendChild(colorDot);
 
-      const teamName = document.createElement('h4');
-      teamName.className = 'text-lg font-semibold text-gray-900';
-      teamName.textContent = team.name;
+      const teamName = UIBuilder.createElement('h4', {
+        className: 'text-lg font-semibold text-gray-900',
+        textContent: team.name
+      });
       teamNameContainer.appendChild(teamName);
 
       teamHeader.appendChild(teamNameContainer);
 
       // Edit button
-      const editButton = document.createElement('button');
-      editButton.className = 'bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors flex items-center';
-      
-      const editIcon = document.createElement('i');
-      editIcon.setAttribute('data-lucide', 'edit-2');
-      editIcon.className = 'w-4 h-4 mr-1';
-      editButton.appendChild(editIcon);
-      
-      const editText = document.createElement('span');
-      editText.textContent = 'Edit';
-      editButton.appendChild(editText);
-      
-      editButton.addEventListener('click', function() {
+      const editButton = UIBuilder.createButton('Edit', function() {
         renderTeamEditModal(team);
-      });
+      }, 'bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors flex items-center', 'edit-2');
       teamHeader.appendChild(editButton);
 
       teamCard.appendChild(teamHeader);
 
       // Team stats
-      const teamStats = document.createElement('div');
-      teamStats.className = 'grid grid-cols-2 gap-4';
+      const teamStats = UIBuilder.createElement('div', { className: 'grid grid-cols-2 gap-4' });
 
-      const playersContainer = document.createElement('div');
-      playersContainer.className = 'text-center bg-white p-3 rounded-lg';
-      const playersLabel = document.createElement('div');
-      playersLabel.className = 'text-sm text-gray-600 font-medium';
-      playersLabel.textContent = 'Players';
+      const playersContainer = UIBuilder.createElement('div', {
+        className: 'text-center bg-white p-3 rounded-lg'
+      });
+      const playersLabel = UIBuilder.createElement('div', {
+        className: 'text-sm text-gray-600 font-medium',
+        textContent: 'Players'
+      });
       playersContainer.appendChild(playersLabel);
-      const playersValue = document.createElement('div');
-      playersValue.className = 'text-2xl font-bold text-blue-600';
-      playersValue.textContent = team.playerCount || 0;
+      const playersValue = UIBuilder.createElement('div', {
+        className: 'text-2xl font-bold text-blue-600',
+        textContent: team.playerCount || 0
+      });
       playersContainer.appendChild(playersValue);
 
-      const scoreContainer = document.createElement('div');
-      scoreContainer.className = 'text-center bg-white p-3 rounded-lg';
-      const scoreLabel = document.createElement('div');
-      scoreLabel.className = 'text-sm text-gray-600 font-medium';
-      scoreLabel.textContent = 'Score';
+      const scoreContainer = UIBuilder.createElement('div', {
+        className: 'text-center bg-white p-3 rounded-lg'
+      });
+      const scoreLabel = UIBuilder.createElement('div', {
+        className: 'text-sm text-gray-600 font-medium',
+        textContent: 'Score'
+      });
       scoreContainer.appendChild(scoreLabel);
-      const scoreValue = document.createElement('div');
-      scoreValue.className = 'text-2xl font-bold text-green-600';
-      scoreValue.textContent = team.score || 0;
+      const scoreValue = UIBuilder.createElement('div', {
+        className: 'text-2xl font-bold text-green-600',
+        textContent: team.score || 0
+      });
       scoreContainer.appendChild(scoreValue);
 
       teamStats.appendChild(playersContainer);
@@ -354,39 +334,31 @@ function renderHostPanel() {
     teamSection.appendChild(teamsContainer);
   } else {
     // Show prompt to add teams when there are none
-    const emptyState = document.createElement('div');
-    emptyState.className = 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
+    const emptyState = UIBuilder.createElement('div', {
+      className: 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300'
+    });
     
-    const emptyIcon = document.createElement('i');
-    emptyIcon.setAttribute('data-lucide', 'users');
-    emptyIcon.className = 'w-12 h-12 text-gray-400 mx-auto mb-3';
+    const emptyIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'users',
+      className: 'w-12 h-12 text-gray-400 mx-auto mb-3'
+    });
     emptyState.appendChild(emptyIcon);
     
-    const emptyTitle = document.createElement('h4');
-    emptyTitle.className = 'text-lg font-medium text-gray-900 mb-2';
-    emptyTitle.textContent = 'No Teams Yet';
+    const emptyTitle = UIBuilder.createElement('h4', {
+      className: 'text-lg font-medium text-gray-900 mb-2',
+      textContent: 'No Teams Yet'
+    });
     emptyState.appendChild(emptyTitle);
     
-    const emptyText = document.createElement('p');
-    emptyText.className = 'text-gray-600 mb-4';
-    emptyText.textContent = 'Scan QR codes to add teams to your game.';
+    const emptyText = UIBuilder.createElement('p', {
+      className: 'text-gray-600 mb-4',
+      textContent: 'Scan QR codes to add teams to your game.'
+    });
     emptyState.appendChild(emptyText);
     
-    const addTeamButton = document.createElement('button');
-    addTeamButton.className = 'bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center';
-    
-    const addIcon = document.createElement('i');
-    addIcon.setAttribute('data-lucide', 'qr-code');
-    addIcon.className = 'w-4 h-4 mr-2';
-    addTeamButton.appendChild(addIcon);
-    
-    const addText = document.createElement('span');
-    addText.textContent = 'Scan QR Code';
-    addTeamButton.appendChild(addText);
-    
-    addTeamButton.addEventListener('click', function() {
+    const addTeamButton = UIBuilder.createButton('Scan QR Code', function() {
       navigateTo('scanQR');
-    });
+    }, 'bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center', 'qr-code');
     emptyState.appendChild(addTeamButton);
 
     teamSection.appendChild(emptyState);
@@ -395,63 +367,73 @@ function renderHostPanel() {
   grid.appendChild(teamSection);
 
   // Base Management Section - Mobile Optimized with Map
-  const baseSection = document.createElement('div');
-  baseSection.className = 'bg-white rounded-lg shadow-md p-4';
+  const baseSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
+  });
 
-  const baseTitle = document.createElement('h3');
-  baseTitle.className = 'text-xl font-semibold mb-4';
-  baseTitle.textContent = 'Base Management';
+  const baseTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-4',
+    textContent: 'Base Management'
+  });
   baseSection.appendChild(baseTitle);
 
   if (appState.gameData.bases && appState.gameData.bases.length > 0) {
     // Map container
-    const mapContainer = document.createElement('div');
-    mapContainer.id = 'map-container';
-    mapContainer.className = 'bg-gray-200 rounded-lg shadow-sm h-64 mb-4 relative';
+    const mapContainer = UIBuilder.createElement('div', {
+      id: 'map-container',
+      className: 'bg-gray-200 rounded-lg shadow-sm h-64 mb-4 relative'
+    });
     baseSection.appendChild(mapContainer);
 
     // Bases list
-    const basesContainer = document.createElement('div');
-    basesContainer.className = 'space-y-3';
+    const basesContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
 
     appState.gameData.bases.forEach(function(base) {
-      const baseCard = document.createElement('div');
-      baseCard.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
+      const baseCard = UIBuilder.createElement('div', {
+        className: 'border border-gray-200 rounded-lg p-4 bg-gray-50'
+      });
 
       // Base header
-      const baseHeader = document.createElement('div');
-      baseHeader.className = 'flex items-center justify-between mb-3';
+      const baseHeader = UIBuilder.createElement('div', {
+        className: 'flex items-center justify-between mb-3'
+      });
 
-      const baseName = document.createElement('h4');
-      baseName.className = 'text-lg font-semibold text-gray-900';
-      baseName.textContent = base.name;
+      const baseName = UIBuilder.createElement('h4', {
+        className: 'text-lg font-semibold text-gray-900',
+        textContent: base.name
+      });
       baseHeader.appendChild(baseName);
 
       // Owner indicator
-      const ownerContainer = document.createElement('div');
-      ownerContainer.className = 'flex items-center text-sm';
+      const ownerContainer = UIBuilder.createElement('div', {
+        className: 'flex items-center text-sm'
+      });
       
       if (base.ownedBy) {
         const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
         if (owningTeam) {
-          const ownerDot = document.createElement('div');
-          ownerDot.className = 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2';
+          const ownerDot = UIBuilder.createElement('div', {
+            className: 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2'
+          });
           ownerContainer.appendChild(ownerDot);
           
-          const ownerName = document.createElement('span');
-          ownerName.className = 'font-medium text-gray-700';
-          ownerName.textContent = owningTeam.name;
+          const ownerName = UIBuilder.createElement('span', {
+            className: 'font-medium text-gray-700',
+            textContent: owningTeam.name
+          });
           ownerContainer.appendChild(ownerName);
         } else {
-          const unknownOwner = document.createElement('span');
-          unknownOwner.className = 'text-gray-500';
-          unknownOwner.textContent = 'Unknown Team';
+          const unknownOwner = UIBuilder.createElement('span', {
+            className: 'text-gray-500',
+            textContent: 'Unknown Team'
+          });
           ownerContainer.appendChild(unknownOwner);
         }
       } else {
-        const uncaptured = document.createElement('span');
-        uncaptured.className = 'text-gray-500 italic';
-        uncaptured.textContent = 'Uncaptured';
+        const uncaptured = UIBuilder.createElement('span', {
+          className: 'text-gray-500 italic',
+          textContent: 'Uncaptured'
+        });
         ownerContainer.appendChild(uncaptured);
       }
       
@@ -459,9 +441,10 @@ function renderHostPanel() {
       baseCard.appendChild(baseHeader);
 
       // Base coordinates (smaller, less prominent)
-      const coordinates = document.createElement('div');
-      coordinates.className = 'text-xs text-gray-500 font-mono bg-white px-2 py-1 rounded';
-      coordinates.textContent = `${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}`;
+      const coordinates = UIBuilder.createElement('div', {
+        className: 'text-xs text-gray-500 font-mono bg-white px-2 py-1 rounded',
+        textContent: `${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}`
+      });
       baseCard.appendChild(coordinates);
 
       basesContainer.appendChild(baseCard);
@@ -473,39 +456,31 @@ function renderHostPanel() {
     setTimeout(() => initGameMap(), 100);
   } else {
     // Show prompt to add bases when there are none
-    const emptyState = document.createElement('div');
-    emptyState.className = 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
+    const emptyState = UIBuilder.createElement('div', {
+      className: 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300'
+    });
     
-    const emptyIcon = document.createElement('i');
-    emptyIcon.setAttribute('data-lucide', 'map-pin');
-    emptyIcon.className = 'w-12 h-12 text-gray-400 mx-auto mb-3';
+    const emptyIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'map-pin',
+      className: 'w-12 h-12 text-gray-400 mx-auto mb-3'
+    });
     emptyState.appendChild(emptyIcon);
     
-    const emptyTitle = document.createElement('h4');
-    emptyTitle.className = 'text-lg font-medium text-gray-900 mb-2';
-    emptyTitle.textContent = 'No Bases Yet';
+    const emptyTitle = UIBuilder.createElement('h4', {
+      className: 'text-lg font-medium text-gray-900 mb-2',
+      textContent: 'No Bases Yet'
+    });
     emptyState.appendChild(emptyTitle);
     
-    const emptyText = document.createElement('p');
-    emptyText.className = 'text-gray-600 mb-4';
-    emptyText.textContent = 'Scan QR codes to add bases to your game.';
+    const emptyText = UIBuilder.createElement('p', {
+      className: 'text-gray-600 mb-4',
+      textContent: 'Scan QR codes to add bases to your game.'
+    });
     emptyState.appendChild(emptyText);
     
-    const addBaseButton = document.createElement('button');
-    addBaseButton.className = 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center';
-    
-    const addIcon = document.createElement('i');
-    addIcon.setAttribute('data-lucide', 'qr-code');
-    addIcon.className = 'w-4 h-4 mr-2';
-    addBaseButton.appendChild(addIcon);
-    
-    const addText = document.createElement('span');
-    addText.textContent = 'Scan QR Code';
-    addBaseButton.appendChild(addText);
-    
-    addBaseButton.addEventListener('click', function() {
+    const addBaseButton = UIBuilder.createButton('Scan QR Code', function() {
       navigateTo('scanQR');
-    });
+    }, 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center', 'qr-code');
     emptyState.appendChild(addBaseButton);
 
     baseSection.appendChild(emptyState);
@@ -514,105 +489,80 @@ function renderHostPanel() {
   grid.appendChild(baseSection);
 
   // Game Control Section - Mobile Optimized
-  const controlSection = document.createElement('div');
-  controlSection.className = 'bg-white rounded-lg shadow-md p-4';
+  const controlSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
+  });
 
-  const controlTitle = document.createElement('h3');
-  controlTitle.className = 'text-xl font-semibold mb-4';
-  controlTitle.textContent = 'Game Control';
+  const controlTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-4',
+    textContent: 'Game Control'
+  });
   controlSection.appendChild(controlTitle);
 
-  const controlButtons = document.createElement('div');
-  controlButtons.className = 'space-y-3';
+  const controlButtons = UIBuilder.createElement('div', { className: 'space-y-3' });
 
   // Show different buttons based on game status
   if (appState.gameData.status === 'active') {
     // Game is running - show only End Game button
-    const endButton = document.createElement('button');
-    endButton.className = 'w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-lg font-medium flex items-center justify-center';
-    
-    const endIcon = document.createElement('i');
-    endIcon.setAttribute('data-lucide', 'stop-circle');
-    endIcon.className = 'w-5 h-5 mr-2';
-    endButton.appendChild(endIcon);
-    
-    const endText = document.createElement('span');
-    endText.textContent = 'End Game';
-    endButton.appendChild(endText);
-    
-    endButton.addEventListener('click', function() {
+    const endButton = UIBuilder.createButton('End Game', function() {
       // Confirm before ending
       if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
         // Call the API function from core.js
         endGame();
       }
-    });
+    }, 'w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-lg font-medium flex items-center justify-center', 'stop-circle');
     controlButtons.appendChild(endButton);
 
   } else if (appState.gameData.status === 'setup') {
     // Game is in setup - show only Start Game button
-    const startButton = document.createElement('button');
-    startButton.className = 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium flex items-center justify-center';
-    
-    // Disable button if fewer than 2 teams
     const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
-    startButton.disabled = !hasEnoughTeams;
+    
+    const startButton = UIBuilder.createButton(
+      hasEnoughTeams ? 'Start Game' : 'Need 2+ Teams to Start',
+      function() {
+        // Double check team count before starting
+        if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
+          // Call the API function from core.js
+          startGame();
+        } else {
+          showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.', 'error');
+        }
+      },
+      hasEnoughTeams 
+        ? 'w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium flex items-center justify-center'
+        : 'w-full bg-gray-400 text-white py-3 px-4 rounded-lg cursor-not-allowed text-lg font-medium flex items-center justify-center',
+      'play-circle'
+    );
     
     if (!hasEnoughTeams) {
+      startButton.disabled = true;
       startButton.title = 'At least 2 teams required to start game';
-      startButton.className = 'w-full bg-gray-400 text-white py-3 px-4 rounded-lg cursor-not-allowed text-lg font-medium flex items-center justify-center';
     }
-    
-    const startIcon = document.createElement('i');
-    startIcon.setAttribute('data-lucide', 'play-circle');
-    startIcon.className = 'w-5 h-5 mr-2';
-    startButton.appendChild(startIcon);
-    
-    const startText = document.createElement('span');
-    startText.textContent = hasEnoughTeams ? 'Start Game' : 'Need 2+ Teams to Start';
-    startButton.appendChild(startText);
-    
-    startButton.addEventListener('click', function() {
-      // Double check team count before starting
-      if (appState.gameData.teams && appState.gameData.teams.length >= 2) {
-        // Call the API function from core.js
-        startGame();
-      } else {
-        showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.', 'error');
-      }
-    });
     
     controlButtons.appendChild(startButton);
   } else if (appState.gameData.status === 'ended') {
     // Game is ended - show message
-    const gameEndedMsg = document.createElement('div');
-    gameEndedMsg.className = 'bg-gray-100 rounded-lg p-4 text-gray-600 mb-4 text-center';
+    const gameEndedMsg = UIBuilder.createElement('div', {
+      className: 'bg-gray-100 rounded-lg p-4 text-gray-600 mb-4 text-center'
+    });
     
-    const endedIcon = document.createElement('i');
-    endedIcon.setAttribute('data-lucide', 'check-circle');
-    endedIcon.className = 'w-6 h-6 mx-auto mb-2 text-gray-500';
+    const endedIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'check-circle',
+      className: 'w-6 h-6 mx-auto mb-2 text-gray-500'
+    });
     gameEndedMsg.appendChild(endedIcon);
     
-    const endedText = document.createElement('p');
-    endedText.textContent = 'This game has ended. QR codes have been released and can be reused in other games.';
+    const endedText = UIBuilder.createElement('p', {
+      textContent: 'This game has ended. QR codes have been released and can be reused in other games.'
+    });
     gameEndedMsg.appendChild(endedText);
     
     controlSection.appendChild(gameEndedMsg);
   }
 
-  const exitButton = document.createElement('button');
-  exitButton.className = 'w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors text-lg font-medium flex items-center justify-center';
-  
-  const exitIcon = document.createElement('i');
-  exitIcon.setAttribute('data-lucide', 'log-out');
-  exitIcon.className = 'w-5 h-5 mr-2';
-  exitButton.appendChild(exitIcon);
-  
-  const exitText = document.createElement('span');
-  exitText.textContent = 'Exit Host Panel';
-  exitButton.appendChild(exitText);
-  
-  exitButton.addEventListener('click', function() { navigateTo('landing'); });
+  const exitButton = UIBuilder.createButton('Exit Host Panel', function() { 
+    navigateTo('landing'); 
+  }, 'w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors text-lg font-medium flex items-center justify-center', 'log-out');
   controlButtons.appendChild(exitButton);
 
   controlSection.appendChild(controlButtons);
@@ -625,28 +575,27 @@ function renderHostPanel() {
 
 // QR Assignment Page
 function renderQRAssignmentPage() {
-  const container = document.createElement('div');
-  container.className = 'max-w-md mx-auto py-8';
+  const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
   const qrId = sessionStorage.getItem('pendingQRCode');
   if (!qrId) {
     // No pending QR, show error and instruction
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'bg-amber-100 border border-amber-400 text-amber-700 px-4 py-3 rounded mb-4';
-    errorDiv.textContent = 'No QR code found to assign. You must scan a QR code first.';
+    const errorDiv = UIBuilder.createElement('div', {
+      className: 'bg-amber-100 border border-amber-400 text-amber-700 px-4 py-3 rounded mb-4',
+      textContent: 'No QR code found to assign. You must scan a QR code first.'
+    });
     container.appendChild(errorDiv);
 
-    const instructionDiv = document.createElement('div');
-    instructionDiv.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6';
+    const instructionDiv = UIBuilder.createElement('div', {
+      className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6'
+    });
 
-    const instructionTitle = document.createElement('p');
-    const titleStrong = document.createElement('strong');
-    titleStrong.textContent = 'How to add teams or bases:';
+    const instructionTitle = UIBuilder.createElement('p');
+    const titleStrong = UIBuilder.createElement('strong', { textContent: 'How to add teams or bases:' });
     instructionTitle.appendChild(titleStrong);
     instructionDiv.appendChild(instructionTitle);
 
-    const instructionList = document.createElement('ol');
-    instructionList.className = 'list-decimal pl-5 mt-2';
+    const instructionList = UIBuilder.createElement('ol', { className: 'list-decimal pl-5 mt-2' });
 
     const steps = [
       'Return to the host panel',
@@ -656,90 +605,60 @@ function renderQRAssignmentPage() {
     ];
 
     steps.forEach(stepText => {
-      const listItem = document.createElement('li');
-      listItem.textContent = stepText;
+      const listItem = UIBuilder.createElement('li', { textContent: stepText });
       instructionList.appendChild(listItem);
     });
 
     instructionDiv.appendChild(instructionList);
     container.appendChild(instructionDiv);
 
-    const backButton = document.createElement('button');
-    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
-    backButton.textContent = 'Back to Host Panel';
-    backButton.addEventListener('click', function() {
+    const backButton = UIBuilder.createButton('Back to Host Panel', function() {
       navigateTo('hostPanel');
-    });
+    }, 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
     container.appendChild(backButton);
 
     return container;
   }
 
   // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Assign QR Code';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold mb-6 text-center',
+    textContent: 'Assign QR Code'
+  });
   container.appendChild(title);
 
   // QR Code info
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6';
-  qrInfo.textContent = `QR Code ID: ${qrId}`;
-  qrInfo.id = 'qr-display';
+  const qrInfo = UIBuilder.createElement('div', {
+    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6',
+    id: 'qr-display',
+    textContent: `QR Code ID: ${qrId}`
+  });
   container.appendChild(qrInfo);
 
   // Options
-  const options = document.createElement('div');
-  options.className = 'flex flex-col gap-4';
+  const options = UIBuilder.createElement('div', { className: 'flex flex-col gap-4' });
 
   // Assign as Team button
-  const teamButton = document.createElement('button');
-  teamButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
-
-  const teamIcon = document.createElement('i');
-  teamIcon.setAttribute('data-lucide', 'users');
-  teamIcon.className = 'mr-2';
-  teamButton.appendChild(teamIcon);
-
-  const teamText = document.createElement('span');
-  teamText.textContent = 'Assign as Team';
-  teamButton.appendChild(teamText);
-
-  teamButton.addEventListener('click', function() {
+  const teamButton = UIBuilder.createButton('Assign as Team', function() {
     // Show team creation form
     renderTeamCreationForm(qrId, container);
-  });
+  }, 'bg-green-500 hover:bg-green-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors', 'users');
   options.appendChild(teamButton);
 
   // Assign as Base button
-  const baseButton = document.createElement('button');
-  baseButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors';
-
-  const baseIcon = document.createElement('i');
-  baseIcon.setAttribute('data-lucide', 'flag');
-  baseIcon.className = 'mr-2';
-  baseButton.appendChild(baseIcon);
-
-  const baseText = document.createElement('span');
-  baseText.textContent = 'Assign as Base';
-  baseButton.appendChild(baseText);
-
-  baseButton.addEventListener('click', function() {
+  const baseButton = UIBuilder.createButton('Assign as Base', function() {
     // Show base creation form
     renderBaseCreationForm(qrId, container);
-  });
+  }, 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded flex items-center justify-center transition-colors', 'flag');
   options.appendChild(baseButton);
 
   container.appendChild(options);
 
   // Cancel button
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', function() {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingQRCode');
     navigateTo('hostPanel');
-  });
+  }, 'mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
   container.appendChild(cancelButton);
 
   return container;
@@ -751,52 +670,57 @@ function renderTeamCreationForm(qrId, container) {
   container.innerHTML = '';
 
   // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Create New Team';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold mb-6 text-center',
+    textContent: 'Create New Team'
+  });
   container.appendChild(title);
 
   // QR Info reminder
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4';
-  qrInfo.textContent = `Creating team from QR Code: ${qrId}`;
+  const qrInfo = UIBuilder.createElement('div', {
+    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4',
+    textContent: `Creating team from QR Code: ${qrId}`
+  });
   container.appendChild(qrInfo);
 
   // Form
-  const form = document.createElement('form');
-  form.className = 'space-y-4';
+  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
   // Team name
-  const nameGroup = document.createElement('div');
+  const nameGroup = UIBuilder.createElement('div');
 
-  const nameLabel = document.createElement('label');
-  nameLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  nameLabel.htmlFor = 'team-name';
-  nameLabel.textContent = 'Team Name';
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'team-name',
+    textContent: 'Team Name'
+  });
   nameGroup.appendChild(nameLabel);
 
-  const nameInput = document.createElement('input');
-  nameInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  nameInput.id = 'team-name';
-  nameInput.type = 'text';
-  nameInput.placeholder = 'Enter team name';
-  nameInput.required = true;
+  const nameInput = UIBuilder.createElement('input', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'team-name',
+    type: 'text',
+    placeholder: 'Enter team name',
+    required: true
+  });
   nameGroup.appendChild(nameInput);
 
   form.appendChild(nameGroup);
 
   // Team color
-  const colorGroup = document.createElement('div');
+  const colorGroup = UIBuilder.createElement('div');
 
-  const colorLabel = document.createElement('label');
-  colorLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  colorLabel.htmlFor = 'team-color';
-  colorLabel.textContent = 'Team Color';
+  const colorLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'team-color',
+    textContent: 'Team Color'
+  });
   colorGroup.appendChild(colorLabel);
 
-  const colorSelect = document.createElement('select');
-  colorSelect.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  colorSelect.id = 'team-color';
+  const colorSelect = UIBuilder.createElement('select', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'team-color'
+  });
 
   const colors = [
     { value: 'bg-red-500', label: 'Red' },
@@ -827,9 +751,10 @@ function renderTeamCreationForm(qrId, container) {
   }
 
   colors.forEach(color => {
-    const option = document.createElement('option');
-    option.value = color.value;
-    option.textContent = color.label;
+    const option = UIBuilder.createElement('option', {
+      value: color.value,
+      textContent: color.label
+    });
     colorSelect.appendChild(option);
   });
 
@@ -852,10 +777,8 @@ function renderTeamCreationForm(qrId, container) {
   form.appendChild(colorGroup);
 
   // Submit button
-  const submitButton = document.createElement('button');
-  submitButton.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
+  const submitButton = UIBuilder.createButton('Create Team', null, 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
   submitButton.type = 'submit';
-  submitButton.textContent = 'Create Team';
   form.appendChild(submitButton);
 
   // Handle form submission
@@ -875,70 +798,73 @@ function renderTeamCreationForm(qrId, container) {
   container.appendChild(form);
 
   // Cancel button
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', function() {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingQRCode');
     navigateTo('hostPanel');
-  });
+  }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
   container.appendChild(cancelButton);
 }
 
 // Function to display a modal for editing team details
 function renderTeamEditModal(team) {
   // Create modal backdrop
-  const modalBackdrop = document.createElement('div');
-  modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  const modalBackdrop = UIBuilder.createElement('div', {
+    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
+  });
   document.body.appendChild(modalBackdrop);
   
   // Create modal container
-  const modalContainer = document.createElement('div');
-  modalContainer.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md';
+  const modalContainer = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md'
+  });
   modalBackdrop.appendChild(modalContainer);
   
   // Modal title
-  const modalTitle = document.createElement('h3');
-  modalTitle.className = 'text-xl font-bold mb-4';
-  modalTitle.textContent = 'Edit Team';
+  const modalTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-bold mb-4',
+    textContent: 'Edit Team'
+  });
   modalContainer.appendChild(modalTitle);
   
   // Create form
-  const form = document.createElement('form');
-  form.className = 'space-y-4';
+  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
   modalContainer.appendChild(form);
   
   // Team name field
-  const nameGroup = document.createElement('div');
+  const nameGroup = UIBuilder.createElement('div');
   
-  const nameLabel = document.createElement('label');
-  nameLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  nameLabel.htmlFor = 'edit-team-name';
-  nameLabel.textContent = 'Team Name';
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'edit-team-name',
+    textContent: 'Team Name'
+  });
   nameGroup.appendChild(nameLabel);
   
-  const nameInput = document.createElement('input');
-  nameInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  nameInput.id = 'edit-team-name';
-  nameInput.type = 'text';
-  nameInput.value = team.name;
-  nameInput.required = true;
+  const nameInput = UIBuilder.createElement('input', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'edit-team-name',
+    type: 'text',
+    value: team.name,
+    required: true
+  });
   nameGroup.appendChild(nameInput);
   
   form.appendChild(nameGroup);
   
   // Team color field
-  const colorGroup = document.createElement('div');
+  const colorGroup = UIBuilder.createElement('div');
   
-  const colorLabel = document.createElement('label');
-  colorLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  colorLabel.htmlFor = 'edit-team-color';
-  colorLabel.textContent = 'Team Color';
+  const colorLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'edit-team-color',
+    textContent: 'Team Color'
+  });
   colorGroup.appendChild(colorLabel);
   
-  const colorSelect = document.createElement('select');
-  colorSelect.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  colorSelect.id = 'edit-team-color';
+  const colorSelect = UIBuilder.createElement('select', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'edit-team-color'
+  });
   
   const colors = [
     { value: 'bg-red-500', label: 'Red' },
@@ -952,12 +878,11 @@ function renderTeamEditModal(team) {
   ];
   
   colors.forEach(color => {
-    const option = document.createElement('option');
-    option.value = color.value;
-    option.textContent = color.label;
-    if (color.value === team.color) {
-      option.selected = true;
-    }
+    const option = UIBuilder.createElement('option', {
+      value: color.value,
+      textContent: color.label,
+      selected: color.value === team.color
+    });
     colorSelect.appendChild(option);
   });
   
@@ -965,21 +890,14 @@ function renderTeamEditModal(team) {
   form.appendChild(colorGroup);
   
   // Action buttons
-  const buttonGroup = document.createElement('div');
-  buttonGroup.className = 'flex gap-4 mt-6';
+  const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 mt-6' });
   
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.type = 'button';
-  cancelButton.addEventListener('click', function() {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     document.body.removeChild(modalBackdrop);
-  });
+  }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600');
   buttonGroup.appendChild(cancelButton);
   
-  const saveButton = document.createElement('button');
-  saveButton.className = 'flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600';
-  saveButton.textContent = 'Save Changes';
+  const saveButton = UIBuilder.createButton('Save Changes', null, 'flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600');
   saveButton.type = 'submit';
   buttonGroup.appendChild(saveButton);
   
@@ -1000,15 +918,17 @@ function renderBaseCreationForm(qrId, container) {
   container.innerHTML = '';
 
   // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Create New Base';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold mb-6 text-center',
+    textContent: 'Create New Base'
+  });
   container.appendChild(title);
 
   // QR Info reminder
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4';
-  qrInfo.textContent = `Creating base from QR Code: ${qrId}`;
+  const qrInfo = UIBuilder.createElement('div', {
+    className: 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4',
+    textContent: `Creating base from QR Code: ${qrId}`
+  });
   container.appendChild(qrInfo);
 
   // Determine default base name (Base XX)
@@ -1034,77 +954,76 @@ function renderBaseCreationForm(qrId, container) {
   const defaultBaseName = `Base ${nextBaseNumber.toString().padStart(2, '0')}`;
 
   // Form
-  const form = document.createElement('form');
-  form.className = 'space-y-4';
+  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
   // Base name
-  const nameGroup = document.createElement('div');
+  const nameGroup = UIBuilder.createElement('div');
 
-  const nameLabel = document.createElement('label');
-  nameLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  nameLabel.htmlFor = 'base-name';
-  nameLabel.textContent = 'Base Name';
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'base-name',
+    textContent: 'Base Name'
+  });
   nameGroup.appendChild(nameLabel);
 
-  const nameInput = document.createElement('input');
-  nameInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  nameInput.id = 'base-name';
-  nameInput.type = 'text';
-  nameInput.placeholder = 'Enter base name';
-  nameInput.value = defaultBaseName;
-  nameInput.required = true;
+  const nameInput = UIBuilder.createElement('input', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'base-name',
+    type: 'text',
+    placeholder: 'Enter base name',
+    value: defaultBaseName,
+    required: true
+  });
   nameGroup.appendChild(nameInput);
 
   form.appendChild(nameGroup);
 
   // Location section
-  const locationGroup = document.createElement('div');
+  const locationGroup = UIBuilder.createElement('div');
 
-  const locationLabel = document.createElement('div');
-  locationLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  locationLabel.textContent = 'Base Location';
+  const locationLabel = UIBuilder.createElement('div', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    textContent: 'Base Location'
+  });
   locationGroup.appendChild(locationLabel);
 
   // Current location display
-  const locationDisplay = document.createElement('div');
-  locationDisplay.className = 'mb-4 p-3 bg-gray-100 rounded flex justify-between items-center';
-  locationDisplay.id = 'location-display';
+  const locationDisplay = UIBuilder.createElement('div', {
+    className: 'mb-4 p-3 bg-gray-100 rounded flex justify-between items-center',
+    id: 'location-display'
+  });
   
-  const locationText = document.createElement('span');
-  locationText.id = 'location-text';
-  locationText.textContent = 'No location data yet. Click "Get Current Location" button.';
+  const locationText = UIBuilder.createElement('span', {
+    id: 'location-text',
+    textContent: 'No location data yet. Click "Get Current Location" button.'
+  });
   locationDisplay.appendChild(locationText);
   
   // Add accuracy indicator
-  const accuracyBadge = document.createElement('span');
-  accuracyBadge.id = 'accuracy-badge';
-  accuracyBadge.className = 'hidden px-2 py-1 text-xs rounded-full';
+  const accuracyBadge = UIBuilder.createElement('span', {
+    id: 'accuracy-badge',
+    className: 'hidden px-2 py-1 text-xs rounded-full'
+  });
   locationDisplay.appendChild(accuracyBadge);
   
   locationGroup.appendChild(locationDisplay);
 
   // Map container for location preview
-  const mapPreviewContainer = document.createElement('div');
-  mapPreviewContainer.id = 'base-location-map';
-  mapPreviewContainer.className = 'h-48 bg-gray-200 rounded mb-4 hidden';
+  const mapPreviewContainer = UIBuilder.createElement('div', {
+    id: 'base-location-map',
+    className: 'h-48 bg-gray-200 rounded mb-4 hidden'
+  });
   locationGroup.appendChild(mapPreviewContainer);
 
   // Get location button group
-  const locationButtonGroup = document.createElement('div');
-  locationButtonGroup.className = 'flex gap-2';
+  const locationButtonGroup = UIBuilder.createElement('div', { className: 'flex gap-2' });
 
   // Get location button
-  const getLocationBtn = document.createElement('button');
-  getLocationBtn.className = 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded';
-  getLocationBtn.type = 'button';
-  updateLocationButtonContent(getLocationBtn, 'navigation', 'Get Current Location');
-
+  const getLocationBtn = UIBuilder.createButton('Get Current Location', null, 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded', 'navigation');
+  
   // Button for high accuracy mode
-  const highAccuracyBtn = document.createElement('button');
-  highAccuracyBtn.className = 'bg-amber-500 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded';
-  highAccuracyBtn.type = 'button';
+  const highAccuracyBtn = UIBuilder.createButton('', null, 'bg-amber-500 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded', 'crosshair');
   highAccuracyBtn.id = 'high-accuracy-toggle';
-  highAccuracyBtn.innerHTML = '<i data-lucide="crosshair" class="inline mr-1"></i>';
   highAccuracyBtn.title = 'Toggle High Accuracy Mode';
   
   // Add to button group
@@ -1113,26 +1032,30 @@ function renderBaseCreationForm(qrId, container) {
   locationGroup.appendChild(locationButtonGroup);
 
   // Hidden fields for location data
-  const latInput = document.createElement('input');
-  latInput.type = 'hidden';
-  latInput.id = 'latitude';
-  latInput.name = 'latitude';
+  const latInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'latitude',
+    name: 'latitude'
+  });
 
-  const lngInput = document.createElement('input');
-  lngInput.type = 'hidden';
-  lngInput.id = 'longitude';
-  lngInput.name = 'longitude';
+  const lngInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'longitude',
+    name: 'longitude'
+  });
   
   // New hidden field for accuracy
-  const accuracyInput = document.createElement('input');
-  accuracyInput.type = 'hidden';
-  accuracyInput.id = 'accuracy';
-  accuracyInput.name = 'accuracy';
+  const accuracyInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'accuracy',
+    name: 'accuracy'
+  });
 
   // Location watch ID storage
-  const watchIdInput = document.createElement('input');
-  watchIdInput.type = 'hidden';
-  watchIdInput.id = 'location-watch-id';
+  const watchIdInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'location-watch-id'
+  });
 
   // Add all hidden inputs
   locationGroup.appendChild(latInput);
@@ -1356,10 +1279,8 @@ function renderBaseCreationForm(qrId, container) {
   form.appendChild(locationGroup);
 
   // Submit button
-  const submitButton = document.createElement('button');
-  submitButton.className = 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full mt-6';
+  const submitButton = UIBuilder.createButton('Create Base', null, 'bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full mt-6');
   submitButton.type = 'submit';
-  submitButton.textContent = 'Create Base';
   form.appendChild(submitButton);
 
   // Handle form submission
@@ -1393,10 +1314,7 @@ function renderBaseCreationForm(qrId, container) {
   container.appendChild(form);
 
   // Cancel button
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', function() {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     // Clear any location watch
     const watchId = document.getElementById('location-watch-id').value;
     if (watchId) {
@@ -1405,7 +1323,7 @@ function renderBaseCreationForm(qrId, container) {
     
     sessionStorage.removeItem('pendingQRCode');
     navigateTo('hostPanel');
-  });
+  }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
 
   // Initialize Lucide icons
@@ -1416,23 +1334,20 @@ function renderBaseCreationForm(qrId, container) {
 
 // Player Registration Page - New page for players to register when joining a team
 function renderPlayerRegistrationPage() {
-  const container = document.createElement('div');
-  container.className = 'max-w-md mx-auto py-8';
+  const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
   const teamId = sessionStorage.getItem('pendingTeamId');
   if (!teamId) {
     // No pending team, show error
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded';
-    errorDiv.textContent = 'No team selected. Please scan a team QR code.';
+    const errorDiv = UIBuilder.createElement('div', {
+      className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded',
+      textContent: 'No team selected. Please scan a team QR code.'
+    });
     container.appendChild(errorDiv);
 
-    const backButton = document.createElement('button');
-    backButton.className = 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded';
-    backButton.textContent = 'Back to Home';
-    backButton.addEventListener('click', function() {
+    const backButton = UIBuilder.createButton('Back to Home', function() {
       navigateTo('landing');
-    });
+    }, 'mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded');
     container.appendChild(backButton);
 
     return container;
@@ -1451,43 +1366,44 @@ function renderPlayerRegistrationPage() {
   }
 
   // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Join Team';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold mb-6 text-center',
+    textContent: 'Join Team'
+  });
   container.appendChild(title);
 
   // Team info
-  const teamInfo = document.createElement('div');
-  teamInfo.className = `${teamColor} text-white px-6 py-4 rounded-lg text-center mb-6`;
-  teamInfo.textContent = `You are joining: ${teamName}`;
+  const teamInfo = UIBuilder.createElement('div', {
+    className: `${teamColor} text-white px-6 py-4 rounded-lg text-center mb-6`,
+    textContent: `You are joining: ${teamName}`
+  });
   container.appendChild(teamInfo);
 
   // Player name form
-  const form = document.createElement('form');
-  form.className = 'space-y-4';
+  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
-  const nameGroup = document.createElement('div');
+  const nameGroup = UIBuilder.createElement('div');
 
-  const nameLabel = document.createElement('label');
-  nameLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  nameLabel.htmlFor = 'player-name';
-  nameLabel.textContent = 'Your Name';
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'player-name',
+    textContent: 'Your Name'
+  });
   nameGroup.appendChild(nameLabel);
 
-  const nameInput = document.createElement('input');
-  nameInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  nameInput.id = 'player-name';
-  nameInput.type = 'text';
-  nameInput.placeholder = 'Enter your name';
+  const nameInput = UIBuilder.createElement('input', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'player-name',
+    type: 'text',
+    placeholder: 'Enter your name'
+  });
   nameGroup.appendChild(nameInput);
 
   form.appendChild(nameGroup);
 
   // Submit button
-  const submitButton = document.createElement('button');
-  submitButton.className = 'bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full';
+  const submitButton = UIBuilder.createButton('Join Team', null, 'bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full');
   submitButton.type = 'submit';
-  submitButton.textContent = 'Join Team';
   form.appendChild(submitButton);
 
   // Handle form submission
@@ -1507,13 +1423,10 @@ function renderPlayerRegistrationPage() {
   container.appendChild(form);
 
   // Cancel button
-  const cancelButton = document.createElement('button');
-  cancelButton.className = 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.addEventListener('click', function() {
+  const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingTeamId');
     navigateTo('landing');
-  });
+  }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
 
   return container;
@@ -1521,8 +1434,7 @@ function renderPlayerRegistrationPage() {
 
 // Results Page
 function renderResultsPage() {
-  const container = document.createElement('div');
-  container.className = 'text-center py-10';
+  const container = UIBuilder.createElement('div', { className: 'text-center py-10' });
 
   // Find the winner (team with highest score)
   let winner = { name: 'No Team', score: 0, color: 'bg-gray-500' };
@@ -1534,44 +1446,50 @@ function renderResultsPage() {
   }
 
   // Title
-  const title = document.createElement('h2');
-  title.className = 'text-3xl font-bold mb-8';
-  title.textContent = 'Game Results';
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-3xl font-bold mb-8',
+    textContent: 'Game Results'
+  });
   container.appendChild(title);
 
   // Winner section
-  const winnerSection = document.createElement('div');
-  winnerSection.className = 'mb-10';
+  const winnerSection = UIBuilder.createElement('div', { className: 'mb-10' });
 
-  const trophyContainer = document.createElement('div');
-  trophyContainer.className = 'inline-block p-6 rounded-full ' + winner.color + ' text-white mb-4';
+  const trophyContainer = UIBuilder.createElement('div', {
+    className: 'inline-block p-6 rounded-full ' + winner.color + ' text-white mb-4'
+  });
 
-  const trophy = document.createElement('span');
-  trophy.className = 'text-3xl';
-  trophy.textContent = '🏆';
+  const trophy = UIBuilder.createElement('span', {
+    className: 'text-3xl',
+    textContent: '🏆'
+  });
   trophyContainer.appendChild(trophy);
 
   winnerSection.appendChild(trophyContainer);
 
-  const winnerName = document.createElement('h3');
-  winnerName.className = 'text-2xl font-bold';
-  winnerName.textContent = winner.name + ' Wins!';
+  const winnerName = UIBuilder.createElement('h3', {
+    className: 'text-2xl font-bold',
+    textContent: winner.name + ' Wins!'
+  });
   winnerSection.appendChild(winnerName);
 
-  const winnerScore = document.createElement('p');
-  winnerScore.className = 'text-xl';
-  winnerScore.textContent = (winner.score || 0) + ' points';
+  const winnerScore = UIBuilder.createElement('p', {
+    className: 'text-xl',
+    textContent: (winner.score || 0) + ' points'
+  });
   winnerSection.appendChild(winnerScore);
 
   container.appendChild(winnerSection);
 
   // Final scores section
-  const scoresSection = document.createElement('div');
-  scoresSection.className = 'max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-8';
+  const scoresSection = UIBuilder.createElement('div', {
+    className: 'max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-8'
+  });
 
-  const scoresTitle = document.createElement('h3');
-  scoresTitle.className = 'text-xl font-semibold mb-4';
-  scoresTitle.textContent = 'Final Scores';
+  const scoresTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-4',
+    textContent: 'Final Scores'
+  });
   scoresSection.appendChild(scoresTitle);
 
   if (appState.gameData.teams && appState.gameData.teams.length > 0) {
@@ -1581,57 +1499,61 @@ function renderResultsPage() {
     });
 
     sortedTeams.forEach(function(team, index) {
-      const teamRow = document.createElement('div');
-      teamRow.className = 'flex justify-between py-2 border-b last:border-b-0';
+      const teamRow = UIBuilder.createElement('div', {
+        className: 'flex justify-between py-2 border-b last:border-b-0'
+      });
 
-      const teamNameContainer = document.createElement('div');
-      teamNameContainer.className = 'flex items-center';
+      const teamNameContainer = UIBuilder.createElement('div', {
+        className: 'flex items-center'
+      });
 
-      const rank = document.createElement('span');
-      rank.className = 'font-bold mr-2';
-      rank.textContent = '#' + (index + 1);
+      const rank = UIBuilder.createElement('span', {
+        className: 'font-bold mr-2',
+        textContent: '#' + (index + 1)
+      });
       teamNameContainer.appendChild(rank);
 
-      const teamColor = document.createElement('div');
-      teamColor.className = 'w-3 h-3 rounded-full ' + team.color + ' mr-2';
+      const teamColor = UIBuilder.createElement('div', {
+        className: 'w-3 h-3 rounded-full ' + team.color + ' mr-2'
+      });
       teamNameContainer.appendChild(teamColor);
 
-      const teamName = document.createElement('span');
-      teamName.textContent = team.name;
+      const teamName = UIBuilder.createElement('span', {
+        textContent: team.name
+      });
       teamNameContainer.appendChild(teamName);
 
       teamRow.appendChild(teamNameContainer);
 
-      const teamScore = document.createElement('span');
-      teamScore.className = 'font-bold';
-      teamScore.textContent = (team.score || 0) + ' pts';
+      const teamScore = UIBuilder.createElement('span', {
+        className: 'font-bold',
+        textContent: (team.score || 0) + ' pts'
+      });
       teamRow.appendChild(teamScore);
 
       scoresSection.appendChild(teamRow);
     });
   } else {
-    const noTeams = document.createElement('p');
-    noTeams.className = 'text-center text-gray-600';
-    noTeams.textContent = 'No teams available';
+    const noTeams = UIBuilder.createElement('p', {
+      className: 'text-center text-gray-600',
+      textContent: 'No teams available'
+    });
     scoresSection.appendChild(noTeams);
   }
 
   container.appendChild(scoresSection);
 
   // Action buttons
-  const actionsContainer = document.createElement('div');
-  actionsContainer.className = 'flex flex-col space-y-4 max-w-xs mx-auto';
+  const actionsContainer = UIBuilder.createElement('div', {
+    className: 'flex flex-col space-y-4 max-w-xs mx-auto'
+  });
 
-  const homeButton = document.createElement('button');
-  homeButton.className = 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700';
-  homeButton.textContent = 'Back to Home';
-  homeButton.addEventListener('click', function() { navigateTo('landing'); });
+  const homeButton = UIBuilder.createButton('Back to Home', function() { 
+    navigateTo('landing'); 
+  }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700');
   actionsContainer.appendChild(homeButton);
 
-  const newGameButton = document.createElement('button');
-  newGameButton.className = 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700';
-  newGameButton.textContent = 'New Game';
-  newGameButton.addEventListener('click', clearGameData);
+  const newGameButton = UIBuilder.createButton('New Game', clearGameData, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700');
   actionsContainer.appendChild(newGameButton);
 
   container.appendChild(actionsContainer);
@@ -1643,9 +1565,10 @@ function updateLocationButtonContent(button, iconName, text, extraClasses = '') 
   // Clear existing content
   button.innerHTML = '';
   
-  const icon = document.createElement('i');
-  icon.setAttribute('data-lucide', iconName);
-  icon.className = `inline mr-1 ${extraClasses}`;
+  const icon = UIBuilder.createElement('i', {
+    'data-lucide': iconName,
+    className: `inline mr-1 ${extraClasses}`
+  });
   button.appendChild(icon);
   
   const textNode = document.createTextNode(` ${text}`);
@@ -1656,9 +1579,10 @@ function updateHighAccuracyButtonContent(button, isOn) {
   // Clear existing content
   button.innerHTML = '';
   
-  const icon = document.createElement('i');
-  icon.setAttribute('data-lucide', 'crosshair');
-  icon.className = 'inline mr-1';
+  const icon = UIBuilder.createElement('i', {
+    'data-lucide': 'crosshair',
+    className: 'inline mr-1'
+  });
   button.appendChild(icon);
   
   const text = document.createTextNode(` High Accuracy: ${isOn ? 'ON' : 'OFF'}`);
