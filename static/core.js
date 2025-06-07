@@ -1311,7 +1311,9 @@ async function deleteHost(hostId) {
         appState.siteAdmin.token = null;
         throw new Error('Admin session expired. Please login again.');
       }
-      throw new Error('Unable to delete host. Please try again.');
+      
+      // Use handleApiResponse to get the actual error message from backend
+      await handleApiResponse(response, 'Unable to delete host');
     }
     
     // Show success message - UI will handle this
@@ -1323,7 +1325,15 @@ async function deleteHost(hostId) {
     return true;
   } catch (err) {
     console.error('Error deleting host:', err);
-    const userMessage = err.message || 'Unable to delete host. Please try again.';
+    
+    // Provide more helpful error message for the common case
+    let userMessage = err.message;
+    if (userMessage && userMessage.includes('Cannot delete host with active games')) {
+      userMessage = 'Cannot delete host with active games. Please delete all games for this host first, then try again.';
+    } else if (!userMessage || userMessage === 'Unable to delete host') {
+      userMessage = 'Unable to delete host. Please try again.';
+    }
+    
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }
