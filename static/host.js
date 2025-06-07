@@ -45,13 +45,13 @@ function renderHostPanel() {
     const teamsNoteGroup = UIBuilder.createElement('div', {
       className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
     });
-    
+
     const teamsNoteText = UIBuilder.createElement('p');
     const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
     teamsNoteText.appendChild(noteStrong);
     teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
     teamsNoteGroup.appendChild(teamsNoteText);
-    
+
     createSection.appendChild(teamsNoteGroup);
 
     // Create Game Button
@@ -97,8 +97,8 @@ function renderHostPanel() {
     // Back to Home link
     const backContainer = UIBuilder.createElement('div', { className: 'text-center mt-6' });
 
-    const backButton = UIBuilder.createButton('Back to Home', function() { 
-      navigateTo('landing'); 
+    const backButton = UIBuilder.createButton('Back to Home', function() {
+      navigateTo('landing');
     }, 'text-gray-600 hover:text-gray-800 transition-colors py-2');
     backContainer.appendChild(backButton);
 
@@ -186,14 +186,14 @@ function renderHostPanel() {
     navigateTo('scanQR');
   }, 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-purple-700 transition-colors text-lg font-medium', 'qr-code');
   qrSection.appendChild(scanQRButton);
-  
+
   // Add instruction text to emphasise the QR-first approach
   const instructionText = UIBuilder.createElement('p', {
     className: 'text-amber-600 text-sm mt-2 text-center',
     textContent: 'Note: Teams and bases can only be created by scanning QR codes first.'
   });
   qrSection.appendChild(instructionText);
-  
+
   grid.appendChild(qrSection);
 
   // Team Management Section - Mobile Optimized
@@ -289,25 +289,25 @@ function renderHostPanel() {
     const emptyState = UIBuilder.createElement('div', {
       className: 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300'
     });
-    
+
     const emptyIcon = UIBuilder.createElement('i', {
       'data-lucide': 'users',
       className: 'w-12 h-12 text-gray-400 mx-auto mb-3'
     });
     emptyState.appendChild(emptyIcon);
-    
+
     const emptyTitle = UIBuilder.createElement('h4', {
       className: 'text-lg font-medium text-gray-900 mb-2',
       textContent: 'No Teams Yet'
     });
     emptyState.appendChild(emptyTitle);
-    
+
     const emptyText = UIBuilder.createElement('p', {
       className: 'text-gray-600 mb-4',
       textContent: 'Scan QR codes to add teams to your game.'
     });
     emptyState.appendChild(emptyText);
-    
+
     const addTeamButton = UIBuilder.createButton('Scan QR Code', function() {
       navigateTo('scanQR');
     }, 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center', 'qr-code');
@@ -360,7 +360,7 @@ function renderHostPanel() {
       const ownerContainer = UIBuilder.createElement('div', {
         className: 'flex items-center text-sm'
       });
-      
+
       if (base.ownedBy) {
         const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
         if (owningTeam) {
@@ -368,7 +368,7 @@ function renderHostPanel() {
             className: 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2'
           });
           ownerContainer.appendChild(ownerDot);
-          
+
           const ownerName = UIBuilder.createElement('span', {
             className: 'font-medium text-gray-700',
             textContent: owningTeam.name
@@ -388,7 +388,7 @@ function renderHostPanel() {
         });
         ownerContainer.appendChild(uncaptured);
       }
-      
+
       baseHeader.appendChild(ownerContainer);
       baseCard.appendChild(baseHeader);
 
@@ -411,25 +411,25 @@ function renderHostPanel() {
     const emptyState = UIBuilder.createElement('div', {
       className: 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300'
     });
-    
+
     const emptyIcon = UIBuilder.createElement('i', {
       'data-lucide': 'map-pin',
       className: 'w-12 h-12 text-gray-400 mx-auto mb-3'
     });
     emptyState.appendChild(emptyIcon);
-    
+
     const emptyTitle = UIBuilder.createElement('h4', {
       className: 'text-lg font-medium text-gray-900 mb-2',
       textContent: 'No Bases Yet'
     });
     emptyState.appendChild(emptyTitle);
-    
+
     const emptyText = UIBuilder.createElement('p', {
       className: 'text-gray-600 mb-4',
       textContent: 'Scan QR codes to add bases to your game.'
     });
     emptyState.appendChild(emptyText);
-    
+
     const addBaseButton = UIBuilder.createButton('Scan QR Code', function() {
       navigateTo('scanQR');
     }, 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center', 'qr-code');
@@ -468,7 +468,7 @@ function renderHostPanel() {
   } else if (appState.gameData.status === 'setup') {
     // Game is in setup - show only Start Game button
     const hasEnoughTeams = appState.gameData.teams && appState.gameData.teams.length >= 2;
-    
+
     const startButton = UIBuilder.createButton(
       hasEnoughTeams ? 'Start Game' : 'Need 2+ Teams to Start',
       function() {
@@ -480,40 +480,40 @@ function renderHostPanel() {
           showNotification('Cannot start game. Please add at least 2 teams by scanning QR codes.', 'error');
         }
       },
-      hasEnoughTeams 
+      hasEnoughTeams
         ? 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors text-lg font-medium flex items-center justify-center'
         : 'w-full bg-gray-400 text-white py-3 px-4 rounded-lg cursor-not-allowed text-lg font-medium flex items-center justify-center',
       'play-circle'
     );
-    
+
     if (!hasEnoughTeams) {
       startButton.disabled = true;
       startButton.title = 'At least 2 teams required to start game';
     }
-    
+
     controlButtons.appendChild(startButton);
   } else if (appState.gameData.status === 'ended') {
     // Game is ended - show message
     const gameEndedMsg = UIBuilder.createElement('div', {
       className: 'bg-gray-100 rounded-lg p-4 text-gray-600 mb-4 text-center'
     });
-    
+
     const endedIcon = UIBuilder.createElement('i', {
       'data-lucide': 'check-circle',
       className: 'w-6 h-6 mx-auto mb-2 text-gray-500'
     });
     gameEndedMsg.appendChild(endedIcon);
-    
+
     const endedText = UIBuilder.createElement('p', {
       textContent: 'This game has ended. QR codes have been released and can be reused in other games.'
     });
     gameEndedMsg.appendChild(endedText);
-    
+
     controlSection.appendChild(gameEndedMsg);
   }
 
-  const exitButton = UIBuilder.createButton('Exit Host Panel', function() { 
-    navigateTo('landing'); 
+  const exitButton = UIBuilder.createButton('Exit Host Panel', function() {
+    navigateTo('landing');
   }, 'w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors text-lg font-medium flex items-center justify-center', 'log-out');
   controlButtons.appendChild(exitButton);
 
@@ -544,18 +544,18 @@ async function loadHostGames() {
     const loadingDiv = UIBuilder.createElement('div', {
       className: 'flex items-center justify-center py-6'
     });
-    
+
     const loadingSpinner = UIBuilder.createElement('div', {
       className: 'animate-spin h-6 w-6 border-2 border-gray-300 rounded-full border-t-purple-600 mr-3'
     });
     loadingDiv.appendChild(loadingSpinner);
-    
+
     const loadingText = UIBuilder.createElement('span', {
       className: 'text-gray-600',
       textContent: 'Loading your games...'
     });
     loadingDiv.appendChild(loadingText);
-    
+
     gamesListContainer.appendChild(loadingDiv);
 
     // Fetch games for this host
@@ -569,18 +569,18 @@ async function loadHostGames() {
       const emptyDiv = UIBuilder.createElement('div', {
         className: 'text-center py-6 text-gray-500'
       });
-      
+
       const emptyIcon = UIBuilder.createElement('i', {
         'data-lucide': 'gamepad-2',
         className: 'w-8 h-8 mx-auto mb-2 text-gray-400'
       });
       emptyDiv.appendChild(emptyIcon);
-      
+
       const emptyText = UIBuilder.createElement('p', {
         textContent: 'You haven\'t created any games yet. Create your first game above!'
       });
       emptyDiv.appendChild(emptyText);
-      
+
       gamesListContainer.appendChild(emptyDiv);
     } else {
       // Show games list
@@ -595,13 +595,13 @@ async function loadHostGames() {
         });
 
         const gameInfo = UIBuilder.createElement('div');
-        
+
         const gameName = UIBuilder.createElement('h4', {
           className: 'text-lg font-semibold text-gray-900',
           textContent: game.name
         });
         gameInfo.appendChild(gameName);
-        
+
         const gameId = UIBuilder.createElement('p', {
           className: 'text-sm text-gray-600',
           textContent: `ID: ${game.id}`
@@ -613,7 +613,7 @@ async function loadHostGames() {
         // Status badge
         let statusClass = 'px-2 py-1 text-xs font-medium rounded-full';
         let statusText = game.status;
-        
+
         switch (game.status) {
           case 'active':
             statusClass += ' bg-green-100 text-green-800';
@@ -630,7 +630,7 @@ async function loadHostGames() {
           default:
             statusClass += ' bg-blue-100 text-blue-800';
         }
-        
+
         const statusBadge = UIBuilder.createElement('span', {
           className: statusClass,
           textContent: statusText
@@ -643,13 +643,13 @@ async function loadHostGames() {
         const gameStats = UIBuilder.createElement('div', {
           className: 'flex items-center text-sm text-gray-600 mb-3'
         });
-        
+
         const teamCount = UIBuilder.createElement('span', {
           className: 'mr-4',
           textContent: `${game.team_count || 0} teams`
         });
         gameStats.appendChild(teamCount);
-        
+
         // Add creation date if available
         if (game.start_time) {
           const startDate = new Date(game.start_time * 1000);
@@ -668,7 +668,7 @@ async function loadHostGames() {
 
         // Action button
         const actionButton = UIBuilder.createElement('div');
-        
+
         if (game.status === 'setup' || game.status === 'active') {
           const manageButton = UIBuilder.createButton('Continue Managing', function() {
             // Load this game and navigate to host panel
@@ -705,21 +705,21 @@ async function loadHostGames() {
     const errorDiv = UIBuilder.createElement('div', {
       className: 'text-center py-6'
     });
-    
+
     const errorIcon = UIBuilder.createElement('i', {
       'data-lucide': 'alert-circle',
       className: 'w-8 h-8 mx-auto mb-2 text-red-400'
     });
     errorDiv.appendChild(errorIcon);
-    
+
     const errorText = UIBuilder.createElement('p', {
       className: 'text-red-600',
       textContent: 'Failed to load your games. Please try refreshing the page.'
     });
     errorDiv.appendChild(errorText);
-    
+
     gamesListContainer.appendChild(errorDiv);
-    
+
     // Initialize Lucide icons for error state
     if (window.lucide) {
       window.lucide.createIcons();
@@ -914,7 +914,7 @@ function renderTeamCreationForm(qrId, container) {
 
   // Set default color selection
   colorSelect.value = defaultColor;
-  
+
   // Set default team name based on initial color
   const initialColorLabel = colors.find(c => c.value === defaultColor)?.label || 'Team';
   nameInput.value = initialColorLabel + ' Team';
@@ -938,13 +938,13 @@ function renderTeamCreationForm(qrId, container) {
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const teamName = nameInput.value.trim();
     if (!teamName) {
       showNotification('Please enter a team name', 'warning');
       return;
     }
-    
+
     // Call the API function from core.js
     createTeam(qrId, teamName, colorSelect.value);
   });
@@ -966,34 +966,34 @@ function renderTeamEditModal(team) {
     className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
   });
   document.body.appendChild(modalBackdrop);
-  
+
   // Create modal container
   const modalContainer = UIBuilder.createElement('div', {
     className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md'
   });
   modalBackdrop.appendChild(modalContainer);
-  
+
   // Modal title
   const modalTitle = UIBuilder.createElement('h3', {
     className: 'text-xl font-bold mb-4',
     textContent: 'Edit Team'
   });
   modalContainer.appendChild(modalTitle);
-  
+
   // Create form
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
   modalContainer.appendChild(form);
-  
+
   // Team name field
   const nameGroup = UIBuilder.createElement('div');
-  
+
   const nameLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'edit-team-name',
     textContent: 'Team Name'
   });
   nameGroup.appendChild(nameLabel);
-  
+
   const nameInput = UIBuilder.createElement('input', {
     className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
     id: 'edit-team-name',
@@ -1002,24 +1002,24 @@ function renderTeamEditModal(team) {
     required: true
   });
   nameGroup.appendChild(nameInput);
-  
+
   form.appendChild(nameGroup);
-  
+
   // Team color field
   const colorGroup = UIBuilder.createElement('div');
-  
+
   const colorLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'edit-team-color',
     textContent: 'Team Color'
   });
   colorGroup.appendChild(colorLabel);
-  
+
   const colorSelect = UIBuilder.createElement('select', {
     className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
     id: 'edit-team-color'
   });
-  
+
   const colors = [
     { value: 'bg-red-500', label: 'Red' },
     { value: 'bg-blue-500', label: 'Blue' },
@@ -1030,7 +1030,7 @@ function renderTeamEditModal(team) {
     { value: 'bg-indigo-500', label: 'Indigo' },
     { value: 'bg-teal-500', label: 'Teal' }
   ];
-  
+
   colors.forEach(color => {
     const option = UIBuilder.createElement('option', {
       value: color.value,
@@ -1039,24 +1039,24 @@ function renderTeamEditModal(team) {
     });
     colorSelect.appendChild(option);
   });
-  
+
   colorGroup.appendChild(colorSelect);
   form.appendChild(colorGroup);
-  
+
   // Action buttons
   const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 mt-6' });
-  
+
   const cancelButton = UIBuilder.createButton('Cancel', function() {
     document.body.removeChild(modalBackdrop);
   }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600');
   buttonGroup.appendChild(cancelButton);
-  
+
   const saveButton = UIBuilder.createButton('Save Changes', null, 'flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600');
   saveButton.type = 'submit';
   buttonGroup.appendChild(saveButton);
-  
+
   form.appendChild(buttonGroup);
-  
+
   // Handle form submission
   form.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1087,7 +1087,7 @@ function renderBaseCreationForm(qrId, container) {
 
   // Determine default base name (Base XX)
   let nextBaseNumber = 1;
-  
+
   // Check existing bases to find the next available number
   if (appState.gameData.bases && appState.gameData.bases.length > 0) {
     // Find base names that match the pattern "Base XX"
@@ -1097,13 +1097,13 @@ function renderBaseCreationForm(qrId, container) {
         return match ? parseInt(match[1], 10) : 0;
       })
       .filter(num => num > 0);
-    
+
     if (baseNumbers.length > 0) {
       // Find the maximum base number and add 1
       nextBaseNumber = Math.max(...baseNumbers) + 1;
     }
   }
-  
+
   // Format the base number with leading zero if needed
   const defaultBaseName = `Base ${nextBaseNumber.toString().padStart(2, '0')}`;
 
@@ -1141,48 +1141,12 @@ function renderBaseCreationForm(qrId, container) {
   });
   locationGroup.appendChild(locationLabel);
 
-  // Location source toggle
-  const locationSourceGroup = UIBuilder.createElement('div', {
-    className: 'mb-4 flex items-center space-x-4',
-    id: 'location-source-group',
-    style: { display: 'none' }
-  });
-
-  const gpsRadio = UIBuilder.createElement('label', {
-    className: 'flex items-center cursor-pointer'
-  });
-  const gpsInput = UIBuilder.createElement('input', {
-    type: 'radio',
-    name: 'location-source',
-    value: 'gps',
-    className: 'mr-2',
-    checked: true
-  });
-  gpsRadio.appendChild(gpsInput);
-  gpsRadio.appendChild(document.createTextNode('Use GPS Location'));
-
-  const manualRadio = UIBuilder.createElement('label', {
-    className: 'flex items-center cursor-pointer'
-  });
-  const manualInput = UIBuilder.createElement('input', {
-    type: 'radio',
-    name: 'location-source',
-    value: 'manual',
-    className: 'mr-2'
-  });
-  manualRadio.appendChild(manualInput);
-  manualRadio.appendChild(document.createTextNode('Use Adjusted Location'));
-
-  locationSourceGroup.appendChild(gpsRadio);
-  locationSourceGroup.appendChild(manualRadio);
-  locationGroup.appendChild(locationSourceGroup);
-
   // Map container for location preview
   const mapPreviewContainer = UIBuilder.createElement('div', {
     id: 'base-location-map',
     className: 'h-64 bg-gray-200 rounded mb-4 relative'
   });
-  
+
   // Map instructions overlay
   const mapInstructions = UIBuilder.createElement('div', {
     id: 'map-instructions',
@@ -1191,7 +1155,7 @@ function renderBaseCreationForm(qrId, container) {
   });
   mapInstructions.innerHTML = '<strong>Drag the marker</strong> to adjust the base location, or <strong>click on the map</strong> to place it.';
   mapPreviewContainer.appendChild(mapInstructions);
-  
+
   locationGroup.appendChild(mapPreviewContainer);
 
   // Get location button group
@@ -1199,17 +1163,17 @@ function renderBaseCreationForm(qrId, container) {
 
   // Get location button
   const getLocationBtn = UIBuilder.createButton('Get GPS Location', null, 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded', 'navigation');
-  
+
   // Reset to GPS button (initially hidden)
   const resetToGpsBtn = UIBuilder.createButton('Reset to GPS', null, 'bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded', 'rotate-ccw');
   resetToGpsBtn.id = 'reset-to-gps';
   resetToGpsBtn.style.display = 'none';
-  
+
   // High accuracy toggle button
   const highAccuracyBtn = UIBuilder.createButton('', null, 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded', 'crosshair');
   highAccuracyBtn.id = 'high-accuracy-toggle';
   highAccuracyBtn.title = 'High Accuracy Mode: ON';
-  
+
   // Add to button group
   locationButtonGroup.appendChild(getLocationBtn);
   locationButtonGroup.appendChild(resetToGpsBtn);
@@ -1228,7 +1192,7 @@ function renderBaseCreationForm(qrId, container) {
     id: 'longitude',
     name: 'longitude'
   });
-  
+
   const accuracyInput = UIBuilder.createElement('input', {
     type: 'hidden',
     id: 'accuracy',
@@ -1262,21 +1226,21 @@ function renderBaseCreationForm(qrId, container) {
   // Location source state
   let currentLocationSource = 'gps'; // 'gps' or 'manual'
   let highAccuracyMode = true;
-  
+
   // Initialize high accuracy button state
   updateHighAccuracyButtonContent(highAccuracyBtn, true);
-  
+
   // Map instance and markers
   let baseLocationMap = null;
   let gpsMarker = null;
   let manualMarker = null;
   let accuracyCircle = null;
-  
+
   // Toggle high accuracy mode
   highAccuracyBtn.addEventListener('click', function(e) {
     e.preventDefault();
     highAccuracyMode = !highAccuracyMode;
-    
+
     if (highAccuracyMode) {
       highAccuracyBtn.classList.remove('bg-amber-500', 'hover:bg-amber-700');
       highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
@@ -1286,69 +1250,53 @@ function renderBaseCreationForm(qrId, container) {
       highAccuracyBtn.classList.add('bg-amber-500', 'hover:bg-amber-700');
       highAccuracyBtn.title = 'High Accuracy Mode: OFF';
     }
-    
+
     updateHighAccuracyButtonContent(highAccuracyBtn, highAccuracyMode);
-    
+
     // If we're currently watching location, restart with new settings
     const watchId = document.getElementById('location-watch-id').value;
     if (watchId) {
       navigator.geolocation.clearWatch(parseInt(watchId));
       startLocationTracking();
     }
-    
+
     // Initialize Lucide icons
     if (window.lucide) window.lucide.createIcons();
-  });
-
-  // Location source change handlers
-  gpsInput.addEventListener('change', function() {
-    if (this.checked) {
-      currentLocationSource = 'gps';
-      updateLocationDisplay();
-    }
-  });
-
-  manualInput.addEventListener('change', function() {
-    if (this.checked) {
-      currentLocationSource = 'manual';
-      updateLocationDisplay();
-    }
   });
 
   // Reset to GPS button handler
   resetToGpsBtn.addEventListener('click', function(e) {
     e.preventDefault();
-    
+
     const gpsLat = parseFloat(document.getElementById('gps-latitude').value);
     const gpsLng = parseFloat(document.getElementById('gps-longitude').value);
-    
+
     if (!isNaN(gpsLat) && !isNaN(gpsLng)) {
       // Reset manual marker to GPS position
       if (manualMarker) {
         manualMarker.setLatLng([gpsLat, gpsLng]);
       }
-      
+
       // Update coordinates
       document.getElementById('latitude').value = gpsLat;
       document.getElementById('longitude').value = gpsLng;
-      
+
       // Switch to GPS source
-      gpsInput.checked = true;
       currentLocationSource = 'gps';
       updateLocationDisplay();
     }
   });
-  
-  // Function to initialize the map 
+
+  // Function to initialize the map
   function initBaseLocationMap(lat, lng) {
     // Show the map container
     const mapContainer = document.getElementById('base-location-map');
     mapContainer.classList.remove('hidden');
-    
+
     // Initialize map if it doesn't exist
     if (!baseLocationMap) {
       baseLocationMap = L.map('base-location-map').setView([lat, lng], 18);
-      
+
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
@@ -1358,31 +1306,30 @@ function renderBaseCreationForm(qrId, container) {
       baseLocationMap.on('click', function(e) {
         const clickLat = e.latlng.lat;
         const clickLng = e.latlng.lng;
-        
+
         // Update manual marker position
         if (manualMarker) {
           manualMarker.setLatLng([clickLat, clickLng]);
         } else {
           createManualMarker(clickLat, clickLng);
         }
-        
+
         // Update coordinates and switch to manual mode
         document.getElementById('latitude').value = clickLat;
         document.getElementById('longitude').value = clickLng;
-        manualInput.checked = true;
         currentLocationSource = 'manual';
         updateLocationDisplay();
       });
     }
-    
+
     // Only center/zoom if this is the first time or we don't have manual coordinates
-    const hasManualCoords = !isNaN(parseFloat(document.getElementById('latitude').value)) && 
+    const hasManualCoords = !isNaN(parseFloat(document.getElementById('latitude').value)) &&
                            currentLocationSource === 'manual';
-    
+
     if (!hasManualCoords) {
       baseLocationMap.setView([lat, lng], 18);
     }
-    
+
     // Create or update GPS marker
     if (gpsMarker) {
       gpsMarker.setLatLng([lat, lng]);
@@ -1395,18 +1342,18 @@ function renderBaseCreationForm(qrId, container) {
           iconAnchor: [8, 8]
         })
       }).addTo(baseLocationMap);
-      
+
       gpsMarker.bindTooltip('GPS Location', { permanent: false });
     }
-    
+
     // Create manual marker if it doesn't exist (initially at GPS location)
     if (!manualMarker) {
       createManualMarker(lat, lng);
     }
-    
+
     updateLocationDisplay();
   }
-  
+
   function createManualMarker(lat, lng) {
     manualMarker = L.marker([lat, lng], {
       draggable: true,
@@ -1417,44 +1364,41 @@ function renderBaseCreationForm(qrId, container) {
         iconAnchor: [11, 11]
       })
     }).addTo(baseLocationMap);
-    
+
     manualMarker.bindTooltip('Drag to adjust location', { permanent: false });
-    
+
     // Handle marker drag
     manualMarker.on('dragend', function(e) {
       const newPos = e.target.getLatLng();
-      
+
       // Update coordinates
       document.getElementById('latitude').value = newPos.lat;
       document.getElementById('longitude').value = newPos.lng;
-      
+
       // Switch to manual mode
-      manualInput.checked = true;
       currentLocationSource = 'manual';
       updateLocationDisplay();
     });
   }
-  
+
   function updateLocationDisplay() {
-    const locationSourceGroup = document.getElementById('location-source-group');
     const mapInstructions = document.getElementById('map-instructions');
     const resetBtn = document.getElementById('reset-to-gps');
-    
+
     const currentLat = parseFloat(document.getElementById('latitude').value);
     const currentLng = parseFloat(document.getElementById('longitude').value);
     const accuracy = parseFloat(document.getElementById('accuracy').value);
-    
+
     if (isNaN(currentLat) || isNaN(currentLng)) {
       return;
     }
-    
+
     // Show/hide elements based on state
     const hasGpsData = !isNaN(parseFloat(document.getElementById('gps-latitude').value));
-    
+
     if (hasGpsData) {
-      locationSourceGroup.style.display = 'flex';
       resetBtn.style.display = currentLocationSource === 'manual' ? 'block' : 'none';
-      
+
       // Show instructions based on accuracy and current source
       if (currentLocationSource === 'gps' && accuracy > 15) {
         mapInstructions.style.display = 'block';
@@ -1464,7 +1408,7 @@ function renderBaseCreationForm(qrId, container) {
         mapInstructions.style.display = 'none';
       }
     }
-    
+
     // Update marker visibility and styling
     if (gpsMarker && manualMarker) {
       if (currentLocationSource === 'gps') {
@@ -1476,54 +1420,54 @@ function renderBaseCreationForm(qrId, container) {
       }
     }
   }
-  
+
   // Function to start continuous location tracking
   function startLocationTracking() {
     if (!navigator.geolocation) {
       showNotification('Geolocation is not supported by this browser.', 'error');
       return;
     }
-    
+
     // Update button state
     getLocationBtn.disabled = true;
     updateLocationButtonContent(getLocationBtn, 'loader-2', 'Getting location...', 'animate-spin');
-    
+
     // Set up high accuracy options
     const options = {
       enableHighAccuracy: highAccuracyMode,
       timeout: 10000,
       maximumAge: 0
     };
-    
+
     // Function to handle position updates
     function handlePositionUpdate(position) {
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
       const accuracy = position.coords.accuracy;
-      
+
       // Store GPS coordinates
       document.getElementById('gps-latitude').value = latitude;
       document.getElementById('gps-longitude').value = longitude;
       document.getElementById('accuracy').value = accuracy;
-      
+
       // Only update current coordinates if we don't have a manual position yet
-      const hasManualPosition = currentLocationSource === 'manual' && 
+      const hasManualPosition = currentLocationSource === 'manual' &&
                                !isNaN(parseFloat(document.getElementById('latitude').value));
-      
+
       if (!hasManualPosition) {
         // Set current coordinates to GPS initially
         document.getElementById('latitude').value = latitude;
         document.getElementById('longitude').value = longitude;
       }
-      
+
       // Initialize or update map
       initBaseLocationMap(latitude, longitude);
-      
+
       // Update accuracy circle
       if (accuracyCircle) {
         baseLocationMap.removeLayer(accuracyCircle);
       }
-      
+
       if (accuracy && !isNaN(accuracy)) {
         accuracyCircle = L.circle([latitude, longitude], {
           radius: accuracy,
@@ -1533,27 +1477,27 @@ function renderBaseCreationForm(qrId, container) {
           weight: 1
         }).addTo(baseLocationMap);
       }
-      
+
       // Update button state
       getLocationBtn.disabled = false;
       updateLocationButtonContent(getLocationBtn, 'navigation', 'Update GPS Location');
-      
+
       // Only suggest manual adjustment for new GPS readings without manual position
       if (!hasManualPosition && accuracy > 15) {
         // Poor accuracy - suggest manual adjustment
         currentLocationSource = 'gps'; // Start with GPS but show adjustment options
       }
-      
+
       updateLocationDisplay();
-      
+
       // Update icons
       if (window.lucide) window.lucide.createIcons();
     }
-    
+
     // Function to handle errors
     function handlePositionError(error) {
       let errorMessage = 'Unknown error occurred while getting location.';
-      
+
       switch(error.code) {
         case error.PERMISSION_DENIED:
           errorMessage = 'Location permission was denied.';
@@ -1565,27 +1509,27 @@ function renderBaseCreationForm(qrId, container) {
           errorMessage = 'Location request timed out.';
           break;
       }
-      
+
       // Update button state
       getLocationBtn.disabled = false;
       updateLocationButtonContent(getLocationBtn, 'navigation', 'Try Again');
-      
+
       showNotification(errorMessage, 'error');
     }
-    
+
     // Clear any previous watch
     const oldWatchId = document.getElementById('location-watch-id').value;
     if (oldWatchId) {
       navigator.geolocation.clearWatch(parseInt(oldWatchId));
     }
-    
+
     // Start watching position
     const watchId = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       handlePositionError,
       options
     );
-    
+
     // Store watch ID
     document.getElementById('location-watch-id').value = watchId;
   }
@@ -1611,7 +1555,7 @@ function renderBaseCreationForm(qrId, container) {
       showNotification('Please get the location for this base first.', 'error');
       return;
     }
-    
+
     // Get accuracy for validation (only relevant for GPS coordinates)
     const accuracy = parseFloat(document.getElementById('accuracy').value);
     if (currentLocationSource === 'gps' && accuracy > 20) {
@@ -1640,7 +1584,7 @@ function renderBaseCreationForm(qrId, container) {
     if (watchId) {
       navigator.geolocation.clearWatch(parseInt(watchId));
     }
-    
+
     sessionStorage.removeItem('pendingQRCode');
     navigateTo('hostPanel');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
@@ -1868,8 +1812,8 @@ function renderResultsPage() {
     className: 'flex flex-col space-y-4 max-w-xs mx-auto'
   });
 
-  const homeButton = UIBuilder.createButton('Back to Home', function() { 
-    navigateTo('landing'); 
+  const homeButton = UIBuilder.createButton('Back to Home', function() {
+    navigateTo('landing');
   }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700');
   actionsContainer.appendChild(homeButton);
 
@@ -1884,13 +1828,13 @@ function renderResultsPage() {
 function updateLocationButtonContent(button, iconName, text, extraClasses = '') {
   // Clear existing content
   button.innerHTML = '';
-  
+
   const icon = UIBuilder.createElement('i', {
     'data-lucide': iconName,
     className: `inline mr-1 ${extraClasses}`
   });
   button.appendChild(icon);
-  
+
   const textNode = document.createTextNode(` ${text}`);
   button.appendChild(textNode);
 }
@@ -1898,13 +1842,13 @@ function updateLocationButtonContent(button, iconName, text, extraClasses = '') 
 function updateHighAccuracyButtonContent(button, isOn) {
   // Clear existing content
   button.innerHTML = '';
-  
+
   const icon = UIBuilder.createElement('i', {
     'data-lucide': 'crosshair',
     className: 'inline mr-1'
   });
   button.appendChild(icon);
-  
+
   const text = document.createTextNode(` High Accuracy: ${isOn ? 'ON' : 'OFF'}`);
   button.appendChild(text);
 }
