@@ -515,6 +515,7 @@ async function fetchGameData(gameId) {
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
+    appState.gameData.settings = data.settings || {};
 
     // IMPORTANT: Keep existing host auth if user is authenticated as host
     // The hostId is maintained from localStorage, not from game data
