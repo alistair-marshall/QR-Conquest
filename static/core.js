@@ -1114,8 +1114,8 @@ async function authenticateSiteAdmin(password) {
       window.showNotification('Site admin authenticated successfully', 'success');
     }
     
-    // Clear any existing host data to force fresh load
-    clearSiteAdminHosts();
+    // Clear any existing admin data to force fresh load
+    clearSiteAdminData();
 
     return true;
   } catch (err) {
@@ -1343,11 +1343,16 @@ async function loadSiteAdminHosts() {
   }
 }
 
-function clearSiteAdminHosts() {
+// Clear host and game data
+function clearSiteAdminData() {
   appState.siteAdmin.hosts = [];
   appState.siteAdmin.hostsLoading = false;
   appState.siteAdmin.hostsLoaded = false;
   appState.siteAdmin.hostsError = null;
+  appState.siteAdmin.games = [];
+  appState.siteAdmin.gamesLoading = false;
+  appState.siteAdmin.gamesLoaded = false;
+  appState.siteAdmin.gamesError = null;
 }
 
 function refreshSiteAdminHosts() {
@@ -1452,6 +1457,12 @@ async function loadSiteAdminGames() {
       window.renderApp();
     }
   }
+}
+
+function refreshSiteAdminGames() {
+  // Force refresh by clearing loaded state
+  appState.siteAdmin.gamesLoaded = false;
+  loadSiteAdminGames();
 }
 
 // Complete a game by impersonating the host

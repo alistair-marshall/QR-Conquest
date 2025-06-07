@@ -124,7 +124,7 @@ function renderSiteAdminLogin() {
   return container;
 }
 
-// Render site admin panel with async host loading
+// Render site admin panel
 function renderSiteAdminPanel() {
     if (!appState.siteAdmin.isAuthenticated) {
         return renderSiteAdminLogin();
@@ -185,10 +185,28 @@ function renderSiteAdminPanel() {
     gamesTab.textContent = 'Game Management';
     gamesTab.id = 'games-tab';
     
-    // Tab state management
+    tabsList.appendChild(hostsTab);
+    tabsList.appendChild(gamesTab);
+    tabsContainer.appendChild(tabsList);
+    tabsSection.appendChild(tabsContainer);
+    container.appendChild(tabsSection);
+
+    // IMPORTANT: Create content area BEFORE setting up tab functionality
+    const contentArea = document.createElement('div');
+    contentArea.id = 'admin-content-area';
+    container.appendChild(contentArea);
+    
+    // Tab state management - moved after content area creation
     const currentTab = sessionStorage.getItem('siteAdminActiveTab') || 'hosts';
     
     function setActiveTab(tabName) {
+        // Add safety check for content area
+        const contentArea = document.getElementById('admin-content-area');
+        if (!contentArea) {
+            console.error('Content area not found when setting active tab');
+            return;
+        }
+        
         sessionStorage.setItem('siteAdminActiveTab', tabName);
         
         if (tabName === 'hosts') {
@@ -202,25 +220,13 @@ function renderSiteAdminPanel() {
         }
     }
     
-    hostsTab.addEventListener('click', () => setActiveTab('hosts'));
-    gamesTab.addEventListener('click', () => setActiveTab('games'));
-    
-    tabsList.appendChild(hostsTab);
-    tabsList.appendChild(gamesTab);
-    tabsContainer.appendChild(tabsList);
-    tabsSection.appendChild(tabsContainer);
-    container.appendChild(tabsSection);
-
-    // Content area for tabs
-    const contentArea = document.createElement('div');
-    contentArea.id = 'admin-content-area';
-    container.appendChild(contentArea);
-    
-    // Set initial active tab
-    setActiveTab(currentTab);
-    
     function showHostsSection() {
         const contentArea = document.getElementById('admin-content-area');
+        if (!contentArea) {
+            console.error('Content area not found in showHostsSection');
+            return;
+        }
+        
         contentArea.innerHTML = '';
         
         const hostListContainer = buildHostListSection();
@@ -229,6 +235,11 @@ function renderSiteAdminPanel() {
     
     function showGamesSection() {
         const contentArea = document.getElementById('admin-content-area');
+        if (!contentArea) {
+            console.error('Content area not found in showGamesSection');
+            return;
+        }
+        
         contentArea.innerHTML = '';
         
         const gameListContainer = buildGameListSection();
@@ -239,6 +250,15 @@ function renderSiteAdminPanel() {
             loadSiteAdminGames();
         }
     }
+    
+    // Set up event listeners after functions are defined
+    hostsTab.addEventListener('click', () => setActiveTab('hosts'));
+    gamesTab.addEventListener('click', () => setActiveTab('games'));
+    
+    // Use setTimeout to ensure DOM is ready before setting initial tab
+    setTimeout(() => {
+        setActiveTab(currentTab);
+    }, 0);
 
     return container;
 }
@@ -534,18 +554,6 @@ function buildGamesError(container, errorMessage) {
     errorDiv.appendChild(retryButton);
     
     container.appendChild(errorDiv);
-}
-
-// Clear host and game data when leaving admin
-function clearSiteAdminData() {
-  appState.siteAdmin.hosts = [];
-  appState.siteAdmin.hostsLoading = false;
-  appState.siteAdmin.hostsLoaded = false;
-  appState.siteAdmin.hostsError = null;
-  appState.siteAdmin.games = [];
-  appState.siteAdmin.gamesLoading = false;
-  appState.siteAdmin.gamesLoaded = false;
-  appState.siteAdmin.gamesError = null;
 }
 
 function buildStatsSection() {
