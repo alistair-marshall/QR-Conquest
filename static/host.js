@@ -182,10 +182,13 @@ function renderHostPanel() {
   });
   qrSection.appendChild(qrDescription);
 
+  // QR Code actions container
+  const qrActionsContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
+
   const scanQRButton = UIBuilder.createButton('Scan QR Code', function() {
     navigateTo('scanQR');
   }, 'w-full bg-purple-600 text-white py-3 px-4 rounded-lg flex items-center justify-center hover:bg-purple-700 transition-colors text-lg font-medium', 'qr-code');
-  qrSection.appendChild(scanQRButton);
+  qrActionsContainer.appendChild(scanQRButton);
 
   // Print QR Codes button
   const printQRButton = UIBuilder.createButton('Print QR Codes', function() {
