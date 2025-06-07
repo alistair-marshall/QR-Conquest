@@ -1137,7 +1137,6 @@ async function fetchHostGames(hostId) {
   }
 
   try {
-    setLoading(true);
     console.log('Fetching games for host:', hostId);
 
     const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
@@ -1152,8 +1151,6 @@ async function fetchHostGames(hostId) {
       window.showNotification(userMessage, 'error');
     }
     throw err;
-  } finally {
-    setLoading(false);
   }
 }
 
