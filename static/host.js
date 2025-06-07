@@ -468,7 +468,13 @@ function renderHostPanel() {
 
   // Helper function to format time
   function formatDuration(minutes) {
-    if (!minutes) return 'Manual end';
+    // Convert to number and handle edge cases
+    const numMinutes = parseInt(minutes);
+    
+    // Check if we have a valid positive number
+    if (isNaN(numMinutes) || numMinutes <= 0) {
+      return 'Manual end';
+    }
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     if (hours > 0) {
