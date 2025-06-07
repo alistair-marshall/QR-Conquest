@@ -237,7 +237,7 @@ function renderLandingPage() {
     // Join Game button
     const joinButton = UIBuilder.createButton('Scan Team QR Code', function() { 
       navigateTo('scanQR'); 
-    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
+    }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(joinButton);
 
     // Continue Game button (if in a team)
@@ -277,7 +277,7 @@ function renderLandingPage() {
     // Scan QR Code button
     const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
       navigateTo('scanQR'); 
-    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
+    }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
     
     // Logout button
@@ -290,7 +290,7 @@ function renderLandingPage() {
     // Scan QR Code button
     const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
       navigateTo('scanQR'); 
-    }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
+    }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
     
     // Host Login help text
@@ -400,7 +400,7 @@ function renderLoadingScreen() {
   container.className = 'flex flex-col items-center justify-center h-64';
 
   const spinner = document.createElement('div');
-  spinner.className = 'animate-spin h-12 w-12 border-4 border-blue-600 rounded-full border-t-transparent mb-4';
+  spinner.className = 'animate-spin h-12 w-12 border-4 border-purple-600 rounded-full border-t-transparent mb-4';
   container.appendChild(spinner);
 
   const text = document.createElement('p');
@@ -427,7 +427,7 @@ function renderErrorScreen() {
 
   const button = UIBuilder.createButton('Dismiss', function() { 
     clearError(); 
-  }, 'bg-blue-600 text-white py-2 px-4 rounded-lg');
+  }, 'bg-purple-600 text-white py-2 px-4 rounded-lg');
   container.appendChild(button);
 
   return container;
@@ -452,7 +452,7 @@ function renderFirstTimePage() {
 
   // QR code info
   const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6 inline-block';
+  qrInfo.className = 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-6 inline-block';
   qrInfo.textContent = `QR Code: ${appState.pendingQRCode}`;
   container.appendChild(qrInfo);
 
@@ -464,7 +464,7 @@ function renderFirstTimePage() {
   const joinButton = UIBuilder.createButton('Join a Game', function() {
     sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
     navigateTo('joinGame');
-  }, 'bg-blue-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 w-full');
+  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
   optionsContainer.appendChild(joinButton);
 
   // Create new game (admin)
@@ -521,7 +521,7 @@ function renderJoinGamePage() {
   form.appendChild(idGroup);
 
   // Join button
-  const joinButton = UIBuilder.createButton('Join Game', null, 'w-full bg-blue-600 text-white py-2 px-4 rounded-lg');
+  const joinButton = UIBuilder.createButton('Join Game', null, 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg');
   joinButton.type = 'submit';
   form.appendChild(joinButton);
 
@@ -554,7 +554,7 @@ function renderJoinGamePage() {
   // Back button
   const backButton = UIBuilder.createButton('← Back to Home', function() {
     navigateTo('landing');
-  }, 'text-blue-600 hover:underline');
+  }, 'text-purple-600 hover:underline');
   container.appendChild(backButton);
 
   return container;
@@ -581,7 +581,7 @@ function renderQRScanner() {
   const authState = getAuthState();
   if (authState.isHost) {
     const instructionBox = document.createElement('div');
-    instructionBox.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4';
+    instructionBox.className = 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-4';
 
     const instructionTitle = document.createElement('p');
     instructionTitle.className = 'font-bold';
@@ -626,7 +626,7 @@ function renderQRScanner() {
   scannerOverlay.className = 'absolute inset-0 flex items-center justify-center';
 
   const viewfinder = document.createElement('div');
-  viewfinder.className = 'border-2 border-blue-500 rounded-lg w-64 h-64 opacity-60';
+  viewfinder.className = 'border-2 border-purple-500 rounded-lg w-64 h-64 opacity-60';
   scannerOverlay.appendChild(viewfinder);
 
   cameraContainer.appendChild(scannerOverlay);
@@ -637,7 +637,7 @@ function renderQRScanner() {
   loadingIndicator.id = 'camera-loading';
 
   const loadingSpinner = document.createElement('div');
-  loadingSpinner.className = 'animate-spin h-10 w-10 border-4 border-blue-500 rounded-full border-t-transparent mb-2';
+  loadingSpinner.className = 'animate-spin h-10 w-10 border-4 border-purple-500 rounded-full border-t-transparent mb-2';
   loadingIndicator.appendChild(loadingSpinner);
 
   const loadingText = document.createElement('p');
@@ -701,7 +701,7 @@ function renderQRScanner() {
     // Determine context based on current page
     const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
     handleQRCode(qrCode, context);
-  }, 'bg-blue-600 text-white py-2 px-4 rounded-lg text-sm');
+  }, 'bg-purple-600 text-white py-2 px-4 rounded-lg text-sm');
   inputContainer.appendChild(submitButton);
 
   manualInputContainer.appendChild(inputContainer);
@@ -1188,7 +1188,7 @@ function renderApp() {
 
     // Add header
     const header = document.createElement('header');
-    header.className = 'bg-blue-600 text-white p-4 shadow-md relative';
+    header.className = 'bg-purple-600 text-white p-4 shadow-md relative';
 
     // Create a container for the header content
     const headerContent = document.createElement('div');
