@@ -693,7 +693,7 @@ function buildHostsTable(container, hosts) {
     const thead = UIBuilder.createElement('thead', { className: 'bg-gray-50' });
     const headerRow = UIBuilder.createElement('tr');
     
-    const headers = ['Host Name', 'Secret Link', 'Status', 'Expiry Date', 'Created', 'Actions'];
+    const headers = ['Host Name', 'Copy Link', 'Status', 'Expiry Date', 'Created', 'Actions'];
     headers.forEach(function(headerText) {
         const th = UIBuilder.createElement('th', {
           className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider',
@@ -739,33 +739,26 @@ function buildHostRow(host) {
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);
     
-    // Secret Link cell
+    // Copy Link cell
     const linkCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     const linkContainer = UIBuilder.createElement('div', {
-      className: 'flex items-center space-x-2'
+      className: 'flex justify-center'
     });
-    
+
     // Generate the full secret link
     const baseUrl = window.location.protocol + '//' + window.location.host;
     const secretLink = `${baseUrl}/?id=${host.qr_code}`;
-    
-    const linkValue = UIBuilder.createElement('span', {
-      className: 'text-sm text-gray-600 font-mono truncate max-w-xs',
-      textContent: secretLink,
-      title: secretLink
-    });
-    linkContainer.appendChild(linkValue);
-    
-    const copyButton = UIBuilder.createButton('', function() {
+
+    const copyButton = UIBuilder.createButton('Copy Secret Link', function() {
       navigator.clipboard.writeText(secretLink);
       showNotification('Secret link copied to clipboard', 'success');
-    }, 'text-blue-600 hover:text-blue-800 transition-colors', 'copy');
-    copyButton.title = 'Copy Secret Link';
+    }, 'bg-blue-100 text-blue-700 hover:bg-blue-200 py-1 px-3 rounded-md text-sm font-medium transition-colors flex items-center', 'copy');
+    copyButton.title = secretLink; // Show full link on hover
     linkContainer.appendChild(copyButton);
-    
+
     linkCell.appendChild(linkContainer);
     row.appendChild(linkCell);
     
