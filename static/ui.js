@@ -1237,8 +1237,9 @@ function initGameMap() {
       }
     }
 
+    const captureRadius = appState.gameData.settings?.capture_radius_meters || 15;
     const circleMarker = L.circleMarker(latLng, {
-      radius: 15, // Same size as capture zone
+      radius: captureRadius,
       fillColor: markerColor,
       color: '#000000', // Border color for the circle
       weight: 1,
