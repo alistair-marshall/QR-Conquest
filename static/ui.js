@@ -1219,18 +1219,13 @@ function renderApp() {
       }
     }
 
-    // Create status section for active, setup, or ended games
-    if (appState.gameData.status && appState.gameData.status !== '') {
-      const statusDiv = document.createElement('div');
-      statusDiv.className = 'flex justify-between items-center mt-1';
-
-      const statusText = document.createElement('p');
-      statusText.className = 'text-sm';
+    // Function to update game status text (used for both initial render and timer updates)
+    function updateGameStatusText(statusElement) {
+      if (!statusElement || !appState.gameData.status) return false;
       
       const now = Math.floor(Date.now() / 1000);
-      let needsUpdate = false;
+      let needsTimer = false;
 
-      // Determine status text based on game state
       if (appState.gameData.status === 'setup') {
         const autoStartTime = appState.gameData.settings?.auto_start_time;
         
@@ -1239,18 +1234,17 @@ function renderApp() {
           const timeString = formatTimeRemaining(timeUntilStart);
           
           if (timeString) {
-            statusText.textContent = `Game starts in ${timeString}`;
-            needsUpdate = true;
+            statusElement.textContent = `Game starts in ${timeString}`;
+            needsTimer = true;
           } else {
-            statusText.textContent = 'Game should start now';
-            statusText.className = 'text-sm text-green-200';
-            // Trigger game data refresh to check if auto-started
+            statusElement.textContent = 'Game should start now';
             if (appState.gameData.id) {
               fetchGameData(appState.gameData.id);
             }
           }
         } else {
-          statusText.textContent = 'Game setup';
+          statusElement.textContent = 'Game setup';
+          statusElement.className = 'text-sm';
         }
         
       } else if (appState.gameData.status === 'active') {
@@ -1261,24 +1255,40 @@ function renderApp() {
           const timeString = formatTimeRemaining(remaining);
           
           if (timeString) {
-            statusText.textContent = `Game in progress • ${timeString} remaining`;
-            needsUpdate = true;
+            statusElement.textContent = `Game in progress • ${timeString} remaining`;
+            needsTimer = true;
           } else {
-            statusText.textContent = 'Game ended';
-            statusText.className = 'text-sm text-red-200';
+            statusElement.textContent = 'Game ended';
+            if (appState.gameData.id) {
+              fetchGameData(appState.gameData.id);
+            }
           }
         } else {
-          statusText.textContent = 'Game in progress';
+          statusElement.textContent = 'Game in progress';
+          statusElement.className = 'text-sm';
         }
         
       } else if (appState.gameData.status === 'ended') {
-        statusText.textContent = 'Game ended';
-        statusText.className = 'text-sm text-gray-200';
+        statusElement.textContent = 'Game ended';
+        statusElement.className = 'text-sm text-gray-200';
       }
+      
+      return needsTimer;
+    }
 
+    // Create status section in header
+    if (appState.gameData.status && appState.gameData.status !== '') {
+      const statusDiv = document.createElement('div');
+      statusDiv.className = 'flex justify-between items-center mt-1';
+
+      const statusText = document.createElement('p');
+      statusText.id = 'game-status-text';
+      
+      // Use the shared function for initial setup
+      const needsTimer = updateGameStatusText(statusText);
       statusDiv.appendChild(statusText);
 
-      // Always show team info if player is on a team (regardless of game status)
+      // Always show team info if player is on a team
       if (appState.gameData.currentTeam) {
         const teamText = document.createElement('p');
         teamText.className = 'text-sm';
@@ -1287,6 +1297,11 @@ function renderApp() {
       }
 
       leftSection.appendChild(statusDiv);
+
+      // Start timer if needed
+      if (needsTimer) {
+        startHeaderTimer();
+      }
     }
 
     headerContent.appendChild(leftSection);
@@ -1603,6 +1618,28 @@ function updateOnlineStatus(isOnline) {
     statusDot.className = 'w-2 h-2 rounded-full mr-1 bg-amber-500';
     statusText.textContent = 'Offline';
   }
+}
+
+let headerTimerInterval = null;
+
+function startHeaderTimer() {
+  // Clear any existing timer first
+  if (headerTimerInterval) {
+    clearInterval(headerTimerInterval);
+  }
+  
+  headerTimerInterval = setInterval(() => {
+    const statusElement = document.getElementById('game-status-text');
+    
+    // Use the same function for updates - it returns whether to continue
+    const shouldContinue = updateGameStatusText(statusElement);
+    
+    // Self-cancel if no longer needed
+    if (!shouldContinue) {
+      clearInterval(headerTimerInterval);
+      headerTimerInterval = null;
+    }
+  }, 1000);
 }
 
 // Initialize online status monitoring
