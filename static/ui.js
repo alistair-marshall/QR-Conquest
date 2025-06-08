@@ -1204,78 +1204,6 @@ function renderApp() {
     title.textContent = appState.gameData.name || 'QR Conquest';
     leftSection.appendChild(title);
 
-    // Helper function to format time duration
-    function formatTimeRemaining(seconds) {
-      if (seconds <= 0) return null;
-      
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = seconds % 60;
-      
-      if (hours > 0) {
-        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      } else {
-        return `${minutes}:${secs.toString().padStart(2, '0')}`;
-      }
-    }
-
-    // Function to update game status text (used for both initial render and timer updates)
-    function updateGameStatusText(statusElement) {
-      if (!statusElement || !appState.gameData.status) return false;
-      
-      const now = Math.floor(Date.now() / 1000);
-      let needsTimer = false;
-
-      if (appState.gameData.status === 'setup') {
-        const autoStartTime = appState.gameData.settings?.auto_start_time;
-        
-        if (autoStartTime) {
-          const timeUntilStart = autoStartTime - now;
-          const timeString = formatTimeRemaining(timeUntilStart);
-          
-          if (timeString) {
-            statusElement.textContent = `Game starts in ${timeString}`;
-            needsTimer = true;
-          } else {
-            statusElement.textContent = 'Game should start now';
-            if (appState.gameData.id) {
-              fetchGameData(appState.gameData.id);
-            }
-          }
-        } else {
-          statusElement.textContent = 'Game setup';
-          statusElement.className = 'text-sm';
-        }
-        
-      } else if (appState.gameData.status === 'active') {
-        const endTime = appState.gameData.settings?.calculated_end_time;
-        
-        if (endTime) {
-          const remaining = endTime - now;
-          const timeString = formatTimeRemaining(remaining);
-          
-          if (timeString) {
-            statusElement.textContent = `Game in progress • ${timeString} remaining`;
-            needsTimer = true;
-          } else {
-            statusElement.textContent = 'Game ended';
-            if (appState.gameData.id) {
-              fetchGameData(appState.gameData.id);
-            }
-          }
-        } else {
-          statusElement.textContent = 'Game in progress';
-          statusElement.className = 'text-sm';
-        }
-        
-      } else if (appState.gameData.status === 'ended') {
-        statusElement.textContent = 'Game ended';
-        statusElement.className = 'text-sm text-gray-200';
-      }
-      
-      return needsTimer;
-    }
-
     // Create status section in header
     if (appState.gameData.status && appState.gameData.status !== '') {
       const statusDiv = document.createElement('div');
@@ -1418,9 +1346,77 @@ function renderApp() {
   }
 }
 
-// =============================================================================
-// HOST BUTTON FUNCTIONALITY
-// =============================================================================
+// Helper function to format time duration
+function formatTimeRemaining(seconds) {
+  if (seconds <= 0) return null;
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+}
+
+// Function to update game status text (used for both initial render and timer updates)
+function updateGameStatusText(statusElement) {
+  if (!statusElement || !appState.gameData.status) return false;
+  
+  const now = Math.floor(Date.now() / 1000);
+  let needsTimer = false;
+
+  if (appState.gameData.status === 'setup') {
+    const autoStartTime = appState.gameData.settings?.auto_start_time;
+    
+    if (autoStartTime) {
+      const timeUntilStart = autoStartTime - now;
+      const timeString = formatTimeRemaining(timeUntilStart);
+      
+      if (timeString) {
+        statusElement.textContent = `Game starts in ${timeString}`;
+        needsTimer = true;
+      } else {
+        statusElement.textContent = 'Game should start now';
+        if (appState.gameData.id) {
+          fetchGameData(appState.gameData.id);
+        }
+      }
+    } else {
+      statusElement.textContent = 'Game setup';
+      statusElement.className = 'text-sm';
+    }
+    
+  } else if (appState.gameData.status === 'active') {
+    const endTime = appState.gameData.settings?.calculated_end_time;
+    
+    if (endTime) {
+      const remaining = endTime - now;
+      const timeString = formatTimeRemaining(remaining);
+      
+      if (timeString) {
+        statusElement.textContent = `Game in progress • ${timeString} remaining`;
+        needsTimer = true;
+      } else {
+        statusElement.textContent = 'Game ended';
+        if (appState.gameData.id) {
+          fetchGameData(appState.gameData.id);
+        }
+      }
+    } else {
+      statusElement.textContent = 'Game in progress';
+      statusElement.className = 'text-sm';
+    }
+    
+  } else if (appState.gameData.status === 'ended') {
+    statusElement.textContent = 'Game ended';
+    statusElement.className = 'text-sm text-gray-200';
+  }
+  
+  return needsTimer;
+}
 
 // Function to handle host button click
 function handleHostButtonClick() {
