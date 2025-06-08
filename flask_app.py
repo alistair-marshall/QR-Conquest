@@ -498,6 +498,10 @@ def update_game_settings(game_id):
     update_fields = []
     params = []
     
+    if 'name' in data:
+        update_fields.append('name = ?')
+        params.append(data['name'])
+    
     if 'capture_radius_meters' in data:
         update_fields.append('capture_radius_meters = ?')
         params.append(data['capture_radius_meters'])
