@@ -515,6 +515,7 @@ async function fetchGameData(gameId) {
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
+    appState.gameData.settings = data.settings || {};
 
     // IMPORTANT: Keep existing host auth if user is authenticated as host
     // The hostId is maintained from localStorage, not from game data
@@ -622,15 +623,31 @@ async function createGame(gameSettings) {
       throw new Error('Host authentication required to create games.');
     }
 
+    const requestBody = {
+      name: gameSettings.name,
+      host_id: authState.hostId
+    };
+
+    // Add optional settings if provided
+    if (gameSettings.capture_radius_meters !== undefined) {
+      requestBody.capture_radius_meters = gameSettings.capture_radius_meters;
+    }
+    if (gameSettings.points_interval_seconds !== undefined) {
+      requestBody.points_interval_seconds = gameSettings.points_interval_seconds;
+    }
+    if (gameSettings.auto_start_time !== undefined) {
+      requestBody.auto_start_time = gameSettings.auto_start_time;
+    }
+    if (gameSettings.game_duration_minutes !== undefined) {
+      requestBody.game_duration_minutes = gameSettings.game_duration_minutes;
+    }
+
     const response = await fetch(API_BASE_URL + '/games', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        name: gameSettings.name,
-        host_id: authState.hostId
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const data = await handleApiResponse(response, 'Failed to create game');
@@ -644,9 +661,28 @@ async function createGame(gameSettings) {
     // Fetch the full game data after creation
     await fetchGameData(gameId);
 
-    // Show success message - UI will handle this
+    // Show success message with settings info
+    let successMessage = `Game created successfully! Game ID: ${gameId}`;
+    
+    if (gameSettings.auto_start_time) {
+      const startTime = new Date(gameSettings.auto_start_time * 1000);
+      successMessage += `\n\nAuto-start: ${startTime.toLocaleString()}`;
+    }
+    
+    if (gameSettings.game_duration_minutes) {
+      const hours = Math.floor(gameSettings.game_duration_minutes / 60);
+      const minutes = gameSettings.game_duration_minutes % 60;
+      if (hours > 0) {
+        successMessage += `\nDuration: ${hours}h ${minutes}m`;
+      } else {
+        successMessage += `\nDuration: ${minutes}m`;
+      }
+    }
+    
+    successMessage += '\n\nYou can now scan QR codes to add teams and bases.';
+
     if (window.showNotification) {
-      window.showNotification(`Game created successfully! Game ID: ${gameId}\n\nYou can now scan QR codes to add teams and bases.`, 'success');
+      window.showNotification(successMessage, 'success');
     }
     
     // Check if there's a pending QR code to handle

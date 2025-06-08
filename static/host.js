@@ -23,52 +23,22 @@ function renderHostPanel() {
     });
     createSection.appendChild(createTitle);
 
-    // Game Name
-    const nameGroup = UIBuilder.createElement('div', { className: 'mb-4' });
-
-    const nameLabel = UIBuilder.createElement('label', {
-      className: 'block text-gray-700 mb-2',
-      textContent: 'Game Name'
-    });
-    nameGroup.appendChild(nameLabel);
-
-    const nameInput = UIBuilder.createElement('input', {
-      type: 'text',
-      value: 'QR Conquest',
-      className: 'w-full px-3 py-2 border rounded-lg'
-    });
-    nameGroup.appendChild(nameInput);
-
-    createSection.appendChild(nameGroup);
-
-    // Note about teams
-    const teamsNoteGroup = UIBuilder.createElement('div', {
-      className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
+    // Use the consolidated form for game creation
+    const gameForm = buildGameSettingsForm({
+      isEditing: false,
+      currentSettings: {},
+      gameData: {},
+      onSubmit: function(e) {
+        e.preventDefault();
+        const settings = validateGameSettings();
+        if (settings) {
+          createGame(settings);
+        }
+      },
+      submitButtonText: 'Create Game'
     });
 
-    const teamsNoteText = UIBuilder.createElement('p');
-    const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
-    teamsNoteText.appendChild(noteStrong);
-    teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
-    teamsNoteGroup.appendChild(teamsNoteText);
-
-    createSection.appendChild(teamsNoteGroup);
-
-    // Create Game Button
-    const createButton = UIBuilder.createButton('Create Game', function() {
-      const gameName = nameInput.value.trim();
-      if (!gameName) {
-        showNotification('Please enter a game name', 'warning');
-        return;
-      }
-
-      // Call the API function from core.js
-      createGame({
-        name: gameName,
-      });
-    }, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium');
-    createSection.appendChild(createButton);
-
+    createSection.appendChild(gameForm);
     container.appendChild(createSection);
 
     // Existing Games Section
@@ -165,6 +135,127 @@ function renderHostPanel() {
   infoSection.appendChild(gameInfoGrid);
   grid.appendChild(infoSection);
 
+  // Game Settings Section
+  const settingsSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
+  });
+
+  const settingsTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-3',
+    textContent: 'Game Settings'
+  });
+  settingsSection.appendChild(settingsTitle);
+
+  const settingsGrid = UIBuilder.createElement('div', {
+    className: 'grid grid-cols-2 sm:grid-cols-4 gap-4'
+  });
+
+  // Helper function to format time
+  function formatDuration(minutes) {
+    // Convert to number and handle edge cases
+    const numMinutes = parseInt(minutes);
+    
+    // Check if we have a valid positive number
+    if (isNaN(numMinutes) || numMinutes <= 0) {
+      return 'Manual end';
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    return `${mins}m`;
+  }
+
+  // Helper function to format points interval
+  function formatPointsInterval(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+  }
+
+  const settings = appState.gameData.settings || {};
+
+  // Capture Radius
+  const radiusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const radiusLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Capture Radius'
+  });
+  radiusCard.appendChild(radiusLabel);
+  const radiusValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-blue-600',
+    textContent: `${settings.capture_radius_meters || 15}m`
+  });
+  radiusCard.appendChild(radiusValue);
+  settingsGrid.appendChild(radiusCard);
+
+  // Points Interval  
+  const intervalCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const intervalLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Points Interval'
+  });
+  intervalCard.appendChild(intervalLabel);
+  const intervalValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-green-600',
+    textContent: formatPointsInterval(settings.points_interval_seconds || 15)
+  });
+  intervalCard.appendChild(intervalValue);
+  settingsGrid.appendChild(intervalCard);
+
+  // Auto-start
+  const autoStartCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const autoStartLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Auto-start'
+  });
+  autoStartCard.appendChild(autoStartLabel);
+  let autoStartText = 'Manual';
+  if (settings.auto_start_time) {
+    const startTime = new Date(settings.auto_start_time * 1000);
+    autoStartText = startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  }
+  const autoStartValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-purple-600',
+    textContent: autoStartText
+  });
+  autoStartCard.appendChild(autoStartValue);
+  settingsGrid.appendChild(autoStartCard);
+
+  // Duration
+  const durationCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const durationLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Duration'
+  });
+  durationCard.appendChild(durationLabel);
+  const durationValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-orange-600',
+    textContent: formatDuration(settings.game_duration_minutes)
+  });
+  durationCard.appendChild(durationValue);
+  settingsGrid.appendChild(durationCard);
+
+  settingsSection.appendChild(settingsGrid);
+
+  // Settings actions (only show for games in setup)
+  if (appState.gameData.status === 'setup') {
+    const settingsActions = UIBuilder.createElement('div', {
+      className: 'mt-4 pt-3 border-t'
+    });
+    
+    const editSettingsBtn = UIBuilder.createButton('Edit Settings', function() {
+      renderGameSettingsModal();
+    }, 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm', 'settings');
+    
+    settingsActions.appendChild(editSettingsBtn);
+    settingsSection.appendChild(settingsActions);
+  }
+
+  grid.appendChild(settingsSection);
+  
   // QR Code Management Section
   const qrSection = UIBuilder.createElement('div', {
     className: 'bg-white rounded-lg shadow-md p-4'
@@ -737,6 +828,124 @@ async function loadHostGames() {
       window.lucide.createIcons();
     }
   }
+}
+
+function renderGameSettingsModal() {
+  // Create modal backdrop
+  const modalBackdrop = UIBuilder.createElement('div', {
+    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
+    id: 'game-settings-modal'
+  });
+  document.body.appendChild(modalBackdrop);
+
+  // Create modal container
+  const modalContainer = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto'
+  });
+  modalBackdrop.appendChild(modalContainer);
+
+  // Modal title
+  const modalTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-bold mb-4',
+    textContent: 'Edit Game Settings'
+  });
+  modalContainer.appendChild(modalTitle);
+
+  // Get current settings
+  const settings = appState.gameData.settings || {};
+
+  // Use the consolidated form for editing
+  const settingsForm = buildGameSettingsForm({
+    isEditing: true,
+    currentSettings: settings,
+    gameData: appState.gameData,
+    onSubmit: async function(e) {
+      e.preventDefault();
+      
+      const validatedSettings = validateGameSettings();
+      if (!validatedSettings) {
+        return; // Validation failed
+      }
+      
+      try {
+        // Call API to update settings
+        const authState = getAuthState();
+        const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            host_id: authState.hostId,
+            ...validatedSettings
+          })
+        });
+
+        await handleApiResponse(response, 'Failed to update game settings');
+        
+        // Close modal
+        document.body.removeChild(modalBackdrop);
+        
+        // Refresh game data
+        await fetchGameData(appState.gameData.id);
+        
+        showNotification('Game settings updated successfully!', 'success');
+        
+      } catch (error) {
+        console.error('Error updating settings:', error);
+        showNotification(error.message || 'Failed to update settings', 'error');
+      }
+    },
+    submitButtonText: 'Save Settings'
+  });
+
+  // Add cancel button to the form
+  const formButtonContainer = settingsForm.querySelector('button[type="submit"]').parentNode;
+  if (!formButtonContainer) {
+    // If no button container found, create one and move the submit button
+    const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 pt-4 border-t' });
+    
+    const cancelButton = UIBuilder.createButton('Cancel', function() {
+      document.body.removeChild(modalBackdrop);
+    }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
+    
+    const submitButton = settingsForm.querySelector('button[type="submit"]');
+    submitButton.className = 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors';
+    
+    // Remove submit button from form and add both to button group
+    submitButton.parentNode.removeChild(submitButton);
+    buttonGroup.appendChild(cancelButton);
+    buttonGroup.appendChild(submitButton);
+    
+    settingsForm.appendChild(buttonGroup);
+  } else {
+    // Modify existing button container
+    formButtonContainer.className = 'flex gap-4 pt-4 border-t';
+    
+    const cancelButton = UIBuilder.createButton('Cancel', function() {
+      document.body.removeChild(modalBackdrop);
+    }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
+    
+    const submitButton = settingsForm.querySelector('button[type="submit"]');
+    submitButton.className = 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors';
+    
+    // Insert cancel button before submit button
+    formButtonContainer.insertBefore(cancelButton, submitButton);
+  }
+
+  modalContainer.appendChild(settingsForm);
+
+  // Initialize Lucide icons
+  if (window.lucide) window.lucide.createIcons();
+
+  // Allow closing modal with Escape key
+  function handleEscapeKey(e) {
+    if (e.key === 'Escape') {
+      document.body.removeChild(modalBackdrop);
+      document.removeEventListener('keydown', handleEscapeKey);
+    }
+  }
+  document.addEventListener('keydown', handleEscapeKey);
 }
 
 // QR Assignment Page
@@ -1835,6 +2044,512 @@ function renderResultsPage() {
   container.appendChild(actionsContainer);
 
   return container;
+}
+
+// Consolidated game settings form builder
+function buildGameSettingsForm(options = {}) {
+  const {
+    isEditing = false,
+    currentSettings = {},
+    gameData = {},
+    onSubmit = null,
+    submitButtonText = isEditing ? 'Save Settings' : 'Create Game'
+  } = options;
+
+  const form = UIBuilder.createElement('form', { className: 'space-y-6' });
+
+  // Game Name Section
+  const nameSection = UIBuilder.createElement('div');
+  const nameTitle = UIBuilder.createElement('h4', {
+    className: 'text-lg font-medium mb-3 text-gray-800',
+    textContent: 'Game Details'
+  });
+  nameSection.appendChild(nameTitle);
+
+  const nameGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 mb-2 font-medium',
+    textContent: 'Game Name'
+  });
+  nameGroup.appendChild(nameLabel);
+
+  const nameInput = UIBuilder.createElement('input', {
+    type: 'text',
+    value: isEditing ? (gameData.name || 'QR Conquest') : 'QR Conquest',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'game-name-input',
+    required: true
+  });
+  nameGroup.appendChild(nameInput);
+  nameSection.appendChild(nameGroup);
+  form.appendChild(nameSection);
+
+  // Game Settings Section
+  const settingsSection = UIBuilder.createElement('div');
+  const settingsTitle = UIBuilder.createElement('h4', {
+    className: 'text-lg font-medium mb-3 text-gray-800',
+    textContent: 'Game Settings'
+  });
+  settingsSection.appendChild(settingsTitle);
+
+  // Settings Grid
+  const settingsGrid = UIBuilder.createElement('div', {
+    className: 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-4'
+  });
+
+  // Capture Radius
+  const radiusGroup = UIBuilder.createElement('div');
+  const radiusLabel = UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Capture Radius'
+  });
+  radiusGroup.appendChild(radiusLabel);
+
+  const radiusContainer = UIBuilder.createElement('div', { className: 'flex items-center space-x-2' });
+  
+  const radiusInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '5',
+    max: '500',
+    value: currentSettings.capture_radius_meters || 15,
+    className: 'flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'capture-radius-input'
+  });
+  radiusContainer.appendChild(radiusInput);
+
+  const radiusUnit = UIBuilder.createElement('span', {
+    className: 'text-sm text-gray-600',
+    textContent: 'metres'
+  });
+  radiusContainer.appendChild(radiusUnit);
+
+  radiusGroup.appendChild(radiusContainer);
+
+  const radiusHelp = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'How close players must be to capture bases (5-500m)'
+  });
+  radiusGroup.appendChild(radiusHelp);
+
+  settingsGrid.appendChild(radiusGroup);
+
+  // Points Interval
+  const intervalGroup = UIBuilder.createElement('div');
+  const intervalLabel = UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Points Interval'
+  });
+  intervalGroup.appendChild(intervalLabel);
+
+  const intervalContainer = UIBuilder.createElement('div', { className: 'space-y-2' });
+  
+  const intervalSelect = UIBuilder.createElement('select', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'points-interval-select'
+  });
+
+  const intervalOptions = [
+    { value: 5, label: 'Fast (5 seconds)' },
+    { value: 15, label: 'Normal (15 seconds)', selected: true },
+    { value: 30, label: 'Steady (30 seconds)' },
+    { value: 60, label: 'Strategic (1 minute)' },
+    { value: 300, label: 'Long (5 minutes)' },
+    { value: 'custom', label: 'Custom...' }
+  ];
+
+  // Set current value for editing
+  const currentInterval = currentSettings.points_interval_seconds || 15;
+  let foundStandardInterval = false;
+
+  intervalOptions.forEach(option => {
+    const optionElement = UIBuilder.createElement('option', {
+      value: option.value,
+      textContent: option.label
+    });
+    
+    if (option.value === currentInterval) {
+      optionElement.selected = true;
+      foundStandardInterval = true;
+    }
+    
+    intervalSelect.appendChild(optionElement);
+  });
+
+  // If current value isn't in standard options, select custom
+  if (!foundStandardInterval && isEditing) {
+    intervalSelect.value = 'custom';
+  }
+
+  intervalContainer.appendChild(intervalSelect);
+
+  // Custom interval input
+  const customIntervalContainer = UIBuilder.createElement('div', {
+    className: 'flex items-center space-x-2',
+    style: { display: (!foundStandardInterval && isEditing) ? 'flex' : 'none' },
+    id: 'custom-interval-container'
+  });
+
+  const customIntervalInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '5',
+    max: '3600',
+    value: (!foundStandardInterval && isEditing) ? currentInterval : '',
+    placeholder: '15',
+    className: 'flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'custom-interval-input'
+  });
+  customIntervalContainer.appendChild(customIntervalInput);
+
+  const intervalUnitSpan = UIBuilder.createElement('span', {
+    className: 'text-sm text-gray-600',
+    textContent: 'seconds'
+  });
+  customIntervalContainer.appendChild(intervalUnitSpan);
+
+  intervalContainer.appendChild(customIntervalContainer);
+  intervalGroup.appendChild(intervalContainer);
+
+  const intervalHelp = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'How often teams earn points for holding bases'
+  });
+  intervalGroup.appendChild(intervalHelp);
+
+  settingsGrid.appendChild(intervalGroup);
+
+  // Auto-start time
+  const autoStartGroup = UIBuilder.createElement('div');
+  const autoStartLabel = UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Auto-start Time (optional)'
+  });
+  autoStartGroup.appendChild(autoStartLabel);
+
+  const autoStartInput = UIBuilder.createElement('input', {
+    type: 'datetime-local',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'auto-start-input'
+  });
+  
+  // Set current value for editing
+  if (isEditing && currentSettings.auto_start_time) {
+    const startTime = new Date(currentSettings.auto_start_time * 1000);
+    autoStartInput.value = startTime.toISOString().slice(0, 16);
+  }
+  
+  // Set minimum to current time
+  const now = new Date();
+  if (!isEditing) {
+    now.setMinutes(now.getMinutes() + 5); // Default to 5 minutes from now for creation
+  }
+  autoStartInput.min = now.toISOString().slice(0, 16);
+  
+  autoStartGroup.appendChild(autoStartInput);
+
+  const autoStartHelp = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Game will start automatically at this time'
+  });
+  autoStartGroup.appendChild(autoStartHelp);
+
+  settingsGrid.appendChild(autoStartGroup);
+
+  // Game duration
+  const durationGroup = UIBuilder.createElement('div');
+  const durationLabel = UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Game Duration (optional)'
+  });
+  durationGroup.appendChild(durationLabel);
+
+  const durationContainer = UIBuilder.createElement('div', { className: 'space-y-2' });
+
+  const durationSelect = UIBuilder.createElement('select', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'duration-select'
+  });
+
+  const durationOptions = [
+    { value: '', label: 'Manual end only' },
+    { value: 30, label: '30 minutes' },
+    { value: 60, label: '1 hour' },
+    { value: 120, label: '2 hours' },
+    { value: 240, label: '4 hours' },
+    { value: 480, label: '8 hours' },
+    { value: 1440, label: '1 day' },
+    { value: 4320, label: '3 days' },
+    { value: 'custom', label: 'Custom...' }
+  ];
+
+  // Set current value for editing
+  const currentDuration = currentSettings.game_duration_minutes;
+  let foundStandardDuration = false;
+
+  durationOptions.forEach(option => {
+    const optionElement = UIBuilder.createElement('option', {
+      value: option.value,
+      textContent: option.label
+    });
+    
+    if (option.value === currentDuration || (option.value === '' && !currentDuration)) {
+      optionElement.selected = true;
+      foundStandardDuration = true;
+    }
+    
+    durationSelect.appendChild(optionElement);
+  });
+
+  // If current value isn't in standard options, select custom
+  if (!foundStandardDuration && isEditing && currentDuration) {
+    durationSelect.value = 'custom';
+  }
+
+  durationContainer.appendChild(durationSelect);
+
+  // Custom duration input
+  const customDurationContainer = UIBuilder.createElement('div', {
+    className: 'flex items-center space-x-2',
+    style: { display: (!foundStandardDuration && isEditing && currentDuration) ? 'flex' : 'none' },
+    id: 'custom-duration-container'
+  });
+
+  const customDurationInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '1',
+    max: '43200',
+    value: (!foundStandardDuration && isEditing && currentDuration) ? currentDuration : '',
+    placeholder: '60',
+    className: 'flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'custom-duration-input'
+  });
+  customDurationContainer.appendChild(customDurationInput);
+
+  const durationUnitSpan = UIBuilder.createElement('span', {
+    className: 'text-sm text-gray-600',
+    textContent: 'minutes'
+  });
+  customDurationContainer.appendChild(durationUnitSpan);
+
+  durationContainer.appendChild(customDurationContainer);
+  durationGroup.appendChild(durationContainer);
+
+  const durationHelp = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Game will end automatically after this time'
+  });
+  durationGroup.appendChild(durationHelp);
+
+  settingsGrid.appendChild(durationGroup);
+
+  settingsSection.appendChild(settingsGrid);
+  form.appendChild(settingsSection);
+
+  // Event Handlers for Dynamic UI
+  // Handle custom interval selection
+  intervalSelect.addEventListener('change', function() {
+    const customContainer = document.getElementById('custom-interval-container');
+    if (this.value === 'custom') {
+      customContainer.style.display = 'flex';
+      document.getElementById('custom-interval-input').focus();
+    } else {
+      customContainer.style.display = 'none';
+    }
+  });
+
+  // Handle custom duration selection
+  durationSelect.addEventListener('change', function() {
+    const customContainer = document.getElementById('custom-duration-container');
+    if (this.value === 'custom') {
+      customContainer.style.display = 'flex';
+      document.getElementById('custom-duration-input').focus();
+    } else {
+      customContainer.style.display = 'none';
+    }
+  });
+
+  // Add special note for creation mode
+  if (!isEditing) {
+    const teamsNoteGroup = UIBuilder.createElement('div', {
+      className: 'mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 p-3 rounded-lg'
+    });
+
+    const teamsNoteText = UIBuilder.createElement('p');
+    const noteStrong = UIBuilder.createElement('strong', { textContent: 'Note:' });
+    teamsNoteText.appendChild(noteStrong);
+    teamsNoteText.appendChild(document.createTextNode(' Teams must be added by scanning QR codes after game creation. At least 2 teams will be required before starting the game.'));
+    teamsNoteGroup.appendChild(teamsNoteText);
+
+    form.appendChild(teamsNoteGroup);
+  }
+
+  // Validation warning
+  const validationWarning = UIBuilder.createElement('div', {
+    className: 'bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg text-sm',
+    id: 'validation-warning',
+    style: { display: 'none' }
+  });
+  form.appendChild(validationWarning);
+
+  // Submit button
+  const submitButton = UIBuilder.createButton(submitButtonText, null, 'w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg font-medium');
+  submitButton.type = 'submit';
+  form.appendChild(submitButton);
+
+  // Real-time validation
+  function validateSettings() {
+    const radiusInput = document.getElementById('capture-radius-input');
+    const intervalSelect = document.getElementById('points-interval-select');
+    const customIntervalInput = document.getElementById('custom-interval-input');
+    const durationSelect = document.getElementById('duration-select');
+    const customDurationInput = document.getElementById('custom-duration-input');
+    const warning = document.getElementById('validation-warning');
+    
+    // Safety checks
+    if (!radiusInput || !intervalSelect || !durationSelect || !warning) {
+      console.warn('Validation elements not ready yet');
+      return true;
+    }
+    
+    const radius = parseInt(radiusInput.value);
+    
+    // Get points interval
+    let interval;
+    if (intervalSelect.value === 'custom') {
+      interval = parseInt(customIntervalInput.value);
+    } else {
+      interval = parseInt(intervalSelect.value);
+    }
+    
+    // Get duration
+    let duration = null;
+    if (durationSelect.value === 'custom') {
+      duration = parseInt(customDurationInput.value);
+    } else if (durationSelect.value) {
+      duration = parseInt(durationSelect.value);
+    }
+    
+    // Check duration vs interval ratio
+    if (duration && interval) {
+      const durationSeconds = duration * 60;
+      const minDurationSeconds = interval * 10;
+      
+      if (durationSeconds < minDurationSeconds) {
+        const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
+        warning.textContent = `⚠️ Game duration should be at least ${minDurationMinutes} minutes for ${interval}s interval (10x ratio recommended)`;
+        warning.style.display = 'block';
+        return false;
+      }
+    }
+    
+    warning.style.display = 'none';
+    return true;
+  }
+
+  // Add validation listeners
+  setTimeout(() => {
+    const intervalSelect = document.getElementById('points-interval-select');
+    const customIntervalInput = document.getElementById('custom-interval-input');
+    const durationSelect = document.getElementById('duration-select');
+    const customDurationInput = document.getElementById('custom-duration-input');
+    
+    if (intervalSelect) {
+      intervalSelect.addEventListener('change', validateSettings);
+    }
+    if (customIntervalInput) {
+      customIntervalInput.addEventListener('input', validateSettings);
+    }
+    if (durationSelect) {
+      durationSelect.addEventListener('change', validateSettings);
+    }
+    if (customDurationInput) {
+      customDurationInput.addEventListener('input', validateSettings);
+    }
+    
+    // Initial validation
+    validateSettings();
+  }, 100);
+
+  // Handle form submission
+  if (onSubmit) {
+    form.addEventListener('submit', onSubmit);
+  }
+
+  return form;
+}
+
+// Shared validation function for game settings
+function validateGameSettings() {
+  const gameName = document.getElementById('game-name-input').value.trim();
+  if (!gameName) {
+    showNotification('Please enter a game name', 'warning');
+    return null;
+  }
+
+  // Get capture radius
+  const captureRadius = parseInt(document.getElementById('capture-radius-input').value);
+  if (isNaN(captureRadius) || captureRadius < 5 || captureRadius > 500) {
+    showNotification('Capture radius must be between 5 and 500 metres', 'error');
+    return null;
+  }
+
+  // Get points interval
+  let pointsInterval;
+  const intervalSelect = document.getElementById('points-interval-select');
+  if (intervalSelect.value === 'custom') {
+    pointsInterval = parseInt(document.getElementById('custom-interval-input').value);
+    if (isNaN(pointsInterval) || pointsInterval < 5 || pointsInterval > 3600) {
+      showNotification('Points interval must be between 5 and 3600 seconds', 'error');
+      return null;
+    }
+  } else {
+    pointsInterval = parseInt(intervalSelect.value);
+  }
+
+  // Get auto-start time (optional)
+  let autoStartTime = null;
+  const autoStartInput = document.getElementById('auto-start-input');
+  if (autoStartInput.value) {
+    autoStartTime = Math.floor(new Date(autoStartInput.value).getTime() / 1000);
+    if (autoStartTime <= Math.floor(Date.now() / 1000)) {
+      showNotification('Auto-start time must be in the future', 'error');
+      return null;
+    }
+  }
+
+  // Get game duration (optional)
+  let gameDuration = null;
+  const durationSelect = document.getElementById('duration-select');
+  if (durationSelect.value === 'custom') {
+    gameDuration = parseInt(document.getElementById('custom-duration-input').value);
+    if (isNaN(gameDuration) || gameDuration < 1 || gameDuration > 43200) {
+      showNotification('Game duration must be between 1 and 43200 minutes', 'error');
+      return null;
+    }
+  } else if (durationSelect.value) {
+    gameDuration = parseInt(durationSelect.value);
+  }
+
+  // Validate duration vs interval ratio
+  if (gameDuration) {
+    const durationSeconds = gameDuration * 60;
+    const minDurationSeconds = pointsInterval * 10;
+    if (durationSeconds < minDurationSeconds) {
+      const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
+      showNotification(
+        `Game duration must be at least 10x the points interval. Minimum ${minDurationMinutes} minutes for ${pointsInterval}s interval.`,
+        'error'
+      );
+      return null;
+    }
+  }
+
+  return {
+    name: gameName,
+    capture_radius_meters: captureRadius,
+    points_interval_seconds: pointsInterval,
+    auto_start_time: autoStartTime,
+    game_duration_minutes: gameDuration
+  };
 }
 
 function updateLocationButtonContent(button, iconName, text, extraClasses = '') {
