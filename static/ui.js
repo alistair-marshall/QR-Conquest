@@ -1204,38 +1204,81 @@ function renderApp() {
     title.textContent = appState.gameData.name || 'QR Conquest';
     leftSection.appendChild(title);
 
-    if (appState.gameData.status === 'active') {
-    let statusString = 'Game in progress';  
-    // Check if we have a timed game
-    if (appState.gameData.settings && appState.gameData.settings.calculated_end_time) {
-        const endTime = appState.gameData.settings.calculated_end_time;
-        const now = Math.floor(Date.now() / 1000);
-        const remaining = endTime - now;
-        
-        if (remaining > 0) {
-          // Calculate time components
-          const hours = Math.floor(remaining / 3600);
-          const minutes = Math.floor((remaining % 3600) / 60);
-          const seconds = remaining % 60;
-          
-          // Format display
-          let timeString;
-          if (hours > 0) {
-            timeString = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-          } else {
-            timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-          }
-          statusString = `Game in progress • ${timeString} remaining`;
-        }
+    // Helper function to format time duration
+    function formatTimeRemaining(seconds) {
+      if (seconds <= 0) return null;
+      
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      } else {
+        return `${minutes}:${secs.toString().padStart(2, '0')}`;
       }
+    }
+
+    // Create status section for active, setup, or ended games
+    if (appState.gameData.status && appState.gameData.status !== '') {
       const statusDiv = document.createElement('div');
       statusDiv.className = 'flex justify-between items-center mt-1';
 
       const statusText = document.createElement('p');
       statusText.className = 'text-sm';
-      statusText.textContent = statusString
+      
+      const now = Math.floor(Date.now() / 1000);
+      let needsUpdate = false;
+
+      // Determine status text based on game state
+      if (appState.gameData.status === 'setup') {
+        const autoStartTime = appState.gameData.settings?.auto_start_time;
+        
+        if (autoStartTime) {
+          const timeUntilStart = autoStartTime - now;
+          const timeString = formatTimeRemaining(timeUntilStart);
+          
+          if (timeString) {
+            statusText.textContent = `Game starts in ${timeString}`;
+            needsUpdate = true;
+          } else {
+            statusText.textContent = 'Game should start now';
+            statusText.className = 'text-sm text-green-200';
+            // Trigger game data refresh to check if auto-started
+            if (appState.gameData.id) {
+              fetchGameData(appState.gameData.id);
+            }
+          }
+        } else {
+          statusText.textContent = 'Game setup';
+        }
+        
+      } else if (appState.gameData.status === 'active') {
+        const endTime = appState.gameData.settings?.calculated_end_time;
+        
+        if (endTime) {
+          const remaining = endTime - now;
+          const timeString = formatTimeRemaining(remaining);
+          
+          if (timeString) {
+            statusText.textContent = `Game in progress • ${timeString} remaining`;
+            needsUpdate = true;
+          } else {
+            statusText.textContent = 'Game ended';
+            statusText.className = 'text-sm text-red-200';
+          }
+        } else {
+          statusText.textContent = 'Game in progress';
+        }
+        
+      } else if (appState.gameData.status === 'ended') {
+        statusText.textContent = 'Game ended';
+        statusText.className = 'text-sm text-gray-200';
+      }
+
       statusDiv.appendChild(statusText);
 
+      // Always show team info if player is on a team (regardless of game status)
       if (appState.gameData.currentTeam) {
         const teamText = document.createElement('p');
         teamText.className = 'text-sm';
@@ -1244,6 +1287,11 @@ function renderApp() {
       }
 
       leftSection.appendChild(statusDiv);
+
+      // Update every second if we're showing a countdown
+      if (needsUpdate) {
+        setTimeout(() => renderApp(), 1000);
+      }
     }
 
     headerContent.appendChild(leftSection);
