@@ -136,14 +136,6 @@ const UIBuilder = {
     appState.gameData.currentPlayer = authState.playerId;
     console.log('Found team ID in localStorage:', authState.teamId);
   }
-
-  // Initialize Lucide icons if available
-  if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons();
-    console.log('Lucide icons initialized in initializeApp');
-  } else {
-    console.warn('Lucide icons library not available in initializeApp');
-  }
 })();
 
 // =============================================================================
@@ -1335,11 +1327,6 @@ function renderApp() {
 
     footer.appendChild(footerContent);
     elements.root.appendChild(footer);
-
-    // Initialize Lucide icons if available
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
   } finally {
     // Always clear the render lock
     window.renderingInProgress = false;
@@ -1468,11 +1455,6 @@ function showHostScanPrompt() {
   }, 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg');
   modalContainer.appendChild(closeButton);
 
-  // Initialize Lucide icons
-  if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons();
-  }
-
   // Allow closing modal with Escape key
   function handleEscapeKey(e) {
     if (e.key === 'Escape') {
@@ -1519,9 +1501,6 @@ function showInstallButton() {
 
   // Insert at the beginning of the container
   container.prepend(installButton);
-
-  // Initialize Lucide icons
-  if (window.lucide) window.lucide.createIcons();
 }
 
 // Function to show the installation prompt

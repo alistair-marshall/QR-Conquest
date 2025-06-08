@@ -1115,9 +1115,6 @@ function renderHostQRModal(host) {
   setTimeout(() => {
     generateQRCodeForHost(qrDiv.id, hostUrl);
   }, 100);
-
-  // Initialize Lucide icons
-  if (window.lucide) window.lucide.createIcons();
   
   // Allow closing modal with Escape key
   function handleEscapeKey(e) {
@@ -1181,9 +1178,6 @@ async function generateQRCodeForHost(elementId, url) {
     fallbackContainer.appendChild(fallbackText2);
     
     qrDiv.appendChild(fallbackContainer);
-    
-    // Initialize lucide icons for fallback
-    if (window.lucide) window.lucide.createIcons();
   }
 }
 

@@ -797,11 +797,6 @@ async function loadHostGames() {
       });
     }
 
-    // Initialize Lucide icons
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-
   } catch (error) {
     // Show error state
     gamesListContainer.innerHTML = '';
@@ -822,11 +817,6 @@ async function loadHostGames() {
     errorDiv.appendChild(errorText);
 
     gamesListContainer.appendChild(errorDiv);
-
-    // Initialize Lucide icons for error state
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
   }
 }
 
@@ -934,9 +924,6 @@ function renderGameSettingsModal() {
   }
 
   modalContainer.appendChild(settingsForm);
-
-  // Initialize Lucide icons
-  if (window.lucide) window.lucide.createIcons();
 
   // Allow closing modal with Escape key
   function handleEscapeKey(e) {
@@ -1480,9 +1467,6 @@ function renderBaseCreationForm(qrId, container) {
       navigator.geolocation.clearWatch(parseInt(watchId));
       startLocationTracking();
     }
-
-    // Initialize Lucide icons
-    if (window.lucide) window.lucide.createIcons();
   });
 
   // Reset to GPS button handler
@@ -1710,9 +1694,6 @@ function renderBaseCreationForm(qrId, container) {
       }
 
       updateLocationDisplay();
-
-      // Update icons
-      if (window.lucide) window.lucide.createIcons();
     }
 
     // Function to handle errors
@@ -1810,9 +1791,6 @@ function renderBaseCreationForm(qrId, container) {
     navigateTo('hostPanel');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
-
-  // Initialize Lucide icons
-  if (window.lucide) window.lucide.createIcons();
 
   return container;
 }
