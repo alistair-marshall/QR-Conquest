@@ -1287,11 +1287,6 @@ function renderApp() {
       }
 
       leftSection.appendChild(statusDiv);
-
-      // Update every second if we're showing a countdown
-      if (needsUpdate) {
-        setTimeout(() => renderApp(), 1000);
-      }
     }
 
     headerContent.appendChild(leftSection);
