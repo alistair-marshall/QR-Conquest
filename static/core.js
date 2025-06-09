@@ -133,12 +133,12 @@ function updateAuthState(authData) {
 }
 
 // Clear all authentication data
-function clearAuthState() {
+function clearGameState() {
   // Clear persistent storage
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
-  localStorage.removeItem('hostId');
+  // keep hostId so hosts stay logged in.
   localStorage.removeItem('hostName');
 
   // Clear temporary session data
@@ -1087,7 +1087,7 @@ async function deleteGame() {
     const result = await handleApiResponse(response, 'Failed to delete game');
     
     // Clear game data from local storage and app state
-    clearAuthState();
+    clearGameState();
     
     // Show success message with details - UI will handle this
     if (window.showNotification) {
@@ -1672,7 +1672,7 @@ function handleQRScan(qrCode) {
 
 // Log out/clear data - public interface
 function clearGameData() {
-  clearAuthState();
+  clearGameState();
   
   // Navigate to landing - UI will handle this
   if (window.navigateTo) {
