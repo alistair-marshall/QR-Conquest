@@ -1178,26 +1178,6 @@ function buildGameSettingsForm(options = {}) {
 }
 
 function renderGameSettingsModal() {
-  // Create modal backdrop
-  const modalBackdrop = UIBuilder.createElement('div', {
-    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
-    id: 'game-settings-modal'
-  });
-  document.body.appendChild(modalBackdrop);
-
-  // Create modal container
-  const modalContainer = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto'
-  });
-  modalBackdrop.appendChild(modalContainer);
-
-  // Modal title
-  const modalTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-bold mb-4',
-    textContent: 'Edit Game Settings'
-  });
-  modalContainer.appendChild(modalTitle);
-
   // Get current settings
   const settings = appState.gameData.settings || {};
 
@@ -1231,7 +1211,7 @@ function renderGameSettingsModal() {
         await handleApiResponse(response, 'Failed to update game settings');
         
         // Close modal
-        document.body.removeChild(modalBackdrop);
+        modal.close();
         
         // Refresh game data
         await fetchGameData(appState.gameData.id);
@@ -1246,50 +1226,21 @@ function renderGameSettingsModal() {
     submitButtonText: 'Save Settings'
   });
 
-  // Add cancel button to the form
-  const formButtonContainer = settingsForm.querySelector('button[type="submit"]').parentNode;
-  if (!formButtonContainer) {
-    // If no button container found, create one and move the submit button
-    const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 pt-4 border-t' });
-    
-    const cancelButton = UIBuilder.createButton('Cancel', function() {
-      document.body.removeChild(modalBackdrop);
-    }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
-    
-    const submitButton = settingsForm.querySelector('button[type="submit"]');
-    submitButton.className = 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors';
-    
-    // Remove submit button from form and add both to button group
-    submitButton.parentNode.removeChild(submitButton);
-    buttonGroup.appendChild(cancelButton);
-    buttonGroup.appendChild(submitButton);
-    
-    settingsForm.appendChild(buttonGroup);
-  } else {
-    // Modify existing button container
-    formButtonContainer.className = 'flex gap-4 pt-4 border-t';
-    
-    const cancelButton = UIBuilder.createButton('Cancel', function() {
-      document.body.removeChild(modalBackdrop);
-    }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
-    
-    const submitButton = settingsForm.querySelector('button[type="submit"]');
-    submitButton.className = 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors';
-    
-    // Insert cancel button before submit button
-    formButtonContainer.insertBefore(cancelButton, submitButton);
-  }
+  const modal = UIBuilder.createModal({
+    title: 'Edit Game Settings',
+    content: settingsForm,
+    size: 'xl',
+    actions: [
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+      // Note: Submit button is already part of the form, so we don't duplicate it here
+    ]
+  });
 
-  modalContainer.appendChild(settingsForm);
-
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
+  document.body.appendChild(modal);
 }
 
 // QR Assignment Page

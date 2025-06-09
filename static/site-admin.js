@@ -797,25 +797,8 @@ function renderHostCreationModal() {
 
 // Host QR code modal
 function renderHostQRModal(host) {
-  // Create modal backdrop
-  const modalBackdrop = UIBuilder.createElement('div', {
-    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
-    id: 'host-qr-modal'
-  });
-  document.body.appendChild(modalBackdrop);
-  
-  // Create modal container
-  const modalContainer = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4'
-  });
-  modalBackdrop.appendChild(modalContainer);
-  
-  // Modal title
-  const modalTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-bold mb-4 text-center',
-    textContent: `Host QR Code: ${host.name}`
-  });
-  modalContainer.appendChild(modalTitle);
+  // Create QR code content
+  const qrContent = UIBuilder.createElement('div');
   
   // Host status indicator
   const statusContainer = UIBuilder.createElement('div', {
@@ -845,7 +828,7 @@ function renderHostQRModal(host) {
     textContent: statusText
   });
   statusContainer.appendChild(statusBadge);
-  modalContainer.appendChild(statusContainer);
+  qrContent.appendChild(statusContainer);
   
   // QR code container
   const qrContainer = UIBuilder.createElement('div', {
@@ -896,47 +879,45 @@ function renderHostQRModal(host) {
   linkContainer.appendChild(hostLink);
   
   qrContainer.appendChild(linkContainer);
-  
-  modalContainer.appendChild(qrContainer);
-  
-  // Action buttons
-  const buttonContainer = UIBuilder.createElement('div', { className: 'flex gap-3' });
-  
-  // Copy ID button
-  const copyIdButton = UIBuilder.createButton('Copy ID', function() {
-    navigator.clipboard.writeText(host.qr_code);
-    showNotification('QR code ID copied to clipboard', 'success');
-  }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center', 'copy');
-  buttonContainer.appendChild(copyIdButton);
-  
-  // Copy link button
-  const copyLinkButton = UIBuilder.createButton('Copy Link', function() {
-    navigator.clipboard.writeText(hostUrl);
-    showNotification('Host link copied to clipboard', 'success');
-  }, 'flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center', 'link');
-  buttonContainer.appendChild(copyLinkButton);
-  
-  modalContainer.appendChild(buttonContainer);
-  
-  // Close button
-  const closeButton = UIBuilder.createButton('Close', function() {
-    document.body.removeChild(modalBackdrop);
-  }, 'mt-4 w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
-  modalContainer.appendChild(closeButton);
+  qrContent.appendChild(qrContainer);
+
+  const modal = UIBuilder.createModal({
+    title: `Host QR Code: ${host.name}`,
+    content: qrContent,
+    size: 'lg',
+    actions: [
+      {
+        text: 'Copy ID',
+        onClick: () => {
+          navigator.clipboard.writeText(host.qr_code);
+          showNotification('QR code ID copied to clipboard', 'success');
+        },
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center',
+        icon: 'copy'
+      },
+      {
+        text: 'Copy Link',
+        onClick: () => {
+          navigator.clipboard.writeText(hostUrl);
+          showNotification('Host link copied to clipboard', 'success');
+        },
+        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center',
+        icon: 'link'
+      },
+      {
+        text: 'Close',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
   
   // Generate QR code after modal is in DOM
   setTimeout(() => {
     generateQRCodeForHost(qrDiv.id, hostUrl);
   }, 100);
-  
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
 }
 
 // New function to generate QR codes with library loading
@@ -996,29 +977,8 @@ async function generateQRCodeForHost(elementId, url) {
 
 // Host edit modal
 function renderHostEditModal(host) {
-  // Create modal backdrop
-  const modalBackdrop = UIBuilder.createElement('div', {
-    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
-    id: 'host-edit-modal'
-  });
-  document.body.appendChild(modalBackdrop);
-  
-  // Create modal container
-  const modalContainer = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4'
-  });
-  modalBackdrop.appendChild(modalContainer);
-  
-  // Modal title
-  const modalTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-bold mb-4',
-    textContent: 'Edit Host'
-  });
-  modalContainer.appendChild(modalTitle);
-  
-  // Create form
+  // Create form content
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
-  modalContainer.appendChild(form);
   
   // Host name field
   const nameGroup = UIBuilder.createElement('div');
@@ -1078,20 +1038,6 @@ function renderHostEditModal(host) {
   
   form.appendChild(expiryGroup);
   
-  // Action buttons
-  const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 mt-6' });
-  
-  const cancelButton = UIBuilder.createButton('Cancel', function() {
-    document.body.removeChild(modalBackdrop);
-  }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
-  buttonGroup.appendChild(cancelButton);
-  
-  const saveButton = UIBuilder.createButton('Save Changes', null, 'flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors');
-  saveButton.type = 'submit';
-  buttonGroup.appendChild(saveButton);
-  
-  form.appendChild(buttonGroup);
-  
   // Reset button for removing expiry date
   if (host.expiry_date) {
     const resetButton = UIBuilder.createButton('Remove Expiry Date', function() {
@@ -1099,51 +1045,56 @@ function renderHostEditModal(host) {
     }, 'w-full text-gray-600 mt-2 text-sm hover:text-gray-800 transition-colors');
     form.appendChild(resetButton);
   }
-  
-  // Handle form submission
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const name = nameInput.value.trim();
-    const expiryDateStr = expiryInput.value;
-    
-    if (!name) {
-      showNotification('Please enter a host name', 'warning');
-      return;
-    }
-    
-    let expiryDate = null;
-    if (expiryDateStr) {
-      // Convert date string to timestamp (seconds)
-      expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
-    }
-    
-    const hostData = {
-      name,
-      expiry_date: expiryDate
-    };
-    
-    try {
-      // Call the API function from core.js
-      const result = await updateHost(host.id, hostData);
-      if (result) {
-        document.body.removeChild(modalBackdrop);
-        renderApp();
+
+  const modal = UIBuilder.createModal({
+    title: 'Edit Host',
+    content: form,
+    actions: [
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      },
+      {
+        text: 'Save Changes',
+        onClick: async () => {
+          const name = nameInput.value.trim();
+          const expiryDateStr = expiryInput.value;
+          
+          if (!name) {
+            showNotification('Please enter a host name', 'warning');
+            return;
+          }
+          
+          let expiryDate = null;
+          if (expiryDateStr) {
+            // Convert date string to timestamp (seconds)
+            expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
+          }
+          
+          const hostData = {
+            name,
+            expiry_date: expiryDate
+          };
+          
+          try {
+            // Call the API function from core.js
+            const result = await updateHost(host.id, hostData);
+            if (result) {
+              modal.close();
+              renderApp();
+            }
+          } catch (error) {
+            // Error handling is done in updateHost function
+          }
+        },
+        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors'
       }
-    } catch (error) {
-      // Error handling is done in updateHost function
-    }
+    ]
   });
+
+  document.body.appendChild(modal);
 
   // Focus on name input
   setTimeout(() => nameInput.focus(), 100);
-
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
 }
