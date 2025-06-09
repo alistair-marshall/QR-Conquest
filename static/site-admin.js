@@ -276,31 +276,21 @@ function buildGameListSection() {
   // Content based on current state
   if (appState.siteAdmin.gamesLoading) {
     // Show loading state
-    const loadingDiv = UIBuilder.createElement('div', {
-      className: 'flex items-center justify-center py-12'
-    });
-    
-    const loadingSpinner = UIBuilder.createElement('div', {
-      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
-    });
-    loadingDiv.appendChild(loadingSpinner);
-    
-    const loadingText = UIBuilder.createElement('p', {
-      className: 'text-gray-600',
-      textContent: 'Loading games...'
-    });
-    loadingDiv.appendChild(loadingText);
-    
-    gameListContainer.appendChild(loadingDiv);
+    gameListContainer.appendChild(UIBuilder.createLoadingDisplay('Loading games...'));
   } else if (appState.siteAdmin.gamesError) {
     // Show error state
-    buildGamesError(gameListContainer, appState.siteAdmin.gamesError);
+    gameListContainer.appendChild(UIBuilder.createErrorDisplay(appState.siteAdmin.gamesError, () => refreshSiteAdminGames()));
   } else if (appState.siteAdmin.games.length > 0) {
     // Show games table
     buildGamesTable(gameListContainer, appState.siteAdmin.games);
   } else {
     // Show empty state
-    buildEmptyGamesState(gameListContainer);
+    gameListContainer.appendChild(UIBuilder.createEmptyState({
+      icon: 'gamepad-2',
+      title: 'No games found',
+      message: 'No games have been created by any hosts yet.'
+    }));
+
   }
 
   return gameListContainer;
@@ -484,69 +474,6 @@ function buildGameRow(game) {
     return row;
 }
 
-// Build empty state for no games
-function buildEmptyGamesState(container) {
-    const noGames = UIBuilder.createElement('div', { className: 'text-center py-12' });
-    
-    const noGamesIcon = UIBuilder.createElement('div', {
-      className: 'mx-auto h-12 w-12 text-gray-400 mb-4'
-    });
-    const icon = UIBuilder.createElement('i', {
-      'data-lucide': 'gamepad-2',
-      className: 'h-12 w-12'
-    });
-    noGamesIcon.appendChild(icon);
-    noGames.appendChild(noGamesIcon);
-    
-    const noGamesTitle = UIBuilder.createElement('h3', {
-      className: 'text-lg font-medium text-gray-900 mb-2',
-      textContent: 'No games found'
-    });
-    noGames.appendChild(noGamesTitle);
-    
-    const noGamesText = UIBuilder.createElement('p', {
-      className: 'text-gray-500 mb-6',
-      textContent: 'No games have been created by any hosts yet.'
-    });
-    noGames.appendChild(noGamesText);
-    
-    container.appendChild(noGames);
-}
-
-// Show error state for games
-function buildGamesError(container, errorMessage) {
-    const errorDiv = UIBuilder.createElement('div', { className: 'text-center py-12' });
-    
-    const errorIcon = UIBuilder.createElement('div', {
-      className: 'mx-auto h-12 w-12 text-red-400 mb-4'
-    });
-    const icon = UIBuilder.createElement('i', {
-      'data-lucide': 'alert-circle',
-      className: 'h-12 w-12'
-    });
-    errorIcon.appendChild(icon);
-    errorDiv.appendChild(errorIcon);
-    
-    const errorTitle = UIBuilder.createElement('h3', {
-      className: 'text-lg font-medium text-gray-900 mb-2',
-      textContent: 'Error Loading Games'
-    });
-    errorDiv.appendChild(errorTitle);
-    
-    const errorText = UIBuilder.createElement('p', {
-      className: 'text-gray-500 mb-6',
-      textContent: errorMessage
-    });
-    errorDiv.appendChild(errorText);
-    
-    const retryButton = UIBuilder.createButton('Retry', function() {
-      refreshSiteAdminGames();
-    }, 'bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors');
-    errorDiv.appendChild(retryButton);
-    
-    container.appendChild(errorDiv);
-}
-
 function buildHostListSection() {
   const hostListContainer = UIBuilder.createElement('div', {
     className: 'bg-white rounded-lg shadow-md p-6'
@@ -573,31 +500,24 @@ function buildHostListSection() {
   // Content based on current state
   if (appState.siteAdmin.hostsLoading) {
     // Show loading state
-    const loadingDiv = UIBuilder.createElement('div', {
-      className: 'flex items-center justify-center py-12'
-    });
-    
-    const loadingSpinner = UIBuilder.createElement('div', {
-      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
-    });
-    loadingDiv.appendChild(loadingSpinner);
-    
-    const loadingText = UIBuilder.createElement('p', {
-      className: 'text-gray-600',
-      textContent: 'Loading hosts...'
-    });
-    loadingDiv.appendChild(loadingText);
-    
-    hostListContainer.appendChild(loadingDiv);
+    hostListContainer.appendChild(UIBuilder.createLoadingDisplay('Loading hosts...'));
   } else if (appState.siteAdmin.hostsError) {
     // Show error state
-    buildHostsError(hostListContainer, appState.siteAdmin.hostsError);
+    hostListContainer.appendChild(UIBuilder.createErrorDisplay(appState.siteAdmin.hostsError, () => renderApp()));
   } else if (appState.siteAdmin.hosts.length > 0) {
     // Show hosts table
     buildHostsTable(hostListContainer, appState.siteAdmin.hosts);
   } else {
     // Show empty state
-    buildEmptyHostsState(hostListContainer);
+    hostListContainer.appendChild(UIBuilder.createEmptyState({
+      icon: 'users',
+      title: 'No hosts found',
+      message: 'Get started by creating your first game host.',
+      action: {
+        text: 'Create First Host',
+        onClick: () => renderHostCreationModal()
+      }
+    }));
   }
 
   return hostListContainer;
@@ -774,103 +694,13 @@ function buildHostRow(host) {
     return row;
 }
 
-// Build empty state for no hosts
-function buildEmptyHostsState(container) {
-    const noHosts = UIBuilder.createElement('div', { className: 'text-center py-12' });
-    
-    const noHostsIcon = UIBuilder.createElement('div', {
-      className: 'mx-auto h-12 w-12 text-gray-400 mb-4'
-    });
-    const icon = UIBuilder.createElement('i', {
-      'data-lucide': 'users',
-      className: 'h-12 w-12'
-    });
-    noHostsIcon.appendChild(icon);
-    noHosts.appendChild(noHostsIcon);
-    
-    const noHostsTitle = UIBuilder.createElement('h3', {
-      className: 'text-lg font-medium text-gray-900 mb-2',
-      textContent: 'No hosts found'
-    });
-    noHosts.appendChild(noHostsTitle);
-    
-    const noHostsText = UIBuilder.createElement('p', {
-      className: 'text-gray-500 mb-6',
-      textContent: 'Get started by creating your first game host.'
-    });
-    noHosts.appendChild(noHostsText);
-    
-    const createFirstButton = UIBuilder.createButton('Create First Host', function() {
-      renderHostCreationModal();
-    }, 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors');
-    noHosts.appendChild(createFirstButton);
-    
-    container.appendChild(noHosts);
-}
-
-// Show error state
-function buildHostsError(container, errorMessage) {
-    const errorDiv = UIBuilder.createElement('div', { className: 'text-center py-12' });
-    
-    const errorIcon = UIBuilder.createElement('div', {
-      className: 'mx-auto h-12 w-12 text-red-400 mb-4'
-    });
-    const icon = UIBuilder.createElement('i', {
-      'data-lucide': 'alert-circle',
-      className: 'h-12 w-12'
-    });
-    errorIcon.appendChild(icon);
-    errorDiv.appendChild(errorIcon);
-    
-    const errorTitle = UIBuilder.createElement('h3', {
-      className: 'text-lg font-medium text-gray-900 mb-2',
-      textContent: 'Error Loading Hosts'
-    });
-    errorDiv.appendChild(errorTitle);
-    
-    const errorText = UIBuilder.createElement('p', {
-      className: 'text-gray-500 mb-6',
-      textContent: errorMessage
-    });
-    errorDiv.appendChild(errorText);
-    
-    const retryButton = UIBuilder.createButton('Retry', function() {
-      renderApp();
-    }, 'bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors');
-    errorDiv.appendChild(retryButton);
-    
-    container.appendChild(errorDiv);
-}
-
 // Host creation modal
 function renderHostCreationModal() {
-  // Create modal backdrop
-  const modalBackdrop = UIBuilder.createElement('div', {
-    className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50',
-    id: 'host-creation-modal'
-  });
-  document.body.appendChild(modalBackdrop);
-
-  // Create modal container
-  const modalContainer = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4'
-  });
-  modalBackdrop.appendChild(modalContainer);
-
-  // Modal title
-  const modalTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-bold mb-4',
-    textContent: 'Create New Host'
-  });
-  modalContainer.appendChild(modalTitle);
-
-  // Create form
-  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
-  modalContainer.appendChild(form);
+  // Create form content
+  const formContent = UIBuilder.createElement('form', { className: 'space-y-4' });
 
   // Host name field
   const nameGroup = UIBuilder.createElement('div');
-  
   const nameLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'new-host-name',
@@ -886,12 +716,10 @@ function renderHostCreationModal() {
     required: true
   });
   nameGroup.appendChild(nameInput);
-  
-  form.appendChild(nameGroup);
+  formContent.appendChild(nameGroup);
 
   // Expiry date field
   const expiryGroup = UIBuilder.createElement('div');
-  
   const expiryLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'new-host-expiry',
@@ -917,69 +745,54 @@ function renderHostCreationModal() {
     textContent: 'Leave blank for no expiry date'
   });
   expiryGroup.appendChild(expiryNote);
-  
-  form.appendChild(expiryGroup);
+  formContent.appendChild(expiryGroup);
 
-  // Action buttons
-  const buttonGroup = UIBuilder.createElement('div', { className: 'flex gap-4 mt-6' });
-  
-  const cancelButton = UIBuilder.createButton('Cancel', function() {
-    document.body.removeChild(modalBackdrop);
-  }, 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors');
-  buttonGroup.appendChild(cancelButton);
-  
-  const submitButton = UIBuilder.createButton('Create Host', null, 'flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors');
-  submitButton.type = 'submit';
-  buttonGroup.appendChild(submitButton);
-  
-  form.appendChild(buttonGroup);
-
-  // Handle form submission
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const name = nameInput.value.trim();
-    const expiryDateStr = expiryInput.value;
-    
-    if (!name) {
-      showNotification('Please enter a host name', 'warning');
-      return;
-    }
-    
-    let expiryDate = null;
-    if (expiryDateStr) {
-      // Convert date string to timestamp (seconds)
-      expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
-    }
-    
-    const hostData = {
-      name,
-      expiry_date: expiryDate
-    };
-    
-    try {
-      // Call the API function from core.js
-      const result = await createHost(hostData);
-      if (result) {
-        document.body.removeChild(modalBackdrop);
-        renderApp();
+  const modal = UIBuilder.createModal({
+    title: 'Create New Host',
+    content: formContent,
+    actions: [
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      },
+      {
+        text: 'Create Host',
+        onClick: async () => {
+          const name = nameInput.value.trim();
+          const expiryDateStr = expiryInput.value;
+          
+          if (!name) {
+            showNotification('Please enter a host name', 'warning');
+            return;
+          }
+          
+          let expiryDate = null;
+          if (expiryDateStr) {
+            expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
+          }
+          
+          const hostData = { name, expiry_date: expiryDate };
+          
+          try {
+            const result = await createHost(hostData);
+            if (result) {
+              modal.close();
+              renderApp();
+            }
+          } catch (error) {
+            // Error handling is done in createHost function
+          }
+        },
+        className: 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors'
       }
-    } catch (error) {
-      // Error handling is done in createHost function
-    }
+    ]
   });
+
+  document.body.appendChild(modal);
 
   // Focus on name input
   setTimeout(() => nameInput.focus(), 100);
-
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
 }
 
 // Host QR code modal

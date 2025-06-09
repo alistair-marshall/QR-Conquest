@@ -63,6 +63,168 @@ const UIBuilder = {
     }
     
     return button;
+  },
+
+  createModal(config) {
+    const {
+      title,        // string - Modal title
+      content,      // HTMLElement|string - Modal content
+      actions = [], // Array of action button configs
+      size = 'md',  // Modal size ('sm', 'md', 'lg', 'xl')
+      onClose = null// Callback when modal is closed
+    } = config;
+
+    // Size classes
+    const sizeClasses = {
+      'sm': 'max-w-sm',
+      'md': 'max-w-md', 
+      'lg': 'max-w-lg',
+      'xl': 'max-w-2xl'
+    };
+
+    // Create modal backdrop
+    const modalBackdrop = this.createElement('div', {
+      className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
+    });
+
+    // Create modal container
+    const modalContainer = this.createElement('div', {
+      className: `bg-white rounded-lg shadow-xl p-6 w-full ${sizeClasses[size]} mx-4 max-h-[90vh] overflow-y-auto`
+    });
+
+    // Add title if provided
+    if (title) {
+      const titleElement = this.createElement('h3', {
+        className: 'text-xl font-bold mb-4',
+        textContent: title
+      });
+      modalContainer.appendChild(titleElement);
+    }
+
+    // Add content
+    if (content) {
+      const contentContainer = this.createElement('div', {
+        className: 'modal-content'
+      });
+      
+      if (typeof content === 'string') {
+        contentContainer.innerHTML = content;
+      } else if (content.nodeType) {
+        contentContainer.appendChild(content);
+      }
+      
+      modalContainer.appendChild(contentContainer);
+    }
+
+    // Add actions if provided
+    if (actions.length > 0) {
+      const actionsContainer = this.createElement('div', {
+        className: 'flex gap-4 mt-6 pt-4 border-t'
+      });
+
+      actions.forEach(action => {
+        const button = this.createButton(
+          action.text,
+          action.onClick,
+          action.className || 'flex-1 py-2 px-4 rounded-lg transition-colors',
+          action.icon
+        );
+        
+        if (action.type) {
+          button.type = action.type;
+        }
+        
+        actionsContainer.appendChild(button);
+      });
+
+      modalContainer.appendChild(actionsContainer);
+    }
+
+    modalBackdrop.appendChild(modalContainer);
+
+    // Close function
+    const closeModal = () => {
+      if (onClose) onClose();
+      if (modalBackdrop.parentNode) {
+        modalBackdrop.parentNode.removeChild(modalBackdrop);
+      }
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+
+    // Handle escape key
+    const handleEscapeKey = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    document.addEventListener('keydown', handleEscapeKey);
+
+    // Add close method to modal for external access
+    modalBackdrop.close = closeModal;
+
+    return modalBackdrop;
+  },
+
+  createLoadingDisplay(message = 'Loading...') {
+    const loadingDiv = this.createElement('div', {
+      className: 'flex items-center justify-center py-12'
+    });
+    
+    const loadingSpinner = this.createElement('div', {
+      className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
+    });
+    loadingDiv.appendChild(loadingSpinner);
+    
+    const loadingText = this.createElement('p', {
+      className: 'text-gray-600',
+      textContent: message
+    });
+    loadingDiv.appendChild(loadingText);
+    
+    return loadingDiv;
+  },
+
+  createEmptyState(config) {
+    const {
+      icon = 'inbox',
+      title = 'No items found',
+      message = 'There are no items to display',
+      action = null
+    } = config;
+
+    const emptyDiv = this.createElement('div', {
+      className: 'text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300'
+    });
+
+    const emptyIcon = this.createElement('i', {
+      'data-lucide': icon,
+      className: 'w-12 h-12 text-gray-400 mx-auto mb-3'
+    });
+    emptyDiv.appendChild(emptyIcon);
+
+    const emptyTitle = this.createElement('h4', {
+      className: 'text-lg font-medium text-gray-900 mb-2',
+      textContent: title
+    });
+    emptyDiv.appendChild(emptyTitle);
+
+    const emptyText = this.createElement('p', {
+      className: 'text-gray-600 mb-4',
+      textContent: message
+    });
+    emptyDiv.appendChild(emptyText);
+
+    if (action) {
+      const actionButton = this.createButton(
+        action.text,
+        action.onClick,
+        action.className || 'bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-flex items-center',
+        action.icon
+      );
+      emptyDiv.appendChild(actionButton);
+    }
+
+    return emptyDiv;
   }
 };
 
@@ -1419,50 +1581,31 @@ function handleHostButtonClick() {
 }
 
 function showHostScanPrompt() {
-  // Create modal backdrop
-  const modalBackdrop = document.createElement('div');
-  modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-  modalBackdrop.id = 'host-scan-modal';
-  document.body.appendChild(modalBackdrop);
+  const modal = UIBuilder.createModal({
+    title: 'Host Authentication',
+    content: UIBuilder.createElement('p', {
+      className: 'mb-4 text-gray-600',
+      textContent: 'Scan your host QR code to access the game management features.'
+    }),
+    actions: [
+      {
+        text: 'Scan Host QR Code',
+        onClick: () => {
+          modal.close();
+          navigateTo('scanQR');
+        },
+        className: 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors',
+        icon: 'qr-code'
+      },
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
 
-  // Create modal container
-  const modalContainer = document.createElement('div');
-  modalContainer.className = 'bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4';
-  modalBackdrop.appendChild(modalContainer);
-
-  // Modal title
-  const modalTitle = document.createElement('h3');
-  modalTitle.className = 'text-xl font-bold mb-4';
-  modalTitle.textContent = 'Host Authentication';
-  modalContainer.appendChild(modalTitle);
-
-  // Instructions
-  const instructions = document.createElement('p');
-  instructions.className = 'mb-4 text-gray-600';
-  instructions.textContent = 'Scan your host QR code to access the game management features.';
-  modalContainer.appendChild(instructions);
-
-  // Scan button
-  const scanButton = UIBuilder.createButton('Scan Host QR Code', function() {
-    document.body.removeChild(modalBackdrop);
-    navigateTo('scanQR');
-  }, 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg mb-4', 'qr-code');
-  modalContainer.appendChild(scanButton);
-
-  // Close button
-  const closeButton = UIBuilder.createButton('Cancel', function() {
-    document.body.removeChild(modalBackdrop);
-  }, 'w-full bg-gray-500 text-white py-2 px-4 rounded-lg');
-  modalContainer.appendChild(closeButton);
-
-  // Allow closing modal with Escape key
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      document.body.removeChild(modalBackdrop);
-      document.removeEventListener('keydown', handleEscapeKey);
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey);
+  document.body.appendChild(modal);
 }
 
 // =============================================================================
