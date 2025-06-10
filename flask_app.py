@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
 import sqlite3
 import uuid
 import time
@@ -11,7 +10,6 @@ import random
 from functools import wraps
 
 app = Flask(__name__, static_folder='static')
-CORS(app)  # Enable CORS for all routes
 
 # ==========================================================
 # Site Admin Authentication Setup

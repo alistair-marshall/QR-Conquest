@@ -297,7 +297,6 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
    ```bash
    git clone <repository-url>
    cd qr-conquest
-   pip install flask flask-cors
    ```
 
 2. **Set environment variables**:
@@ -384,7 +383,6 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Input validation**: All API inputs validated
 - **SQL injection protection**: Parameterized queries
 - **HTTPS required**: Camera access requires secure connection
-- **CORS enabled**: Cross-origin requests properly configured
 
 ### Privacy Considerations
 - **Location data**: Only stored for base creation and capture verification
