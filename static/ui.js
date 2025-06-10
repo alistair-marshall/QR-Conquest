@@ -1207,98 +1207,89 @@ function initGameMap() {
     return;
   }
 
-  // If a map instance already exists, remove it to prevent Leaflet errors on re-render.
-  if (gameMapInstance) {
-    gameMapInstance.remove();
-    gameMapInstance = null;
-  }
-
   // Check if there are bases to display
   if (!appState.gameData.bases || appState.gameData.bases.length === 0) {
     mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No bases to display on the map.</div>`;
     return;
   }
 
-  // Initialize the map
-  gameMapInstance = L.map(mapElement);
+  // Only initialize the map if it doesn't exist yet
+  if (!gameMapInstance) {
+    // Initialize the map
+    gameMapInstance = L.map(mapElement);
 
-  // Add OpenStreetMap tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  }).addTo(gameMapInstance);
-
-  const latLngs = [];
-  const markers = [];
-
-  appState.gameData.bases.forEach(base => {
-    if (typeof base.lat !== 'number' || typeof base.lng !== 'number') {
-      console.warn('Base has invalid coordinates:', base.name, base.lat, base.lng);
-      return; // Skip this base
-    }
-    const latLng = [base.lat, base.lng];
-    latLngs.push(latLng);
-
-    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
-    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
-
-    if (base.ownedBy) {
-      const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
-      if (owningTeam) {
-        markerColor = getHexColorForTailwind(owningTeam.color);
-        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
-      } else {
-        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
-      }
-    }
-
-    const captureRadius = appState.gameData.settings?.capture_radius_meters || 15;
-    const circleMarker = L.circleMarker(latLng, {
-      radius: captureRadius,
-      fillColor: markerColor,
-      color: '#000000', // Border color for the circle
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.75
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
     }).addTo(gameMapInstance);
 
-    circleMarker.bindPopup(popupContent);
-    circleMarker.baseId = base.id;
-    markers.push(circleMarker);
-  });
+    // Initialize empty markers array
+    gameMapInstance.baseMarkers = [];
+  }
 
-  gameMapInstance.baseMarkers = markers;
+  // Create or update all markers
+  updateMapMarkers();
 
-  // Zoom and center the map to fit all base markers
-  if (latLngs.length > 0) {
-    const bounds = L.latLngBounds(latLngs);
-    gameMapInstance.fitBounds(bounds.pad(0.2)); // .pad(0.2) adds 20% padding around bounds
-  } else {
-    // Fallback if no valid bases were processed (e.g. all had bad coords)
-    // Centering on Edinburgh, UK as a generic fallback.
-    gameMapInstance.setView([55.94763, -3.16202], 16);
-    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
+  // Set initial view if this is the first time
+  if (!gameMapInstance._boundsSet) {
+    const latLngs = [];
+    appState.gameData.bases.forEach(base => {
+      if (typeof base.lat === 'number' && typeof base.lng === 'number') {
+        latLngs.push([base.lat, base.lng]);
+      }
+    });
+
+    if (latLngs.length > 0) {
+      const bounds = L.latLngBounds(latLngs);
+      gameMapInstance.fitBounds(bounds.pad(0.2));
+      gameMapInstance._boundsSet = true;
+    } else {
+      gameMapInstance.setView([55.94763, -3.16202], 16);
+      gameMapInstance._boundsSet = true;
+      mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
+    }
   }
 }
 
 function updateMapMarkers() {
-  // If no map instance or no bases, return
-  if (!gameMapInstance || !appState.gameData.bases || appState.gameData.bases.length === 0) {
+  if (!gameMapInstance) {
     return;
   }
 
-  // Get all markers (we'll store them in a new property of gameMapInstance)
+  // Initialize markers array if it doesn't exist
   if (!gameMapInstance.baseMarkers) {
-    console.warn('No markers to update. Reinitialize map.');
-    initGameMap()
+    gameMapInstance.baseMarkers = [];
+  }
+
+  // If no bases, clear all markers and return
+  if (!appState.gameData.bases || appState.gameData.bases.length === 0) {
+    gameMapInstance.baseMarkers.forEach(marker => {
+      gameMapInstance.removeLayer(marker);
+    });
+    gameMapInstance.baseMarkers = [];
     return;
   }
 
-  // Update each marker based on current base ownership
-  appState.gameData.bases.forEach(base => {
-    const marker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
-    if (!marker) return;
+  const captureRadius = appState.gameData.settings?.capture_radius_meters || 15;
 
+  // Track which bases we've processed
+  const processedBaseIds = new Set();
+
+  // Update or create markers for current bases
+  appState.gameData.bases.forEach(base => {
+    if (typeof base.lat !== 'number' || typeof base.lng !== 'number') {
+      console.warn('Base has invalid coordinates:', base.name, base.lat, base.lng);
+      return;
+    }
+
+    processedBaseIds.add(base.id);
+    const latLng = [base.lat, base.lng];
+
+    // Find existing marker for this base
+    let existingMarker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
+
+    // Determine marker color and popup content
     let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
     let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
 
@@ -1312,13 +1303,43 @@ function updateMapMarkers() {
       }
     }
 
-    // Update marker color
-    marker.setStyle({
-      fillColor: markerColor
-    });
+    if (existingMarker) {
+      // Update existing marker
+      existingMarker.setLatLng(latLng);
+      existingMarker.setStyle({
+        radius: captureRadius,
+        fillColor: markerColor,
+        color: '#000000',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.75
+      });
+      existingMarker.getPopup().setContent(popupContent);
+    } else {
+      // Create new marker
+      const circleMarker = L.circleMarker(latLng, {
+        radius: captureRadius,
+        fillColor: markerColor,
+        color: '#000000',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.75
+      }).addTo(gameMapInstance);
 
-    // Update popup content
-    marker.getPopup().setContent(popupContent);
+      circleMarker.bindPopup(popupContent);
+      circleMarker.baseId = base.id;
+      gameMapInstance.baseMarkers.push(circleMarker);
+    }
+  });
+
+  // Remove markers for bases that no longer exist
+  gameMapInstance.baseMarkers = gameMapInstance.baseMarkers.filter(marker => {
+    if (!processedBaseIds.has(marker.baseId)) {
+      // Base no longer exists, remove marker
+      gameMapInstance.removeLayer(marker);
+      return false;
+    }
+    return true;
   });
 }
 
