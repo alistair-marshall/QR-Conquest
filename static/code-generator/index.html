@@ -120,7 +120,7 @@
         .qr-item.custom-colors {
             border: 2px solid var(--custom-border-color, #ff0000);
         }
-        
+
         input[type="color"] {
             width: 60px;
             height: 40px;
@@ -157,8 +157,8 @@
             border-radius: 2px;
             max-width: 100%;
         }
-        
-                @media print {
+
+        @media print {
             body {
                 background-color: white;
                 padding: 0;
@@ -168,7 +168,8 @@
             .container {
                 box-shadow: none;
                 max-width: 100%;
-                padding: 10mm;
+                padding: 0;
+                margin:0;
                 height: auto;
                 overflow: hidden;
             }
@@ -177,6 +178,7 @@
             }
             .print-area {
                 margin-top: 0;
+                padding:0;
                 height: auto;
                 overflow: hidden;
             }
@@ -227,7 +229,7 @@
                 border: 3px solid #000 !important;
             }
         }
-        
+
         @media (max-width: 600px) {
             .form-controls {
                 grid-template-columns: 1fr;
@@ -238,7 +240,7 @@
 <body>
     <div class="container">
         <h1>QR Conquest: Enhanced Code Generator</h1>
-        
+
         <div class="form-controls">
             <div class="form-group">
                 <label for="paperSize">Paper Size:</label>
@@ -249,7 +251,7 @@
                     <option value="tabloid">Tabloid (11 × 17 in)</option>
                 </select>
             </div>
-            
+
             <div class="form-group">
                 <label for="columns">Number of Columns:</label>
                 <select id="columns" onchange="updateLayout()">
@@ -260,12 +262,12 @@
                     <option value="6">6 Columns</option>
                 </select>
             </div>
-            
+
             <div class="form-group full-width">
                 <label for="headerText">Header Text (optional):</label>
                 <textarea id="headerText" placeholder="Enter text to appear above each QR code (e.g., 'QR Conquest Base', 'Team Code', etc.)" onblur="updateLayout()"></textarea>
             </div>
-            
+
             <div class="form-group">
                 <label>Visual Style:</label>
                 <select id="visualStyle" onchange="updateLayout()">
@@ -275,14 +277,14 @@
                     <option value="custom">Custom Colors</option>
                 </select>
             </div>
-            
+
             <div class="form-group" id="customColorsGroup" style="display: none;">
                 <label for="backgroundColor">Background Color:</label>
                 <input type="color" id="backgroundColor" value="#ffff00" onchange="updateLayout()">
                 <label for="borderColor" style="margin-top: 10px;">Border Color:</label>
                 <input type="color" id="borderColor" value="#ff0000" onchange="updateLayout()">
             </div>
-            
+
             <div class="form-group">
                 <div class="checkbox-group">
                     <input type="checkbox" id="showUrl" checked onchange="updateLayout()">
@@ -290,10 +292,10 @@
                 </div>
             </div>
         </div>
-        
+
         <button onclick="generateQRCodes()">Generate New QR Codes</button>
         <button onclick="window.print()">Print QR Codes</button>
-        
+
         <div class="info-panel">
             <h3>Layout Information</h3>
             <div id="layoutInfo">
@@ -302,7 +304,7 @@
                 <p><strong>Grid layout:</strong> <span id="gridLayout">3 × 4</span></p>
             </div>
         </div>
-        
+
         <div class="print-area">
             <div id="qrGrid" class="qr-grid"></div>
         </div>
@@ -316,7 +318,7 @@
             a3: { width: 1123, height: 1587 },     // 297mm × 420mm at 96dpi
             tabloid: { width: 1056, height: 1632 } // 11" × 17" at 96dpi
         };
-        
+
         function generateRandomID() {
             const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
             let result = '';
@@ -325,41 +327,41 @@
             }
             return result;
         }
-        
+
         function calculateOptimalLayout() {
             const paperSize = document.getElementById('paperSize').value;
             const columns = parseInt(document.getElementById('columns').value);
             const hasHeader = document.getElementById('headerText').value.trim() !== '';
             const showUrl = document.getElementById('showUrl').checked;
-            
+
             const paper = paperSizes[paperSize];
-            const margins = 40; // 20px margin on each side
-            const gap = 10;
-            
-            // Calculate available space (with bottom buffer to prevent extra pages)
+            const margins = 60;
+
+            // Calculate available space
             const availableWidth = paper.width - (2 * margins);
-            const availableHeight = paper.height - (2 * margins) - 60; // Subtract 60px buffer at bottom
-            
+            const availableHeight = paper.height - (2 * margins) - 30;
+
             // Calculate item width (no gaps between items)
             const itemWidth = availableWidth / columns;
-            
-            // Calculate QR code size (leave generous room for visual separation)
-            let qrSize = itemWidth - 80; // Much more conservative: 40px effective padding on each side
-            if (hasHeader) qrSize -= 30; // Space for header text
-            if (showUrl) qrSize -= 20; // Space for URL text
-            
-            // Ensure QR code isn't too small or too large
-            qrSize = Math.max(80, Math.min(300, qrSize));
-            
-            // Calculate item height based on actual content
-            let itemHeight = qrSize + 80; // QR code + generous padding
-            if (hasHeader) itemHeight += 30; // Header space
-            if (showUrl) itemHeight += 20; // URL space
-            
-            // Calculate how many rows fit (no gaps between rows)
+
+            // Calculate QR code size with more efficient padding
+            let qrSize = itemWidth - 60;
+            if (hasHeader) qrSize -= 25;
+            if (showUrl) qrSize -= 15;
+
+            // Allow smaller minimum QR codes for better space utilisation
+            qrSize = Math.max(60, Math.min(300, qrSize));
+
+            // Calculate item height with tighter spacing
+            let itemHeight = qrSize + 40;
+            if (hasHeader) itemHeight += 25;
+            if (showUrl) itemHeight += 15;
+
+            // Calculate how many rows fit
+            console.log("raw rows ",availableHeight / itemHeight)
             const rows = Math.floor(availableHeight / itemHeight);
             const codesPerPage = columns * rows;
-            
+
             return {
                 qrSize: Math.floor(qrSize),
                 columns: columns,
@@ -369,51 +371,51 @@
                 itemHeight: Math.floor(itemHeight)
             };
         }
-        
+
         function updateLayout() {
             const layout = calculateOptimalLayout();
-            
+
             // Show/hide custom colors controls
             const visualStyle = document.getElementById('visualStyle').value;
             const customColorsGroup = document.getElementById('customColorsGroup');
             customColorsGroup.style.display = visualStyle === 'custom' ? 'block' : 'none';
-            
+
             // Update info panel
             document.getElementById('qrSize').textContent = layout.qrSize + 'px';
             document.getElementById('codesPerPage').textContent = layout.codesPerPage;
             document.getElementById('gridLayout').textContent = `${layout.columns} × ${layout.rows}`;
-            
+
             // Update grid CSS
             const grid = document.getElementById('qrGrid');
             grid.style.gridTemplateColumns = `repeat(${layout.columns}, 1fr)`;
-            
+
             // Regenerate if we already have codes
             if (grid.children.length > 0) {
                 generateQRCodes();
             }
         }
-        
+
         function generateQRCodes() {
             const container = document.getElementById('qrGrid');
             container.innerHTML = ''; // Clear previous QR codes
-            
+
             const layout = calculateOptimalLayout();
             const headerText = document.getElementById('headerText').value.trim();
             const visualStyle = document.getElementById('visualStyle').value;
             const showUrl = document.getElementById('showUrl').checked;
-            
+
             // Extract base URL from current location
             const baseDomain = window.location.href.split('/code-generator')[0];
-            
+
             // Generate QR codes to fill the page
             for (let i = 0; i < layout.codesPerPage; i++) {
                 const uniqueID = generateRandomID();
                 const url = `${baseDomain}/?id=${uniqueID}`;
-                
+
                 // Create container for each QR code
                 const qrItem = document.createElement('div');
                 qrItem.className = 'qr-item';
-                
+
                 // Apply visual style
                 if (visualStyle === 'border') {
                     qrItem.classList.add('with-border');
@@ -426,22 +428,21 @@
                     qrItem.style.backgroundColor = bgColor;
                     qrItem.style.setProperty('--custom-border-color', borderColor);
                 }
-                
+
                 // Add header text if specified
                 if (headerText) {
                     const headerDiv = document.createElement('div');
                     headerDiv.className = 'qr-header';
                     headerDiv.textContent = headerText;
-                    console.log('Adding header:', headerText); // Debug log
                     qrItem.appendChild(headerDiv);
                 }
-                
+
                 // Create div for the QR code
                 const qrDiv = document.createElement('div');
                 qrDiv.className = 'qr-code';
                 qrDiv.id = `qrcode-${i}`;
                 qrItem.appendChild(qrDiv);
-                
+
                 // Add URL if enabled
                 if (showUrl) {
                     const idDiv = document.createElement('div');
@@ -449,9 +450,9 @@
                     idDiv.textContent = url;
                     qrItem.appendChild(idDiv);
                 }
-                
+
                 container.appendChild(qrItem);
-                
+
                 // Generate the QR code
                 new QRCode(qrDiv.id, {
                     text: url,
@@ -463,7 +464,7 @@
                 });
             }
         }
-        
+
         // Initialize when page loads
         window.onload = function() {
             updateLayout();
