@@ -8,7 +8,7 @@ const appState = {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    hostId: null,  
+    hostId: null,
     hostName: null,
     status: 'setup'
   },
@@ -218,7 +218,7 @@ async function handleQRCode(qrCode, context = 'scan') {
 
     const responseText = await statusResponse.text();
     let statusData;
-    
+
     try {
       statusData = JSON.parse(responseText);
     } catch (jsonError) {
@@ -231,13 +231,13 @@ async function handleQRCode(qrCode, context = 'scan') {
 
   } catch (err) {
     console.error('Error processing QR code:', err);
-    
+
     // Show user-friendly error message
     const userMessage = err.message || 'Unable to process QR code. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }
-    
+
     // If we have no game loaded and this is an unrecognised QR code
     if (!getAuthState().hasGame) {
       appState.pendingQRCode = qrCode;
@@ -257,19 +257,19 @@ async function routeQRCode(qrCode, statusData) {
       case 'host':
         await handleHostQR(qrCode, statusData);
         break;
-        
+
       case 'team':
         await handleTeamQR(qrCode, statusData);
         break;
-        
+
       case 'base':
         await handleBaseQR(qrCode, statusData);
         break;
-        
+
       case 'unassigned':
         await handleUnassignedQR(qrCode);
         break;
-        
+
       default:
         throw new Error('This QR code is not recognised by the system.');
     }
@@ -319,7 +319,7 @@ async function handleTeamQR(qrCode, statusData) {
     } else {
       const currentTeamName = getTeamName(authState.teamId);
       const newTeamName = getTeamName(teamId);
-      
+
       if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
         // Proceed with team switch
         await joinTeam(teamId);
@@ -435,7 +435,7 @@ async function captureBaseWithLocation(baseId) {
       },
       function(error) {
         let errorMessage = 'Unable to get your location. ';
-        
+
         switch(error.code) {
           case error.PERMISSION_DENIED:
             errorMessage += 'Please enable location services and try again.';
@@ -566,14 +566,31 @@ async function fetchGameUpdates() {
     // Update bases with ownership information
     appState.gameData.bases = gameData.bases;
 
-    // Update map markers without recreating the whole map - UI will handle this
-    if (window.updateMapMarkers) {
-      window.updateMapMarkers();
-    }
+    // Update game status in case it changed
+    appState.gameData.status = gameData.status;
 
-    // Re-render with new data - UI will handle this
-    if (window.renderApp) {
-      window.renderApp();
+    // Only update specific UI components instead of full re-render
+    if (appState.page === 'gameView') {
+      // Update scoreboard
+      if (window.updateScoreboard) {
+        window.updateScoreboard();
+      }
+
+      // Update map markers
+      if (window.updateMapMarkers) {
+        window.updateMapMarkers();
+      }
+
+      // Update header status if it exists
+      const statusElement = document.getElementById('game-status-text');
+      if (statusElement && window.updateGameStatusText) {
+        window.updateGameStatusText(statusElement);
+      }
+    } else {
+      // Only do full re-render if we're not on the game view
+      if (window.renderApp) {
+        window.renderApp();
+      }
     }
   } catch (err) {
     console.error('Error fetching game updates:', err);
@@ -663,12 +680,12 @@ async function createGame(gameSettings) {
 
     // Show success message with settings info
     let successMessage = `Game created successfully! Game ID: ${gameId}`;
-    
+
     if (gameSettings.auto_start_time) {
       const startTime = new Date(gameSettings.auto_start_time * 1000);
       successMessage += `\n\nAuto-start: ${startTime.toLocaleString()}`;
     }
-    
+
     if (gameSettings.game_duration_minutes) {
       const hours = Math.floor(gameSettings.game_duration_minutes / 60);
       const minutes = gameSettings.game_duration_minutes % 60;
@@ -678,13 +695,13 @@ async function createGame(gameSettings) {
         successMessage += `\nDuration: ${minutes}m`;
       }
     }
-    
+
     successMessage += '\n\nYou can now scan QR codes to add teams and bases.';
 
     if (window.showNotification) {
       window.showNotification(successMessage, 'success');
     }
-    
+
     // Check if there's a pending QR code to handle
     const pendingQR = sessionStorage.getItem('pendingQRCode');
     if (pendingQR) {
@@ -710,12 +727,12 @@ async function startGame() {
 
   try {
     setLoading(true);
-    
+
     const authState = getAuthState();
     if (!authState.isHost) {
       throw new Error('Only the game host can start the game.');
     }
-    
+
     const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/start', {
       method: 'POST',
       headers: {
@@ -727,10 +744,10 @@ async function startGame() {
     });
 
     await handleApiResponse(response, 'Failed to start game');
-    
+
     // Update game status
     appState.gameData.status = 'active';
-    
+
     // Show success message and navigate - UI will handle this
     if (window.showNotification) {
       window.showNotification('Game has been started!', 'success');
@@ -758,12 +775,12 @@ async function endGame() {
 
   try {
     setLoading(true);
-    
+
     const authState = getAuthState();
     if (!authState.isHost) {
       throw new Error('Only the game host can end the game.');
     }
-    
+
     const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/end', {
       method: 'POST',
       headers: {
@@ -778,7 +795,7 @@ async function endGame() {
 
     // Update game status
     appState.gameData.status = 'ended';
-    
+
     // Navigate to results - UI will handle this
     if (window.navigateTo) {
       window.navigateTo('results');
@@ -824,7 +841,7 @@ async function joinTeam(teamId) {
     });
 
     const teamName = getTeamName(teamId);
-    
+
     // Show success message and navigate - UI will handle this
     if (window.showNotification) {
       window.showNotification(`You have successfully joined ${teamName}!`, 'success');
@@ -1068,12 +1085,12 @@ async function deleteGame() {
 
   try {
     setLoading(true);
-    
+
     const authState = getAuthState();
     if (!authState.isHost) {
       throw new Error('Only the game host can delete the game.');
     }
-    
+
     const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id, {
       method: 'DELETE',
       headers: {
@@ -1085,17 +1102,17 @@ async function deleteGame() {
     });
 
     const result = await handleApiResponse(response, 'Failed to delete game');
-    
+
     // Clear game data from local storage and app state
     clearGameState();
-    
+
     // Show success message with details - UI will handle this
     if (window.showNotification) {
       const deleted = result.deleted;
       const message = `Game deleted successfully!\n\nRemoved: ${deleted.teams} teams, ${deleted.bases} bases, ${deleted.players} players, ${deleted.captures} captures\n\nAll QR codes have been released for reuse.`;
       window.showNotification(message, 'success');
     }
-    
+
     // Navigate to landing page - UI will handle this
     if (window.navigateTo) {
       window.navigateTo('landing');
@@ -1121,35 +1138,35 @@ async function deleteGame() {
 async function authenticateSiteAdmin(password) {
   try {
     setLoading(true);
-    
+
     // Store the admin token in memory only (not in localStorage for security)
     appState.siteAdmin.token = password;
     appState.siteAdmin.isAuthenticated = true;
-    
+
     // Test authentication with a request to the hosts endpoint
     const response = await fetch(`${API_BASE_URL}/hosts`, {
       headers: {
         'Authorization': `Bearer ${password}`
       }
     });
-    
+
     if (!response.ok) {
       // Reset auth state
       appState.siteAdmin.token = null;
       appState.siteAdmin.isAuthenticated = false;
-      
+
       if (response.status === 401) {
         throw new Error('Invalid admin password. Please check your credentials.');
       } else {
         throw new Error('Authentication failed. Please try again.');
       }
     }
-    
+
     // Show success message - UI will handle this
     if (window.showNotification) {
       window.showNotification('Site admin authenticated successfully', 'success');
     }
-    
+
     // Clear any existing admin data to force fresh load
     clearSiteAdminData();
 
@@ -1177,7 +1194,7 @@ async function fetchHostGames(hostId) {
 
     const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
     const data = await handleApiResponse(response, 'Failed to fetch host games');
-    
+
     console.log('Host games received:', data);
     return data;
   } catch (err) {
@@ -1198,13 +1215,13 @@ async function fetchHosts() {
 
   try {
     setLoading(true);
-    
+
     const response = await fetch(`${API_BASE_URL}/hosts`, {
       headers: {
         'Authorization': `Bearer ${appState.siteAdmin.token}`
       }
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         // Reset admin auth if unauthorized
@@ -1214,7 +1231,7 @@ async function fetchHosts() {
       }
       throw new Error('Unable to load hosts. Please try again.');
     }
-    
+
     const hosts = await response.json();
     return hosts;
   } catch (err) {
@@ -1236,7 +1253,7 @@ async function createHost(hostData) {
 
   try {
     setLoading(true);
-    
+
     const response = await fetch(`${API_BASE_URL}/hosts`, {
       method: 'POST',
       headers: {
@@ -1245,7 +1262,7 @@ async function createHost(hostData) {
       },
       body: JSON.stringify(hostData)
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         // Reset admin auth if unauthorized
@@ -1255,9 +1272,9 @@ async function createHost(hostData) {
       }
       throw new Error('Unable to create host. Please check your details and try again.');
     }
-    
+
     const result = await response.json();
-    
+
     // Show success message - UI will handle this
     if (window.showNotification) {
       window.showNotification('Host created successfully!', 'success');
@@ -1284,7 +1301,7 @@ async function updateHost(hostId, hostData) {
 
   try {
     setLoading(true);
-    
+
     const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
       method: 'PUT',
       headers: {
@@ -1293,7 +1310,7 @@ async function updateHost(hostId, hostData) {
       },
       body: JSON.stringify(hostData)
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         // Reset admin auth if unauthorized
@@ -1303,14 +1320,14 @@ async function updateHost(hostId, hostData) {
       }
       throw new Error('Unable to update host. Please check your details and try again.');
     }
-    
+
     const result = await response.json();
-    
+
     // Show success message - UI will handle this
     if (window.showNotification) {
       window.showNotification('Host updated successfully!', 'success');
     }
-    
+
     refreshSiteAdminHosts();
     return result;
   } catch (err) {
@@ -1332,14 +1349,14 @@ async function deleteHost(hostId) {
 
   try {
     setLoading(true);
-    
+
     const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${appState.siteAdmin.token}`
       }
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         // Reset admin auth if unauthorized
@@ -1347,21 +1364,21 @@ async function deleteHost(hostId) {
         appState.siteAdmin.token = null;
         throw new Error('Admin session expired. Please login again.');
       }
-      
+
       // Use handleApiResponse to get the actual error message from backend
       await handleApiResponse(response, 'Unable to delete host');
     }
-    
+
     // Show success message - UI will handle this
     if (window.showNotification) {
       window.showNotification('Host deleted successfully!', 'success');
     }
-    
+
     refreshSiteAdminHosts();
     return true;
   } catch (err) {
     console.error('Error deleting host:', err);
-    
+
     // Provide more helpful error message for the common case
     let userMessage = err.message;
     if (userMessage && userMessage.includes('Cannot delete host with active games')) {
@@ -1369,7 +1386,7 @@ async function deleteHost(hostId) {
     } else if (!userMessage || userMessage === 'Unable to delete host') {
       userMessage = 'Unable to delete host. Please try again.';
     }
-    
+
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }
@@ -1384,18 +1401,18 @@ async function loadSiteAdminHosts() {
   if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
     return;
   }
-  
+
   try {
     appState.siteAdmin.hostsLoading = true;
     appState.siteAdmin.hostsError = null;
-    
+
     // Re-render to show loading state - UI will handle this
     if (window.renderApp) {
       window.renderApp();
     }
-    
+
     const hosts = await fetchHosts();
-    
+
     appState.siteAdmin.hosts = hosts;
     appState.siteAdmin.hostsLoaded = true;
     appState.siteAdmin.hostsError = null;
@@ -1405,7 +1422,7 @@ async function loadSiteAdminHosts() {
     appState.siteAdmin.hosts = [];
   } finally {
     appState.siteAdmin.hostsLoading = false;
-    
+
     // Final render with data or error - UI will handle this
     if (window.renderApp) {
       window.renderApp();
@@ -1436,28 +1453,28 @@ async function loadSiteAdminGames() {
   if (appState.siteAdmin.gamesLoading || appState.siteAdmin.gamesLoaded) {
     return;
   }
-  
+
   try {
     appState.siteAdmin.gamesLoading = true;
     appState.siteAdmin.gamesError = null;
-    
+
     // Re-render to show loading state
     if (window.renderApp) {
       window.renderApp();
     }
-    
+
     // First, get all hosts to get their games
     const hosts = await fetchHosts();
-    
+
     let allGames = [];
-    
+
     // For each host, get their games using existing API
     for (const host of hosts) {
       try {
         const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`);
         if (response.ok) {
           const hostGames = await response.json();
-          
+
           // Add host info to each game
           const gamesWithHost = hostGames.map(game => ({
             ...game,
@@ -1465,14 +1482,14 @@ async function loadSiteAdminGames() {
             host_name: host.name,
             host_qr_code: host.qr_code
           }));
-          
+
           allGames = allGames.concat(gamesWithHost);
         }
       } catch (error) {
         console.warn(`Failed to load games for host ${host.name}:`, error);
       }
     }
-    
+
     // For each game, get detailed info to get base/team/player counts
     for (let i = 0; i < allGames.length; i++) {
       try {
@@ -1481,7 +1498,7 @@ async function loadSiteAdminGames() {
           const gameDetails = await response.json();
           allGames[i].bases_count = gameDetails.bases ? gameDetails.bases.length : 0;
           allGames[i].teams_count = gameDetails.teams ? gameDetails.teams.length : 0;
-          
+
           // Count total players across all teams
           let totalPlayers = 0;
           if (gameDetails.teams) {
@@ -1497,21 +1514,21 @@ async function loadSiteAdminGames() {
         allGames[i].players_count = 0;
       }
     }
-    
+
     // Sort games by status priority and start time
     allGames.sort((a, b) => {
       const statusPriority = { 'active': 1, 'setup': 2, 'ended': 3 };
       const aPriority = statusPriority[a.status] || 4;
       const bPriority = statusPriority[b.status] || 4;
-      
+
       if (aPriority !== bPriority) {
         return aPriority - bPriority;
       }
-      
+
       // If same status, sort by start time (most recent first)
       return (b.start_time || 0) - (a.start_time || 0);
     });
-    
+
     appState.siteAdmin.games = allGames;
     appState.siteAdmin.gamesLoaded = true;
     appState.siteAdmin.gamesError = null;
@@ -1521,7 +1538,7 @@ async function loadSiteAdminGames() {
     appState.siteAdmin.games = [];
   } finally {
     appState.siteAdmin.gamesLoading = false;
-    
+
     // Final render with data or error
     if (window.renderApp) {
       window.renderApp();
@@ -1543,7 +1560,7 @@ async function completeGameAsAdmin(game) {
 
   try {
     setLoading(true);
-    
+
     // Use existing end game API, passing the host_id from the game
     const response = await fetch(`${API_BASE_URL}/games/${game.id}/end`, {
       method: 'POST',
@@ -1584,7 +1601,7 @@ async function deleteGameAsAdmin(game) {
 
   try {
     setLoading(true);
-    
+
     // Use the host endpoint by providing the host_id (admin knows all host IDs)
     const response = await fetch(`${API_BASE_URL}/games/${game.id}`, {
       method: 'DELETE',
@@ -1626,7 +1643,7 @@ async function deleteGameAsAdmin(game) {
 // Set loading state
 function setLoading(isLoading) {
   appState.loading = isLoading;
-  
+
   // Re-render to show loading state - UI will handle this
   if (window.renderApp) {
     window.renderApp();
@@ -1673,12 +1690,12 @@ function handleQRScan(qrCode) {
 // Log out/clear data - public interface
 function clearGameData() {
   clearGameState();
-  
+
   // Navigate to landing - UI will handle this
   if (window.navigateTo) {
     window.navigateTo('landing');
   }
-  
+
   // Display confirmation message to user - UI will handle this
   setTimeout(function() {
     if (window.showNotification) {

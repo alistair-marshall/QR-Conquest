@@ -9,7 +9,7 @@ const UIBuilder = {
   // Create element with properties and children
   createElement(tag, props = {}, children = []) {
     const element = document.createElement(tag);
-    
+
     // Set properties
     Object.entries(props).forEach(([key, value]) => {
       if (key === 'onClick' && typeof value === 'function') {
@@ -31,7 +31,7 @@ const UIBuilder = {
         element.setAttribute(key, value);
       }
     });
-    
+
     // Add children
     children.forEach(child => {
       if (typeof child === 'string') {
@@ -40,7 +40,7 @@ const UIBuilder = {
         element.appendChild(child);
       }
     });
-    
+
     return element;
   },
 
@@ -48,20 +48,20 @@ const UIBuilder = {
   createButton(text, onClick, className = '', icon = null) {
     const button = document.createElement('button');
     button.className = `font-medium rounded-lg transition-colors flex items-center justify-center ${className}`;
-    
+
     if (icon) {
       const iconEl = document.createElement('i');
       iconEl.setAttribute('data-lucide', icon);
       iconEl.className = 'mr-2';
       button.appendChild(iconEl);
     }
-    
+
     button.appendChild(document.createTextNode(text));
-    
+
     if (onClick) {
       button.addEventListener('click', onClick);
     }
-    
+
     return button;
   },
 
@@ -77,7 +77,7 @@ const UIBuilder = {
     // Size classes
     const sizeClasses = {
       'sm': 'max-w-sm',
-      'md': 'max-w-md', 
+      'md': 'max-w-md',
       'lg': 'max-w-lg',
       'xl': 'max-w-2xl'
     };
@@ -106,13 +106,13 @@ const UIBuilder = {
       const contentContainer = this.createElement('div', {
         className: 'modal-content'
       });
-      
+
       if (typeof content === 'string') {
         contentContainer.innerHTML = content;
       } else if (content.nodeType) {
         contentContainer.appendChild(content);
       }
-      
+
       modalContainer.appendChild(contentContainer);
     }
 
@@ -129,11 +129,11 @@ const UIBuilder = {
           action.className || 'flex-1 py-2 px-4 rounded-lg transition-colors',
           action.icon
         );
-        
+
         if (action.type) {
           button.type = action.type;
         }
-        
+
         actionsContainer.appendChild(button);
       });
 
@@ -169,18 +169,18 @@ const UIBuilder = {
     const loadingDiv = this.createElement('div', {
       className: 'flex items-center justify-center py-12'
     });
-    
+
     const loadingSpinner = this.createElement('div', {
       className: 'animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-purple-600 mr-4'
     });
     loadingDiv.appendChild(loadingSpinner);
-    
+
     const loadingText = this.createElement('p', {
       className: 'text-gray-600',
       textContent: message
     });
     loadingDiv.appendChild(loadingText);
-    
+
     return loadingDiv;
   },
 
@@ -387,32 +387,32 @@ function renderLandingPage() {
     instructionText.className = 'mb-6 text-sm text-gray-600';
     instructionText.textContent = 'To join a team, you must scan its QR code. Ask the game host for team QR codes.';
     container.appendChild(instructionText);
-    
+
     // Join Game button
-    const joinButton = UIBuilder.createButton('Scan Team QR Code', function() { 
-      navigateTo('scanQR'); 
+    const joinButton = UIBuilder.createButton('Scan Team QR Code', function() {
+      navigateTo('scanQR');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(joinButton);
 
     // Continue Game button (if in a team)
     if (authState.hasTeam) {
-      const continueButton = UIBuilder.createButton('Continue Game', function() { 
-        navigateTo('gameView'); 
+      const continueButton = UIBuilder.createButton('Continue Game', function() {
+        navigateTo('gameView');
       }, 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 w-full');
       buttonContainer.appendChild(continueButton);
     }
 
     // Host Panel button (if host)
     if (authState.isHost) {
-      const hostButton = UIBuilder.createButton('Game Management', function() { 
-        navigateTo('hostPanel'); 
+      const hostButton = UIBuilder.createButton('Game Management', function() {
+        navigateTo('hostPanel');
       }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
       buttonContainer.appendChild(hostButton);
     }
 
     // Leave Game button
-    const leaveButton = UIBuilder.createButton('Leave Game', function() { 
-      clearGameData(); 
+    const leaveButton = UIBuilder.createButton('Leave Game', function() {
+      clearGameData();
     }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(leaveButton);
   } else if (authState.isHost) {
@@ -421,32 +421,32 @@ function renderLandingPage() {
     hostWelcome.className = 'mb-6 text-purple-700';
     hostWelcome.textContent = `Welcome, ${authState.hostName || 'Host'}!`;
     container.appendChild(hostWelcome);
-    
+
     // Host Game button
-    const hostButton = UIBuilder.createButton('Host a Game', function() { 
-      navigateTo('hostPanel'); 
+    const hostButton = UIBuilder.createButton('Host a Game', function() {
+      navigateTo('hostPanel');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(hostButton);
-    
+
     // Scan QR Code button
-    const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
-      navigateTo('scanQR'); 
+    const scanButton = UIBuilder.createButton('Scan QR Code', function() {
+      navigateTo('scanQR');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
-    
+
     // Logout button
-    const logoutButton = UIBuilder.createButton('Logout', function() { 
-      clearGameData(); 
+    const logoutButton = UIBuilder.createButton('Logout', function() {
+      clearGameData();
     }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(logoutButton);
   } else {
     // Not authenticated, not in a game
     // Scan QR Code button
-    const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
-      navigateTo('scanQR'); 
+    const scanButton = UIBuilder.createButton('Scan QR Code', function() {
+      navigateTo('scanQR');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
-    
+
     // Host Login help text
     const hostLoginLink = document.createElement('p');
     hostLoginLink.className = 'text-sm text-gray-600 mt-2 text-center';
@@ -483,38 +483,9 @@ function renderGameView() {
 
   const scoreboardContainer = document.createElement('div');
   scoreboardContainer.className = 'bg-white rounded-lg shadow-md p-4';
-
-  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
-    const sortedTeams = [].concat(appState.gameData.teams).sort(function (a, b) {
-      return (b.score || 0) - (a.score || 0);
-    });
-
-    sortedTeams.forEach(function (team) {
-      const teamRow = document.createElement('div');
-      teamRow.className = 'flex justify-between py-2 border-b last:border-b-0';
-      const teamNameContainer = document.createElement('div');
-      teamNameContainer.className = 'flex items-center';
-      const teamColorDiv = document.createElement('div');
-      teamColorDiv.className = 'w-4 h-4 rounded-full ' + team.color + ' mr-2';
-      teamNameContainer.appendChild(teamColorDiv);
-      const teamNameSpan = document.createElement('span');
-      teamNameSpan.className = 'font-medium';
-      teamNameSpan.textContent = team.name;
-      teamNameContainer.appendChild(teamNameSpan);
-      teamRow.appendChild(teamNameContainer);
-      const teamScoreSpan = document.createElement('span');
-      teamScoreSpan.className = 'font-bold';
-      teamScoreSpan.textContent = (team.score || 0) + ' pts';
-      teamRow.appendChild(teamScoreSpan);
-      scoreboardContainer.appendChild(teamRow);
-    });
-  } else {
-    const noTeams = document.createElement('p');
-    noTeams.className = 'text-center text-gray-600';
-    noTeams.textContent = 'No teams available';
-    scoreboardContainer.appendChild(noTeams);
-  }
+  scoreboardContainer.id = 'scoreboard-container'; // Add ID for updates
   scoreboardSection.appendChild(scoreboardContainer);
+
   container.appendChild(scoreboardSection);
 
   // Map section
@@ -536,14 +507,17 @@ function renderGameView() {
   const actionsContainer = document.createElement('div');
   actionsContainer.className = 'flex gap-4';
 
-  const scanButton = UIBuilder.createButton('Scan QR Code', function() { 
-    navigateTo('scanQR'); 
+  const scanButton = UIBuilder.createButton('Scan QR Code', function() {
+    navigateTo('scanQR');
   }, 'flex-1 bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700', 'qr-code');
   actionsContainer.appendChild(scanButton);
   container.appendChild(actionsContainer);
 
-  // Initialize the Leaflet map
-  setTimeout(() => initGameMap(), 0);
+  // Initialise the scoreboard with current data
+  setTimeout(() => {
+    updateScoreboard();
+    initGameMap();
+  }, 0);
 
   return container;
 }
@@ -579,8 +553,8 @@ function renderErrorScreen() {
   message.textContent = appState.error;
   container.appendChild(message);
 
-  const button = UIBuilder.createButton('Dismiss', function() { 
-    clearError(); 
+  const button = UIBuilder.createButton('Dismiss', function() {
+    clearError();
   }, 'bg-purple-600 text-white py-2 px-4 rounded-lg');
   container.appendChild(button);
 
@@ -851,7 +825,7 @@ function renderQRScanner() {
       setStatusMessage('Please enter a QR code value', 'error');
       return;
     }
-    
+
     // Determine context based on current page
     const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
     handleQRCode(qrCode, context);
@@ -1078,7 +1052,7 @@ function renderQRScanner() {
 
               // Stop scanning and handle the QR code
               stopCamera();
-              
+
               // Determine context based on current page
               const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
               setTimeout(() => handleQRCode(qrCode, context), 500);
@@ -1159,7 +1133,7 @@ function renderQRScanner() {
 
           // Stop scanning and handle the QR code
           stopCamera();
-          
+
           // Determine context based on current page
           const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
           setTimeout(() => handleQRCode(qrCode, context), 500);
@@ -1254,10 +1228,18 @@ function initGameMap() {
 
 function updateMapMarkers() {
   if (!gameMapInstance) {
+    console.warn('Map instance not found in updateMapMarkers. Map may not be initialised.');
+
+    // Try to initialise the map if we're on the game view page
+    if (appState.page === 'gameView' && document.getElementById('map-container')) {
+      console.log('Attempting to initialise map from updateMapMarkers');
+      initGameMap();
+      return; // initGameMap will call updateMapMarkers again
+    }
     return;
   }
 
-  // Initialize markers array if it doesn't exist
+  // Initialise markers array if it doesn't exist
   if (!gameMapInstance.baseMarkers) {
     gameMapInstance.baseMarkers = [];
   }
@@ -1289,7 +1271,7 @@ function updateMapMarkers() {
     // Find existing marker for this base
     let existingMarker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
 
-    // Determine marker color and popup content
+    // Determine marker colour and popup content
     let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
     let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
 
@@ -1306,24 +1288,24 @@ function updateMapMarkers() {
     if (existingMarker) {
       // Update existing marker
       existingMarker.setLatLng(latLng);
+      existingMarker.setRadius(captureRadius); // This works for L.circle
       existingMarker.setStyle({
-        radius: captureRadius,
         fillColor: markerColor,
         color: '#000000',
-        weight: 1,
+        weight: 2,
         opacity: 1,
-        fillOpacity: 0.75
+        fillOpacity: 0.6
       });
       existingMarker.getPopup().setContent(popupContent);
     } else {
-      // Create new marker
-      const circleMarker = L.circleMarker(latLng, {
-        radius: captureRadius,
+      // Create new marker using L.circle to show actual radius in metres
+      const circleMarker = L.circle(latLng, {
+        radius: captureRadius, // radius in metres
         fillColor: markerColor,
         color: '#000000',
-        weight: 1,
+        weight: 2,
         opacity: 1,
-        fillOpacity: 0.75
+        fillOpacity: 0.6
       }).addTo(gameMapInstance);
 
       circleMarker.bindPopup(popupContent);
@@ -1341,6 +1323,54 @@ function updateMapMarkers() {
     }
     return true;
   });
+}
+
+function updateScoreboard() {
+  const scoreboardContainer = document.querySelector('#scoreboard-container');
+  if (!scoreboardContainer) {
+    console.warn('Scoreboard container not found for update');
+    return;
+  }
+
+  // Clear existing content
+  scoreboardContainer.innerHTML = '';
+
+  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
+    const sortedTeams = [].concat(appState.gameData.teams).sort(function (a, b) {
+      return (b.score || 0) - (a.score || 0);
+    });
+
+    sortedTeams.forEach(function (team) {
+      const teamRow = document.createElement('div');
+      teamRow.className = 'flex justify-between py-2 border-b last:border-b-0';
+
+      const teamNameContainer = document.createElement('div');
+      teamNameContainer.className = 'flex items-center';
+
+      const teamColorDiv = document.createElement('div');
+      teamColorDiv.className = 'w-4 h-4 rounded-full ' + team.color + ' mr-2';
+      teamNameContainer.appendChild(teamColorDiv);
+
+      const teamNameSpan = document.createElement('span');
+      teamNameSpan.className = 'font-medium';
+      teamNameSpan.textContent = team.name;
+      teamNameContainer.appendChild(teamNameSpan);
+
+      teamRow.appendChild(teamNameContainer);
+
+      const teamScoreSpan = document.createElement('span');
+      teamScoreSpan.className = 'font-bold';
+      teamScoreSpan.textContent = (team.score || 0) + ' pts';
+      teamRow.appendChild(teamScoreSpan);
+
+      scoreboardContainer.appendChild(teamRow);
+    });
+  } else {
+    const noTeams = document.createElement('p');
+    noTeams.className = 'text-center text-gray-600';
+    noTeams.textContent = 'No teams available';
+    scoreboardContainer.appendChild(noTeams);
+  }
 }
 
 // =============================================================================
@@ -1386,7 +1416,7 @@ function renderApp() {
 
       const statusText = document.createElement('p');
       statusText.id = 'game-status-text';
-      
+
       // Use the shared function for initial setup
       const needsTimer = updateGameStatusText(statusText);
       statusDiv.appendChild(statusText);
@@ -1490,7 +1520,7 @@ function renderApp() {
     // Add footer
     const footer = document.createElement('footer');
     footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
-    
+
     const footerContent = document.createElement('div');
     footerContent.className = 'flex justify-between items-center';
 
@@ -1519,11 +1549,11 @@ function renderApp() {
 // Helper function to format time duration
 function formatTimeRemaining(seconds) {
   if (seconds <= 0) return null;
-  
+
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
-  
+
   if (hours > 0) {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   } else {
@@ -1534,17 +1564,17 @@ function formatTimeRemaining(seconds) {
 // Function to update game status text (used for both initial render and timer updates)
 function updateGameStatusText(statusElement) {
   if (!statusElement || !appState.gameData.status) return false;
-  
+
   const now = Math.floor(Date.now() / 1000);
   let needsTimer = false;
 
   if (appState.gameData.status === 'setup') {
     const autoStartTime = appState.gameData.settings?.auto_start_time;
-    
+
     if (autoStartTime) {
       const timeUntilStart = autoStartTime - now;
       const timeString = formatTimeRemaining(timeUntilStart);
-      
+
       if (timeString) {
         statusElement.textContent = `Game starts in ${timeString}`;
         needsTimer = true;
@@ -1558,14 +1588,14 @@ function updateGameStatusText(statusElement) {
       statusElement.textContent = 'Game setup';
       statusElement.className = 'text-sm';
     }
-    
+
   } else if (appState.gameData.status === 'active') {
     const endTime = appState.gameData.settings?.calculated_end_time;
-    
+
     if (endTime) {
       const remaining = endTime - now;
       const timeString = formatTimeRemaining(remaining);
-      
+
       if (timeString) {
         statusElement.textContent = `Game in progress • ${timeString} remaining`;
         needsTimer = true;
@@ -1579,12 +1609,12 @@ function updateGameStatusText(statusElement) {
       statusElement.textContent = 'Game in progress';
       statusElement.className = 'text-sm';
     }
-    
+
   } else if (appState.gameData.status === 'ended') {
     statusElement.textContent = 'Game ended';
     statusElement.className = 'text-sm text-gray-200';
   }
-  
+
   return needsTimer;
 }
 
@@ -1766,13 +1796,13 @@ function startHeaderTimer() {
   if (headerTimerInterval) {
     clearInterval(headerTimerInterval);
   }
-  
+
   headerTimerInterval = setInterval(() => {
     const statusElement = document.getElementById('game-status-text');
-    
+
     // Use the same function for updates - it returns whether to continue
     const shouldContinue = updateGameStatusText(statusElement);
-    
+
     // Self-cancel if no longer needed
     if (!shouldContinue) {
       clearInterval(headerTimerInterval);
@@ -1792,3 +1822,5 @@ document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
 window.navigateTo = navigateTo;
 window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
+window.updateScoreboard = updateScoreboard;
+window.updateGameStatusText = updateGameStatusText;
