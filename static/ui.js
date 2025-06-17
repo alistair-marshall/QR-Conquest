@@ -306,6 +306,7 @@ const UIBuilder = {
 
 function navigateTo(page) {
   console.log('Navigating to:', page);
+  const previousPage = appState.page;
   appState.page = page;
 
   // Stop polling if leaving game view
@@ -316,6 +317,19 @@ function navigateTo(page) {
   // Start polling if entering game view
   if (page === 'gameView') {
     startScorePolling();
+  }
+
+  // GPS tracking management
+  const gpsPages = ['gameView', 'scanQR'];
+  const wasOnGPSPage = gpsPages.includes(previousPage);
+  const isOnGPSPage = gpsPages.includes(page);
+
+  if (!wasOnGPSPage && isOnGPSPage) {
+    // Starting GPS tracking
+    startGPSTracking();
+  } else if (wasOnGPSPage && !isOnGPSPage) {
+    // Stopping GPS tracking
+    stopGPSTracking();
   }
 
   if (appState.page === 'gameView' || appState.page === 'hostPanel') {
@@ -512,6 +526,13 @@ function renderGameView() {
   mapContainerElement.id = 'map-container';
   mapContainerElement.className = 'bg-gray-200 rounded-lg shadow-md h-80 md:h-96 relative';
   mapSection.appendChild(mapContainerElement);
+
+  // GPS status below map (unobtrusive)
+  const gpsStatusContainer = document.createElement('div');
+  gpsStatusContainer.className = 'mt-2 flex justify-center';
+  gpsStatusContainer.appendChild(createGPSStatusIndicator());
+  mapSection.appendChild(gpsStatusContainer);
+
   container.appendChild(mapSection);
 
   // Action buttons
@@ -528,6 +549,7 @@ function renderGameView() {
   setTimeout(() => {
     updateScoreboard();
     initGameMap();
+    updateGPSStatusDisplay();
   }, 0);
 
   return container;
@@ -810,6 +832,12 @@ function renderQRScanner() {
   scannerContainer.appendChild(cameraContainer);
   scannerContainer.appendChild(cameraSelectContainer);
   scannerContainer.appendChild(statusMessage);
+
+  // GPS status below camera feed (unobtrusive)
+  const gpsStatusContainer = document.createElement('div');
+  gpsStatusContainer.className = 'mt-2 flex justify-center';
+  gpsStatusContainer.appendChild(createGPSStatusIndicator());
+  scannerContainer.appendChild(gpsStatusContainer);
 
   // Fallback manual input
   const manualInputContainer = document.createElement('div');
@@ -1632,6 +1660,65 @@ function updateGameStatusText(statusElement) {
   return needsTimer;
 }
 
+function updateGPSStatusDisplay() {
+  const statusElement = document.getElementById('gps-status-indicator');
+  if (!statusElement) return;
+
+  const { status, accuracy } = appState.gps;
+  
+  // Clear existing classes
+  statusElement.className = 'text-xs px-2 py-1 rounded-full flex items-center';
+  
+  let statusText = '';
+  let statusIcon = '';
+  
+  switch (status) {
+    case 'getting':
+      statusElement.className += ' bg-blue-100 text-blue-700';
+      statusText = 'Getting GPS...';
+      statusIcon = 'loader-2';
+      break;
+    case 'ready':
+      statusElement.className += ' bg-green-100 text-green-700';
+      statusText = `GPS Ready (±${accuracy.toFixed(0)}m)`;
+      statusIcon = 'navigation';
+      break;
+    case 'poor':
+      statusElement.className += ' bg-amber-100 text-amber-700';
+      statusText = `Poor GPS (±${accuracy.toFixed(0)}m)`;
+      statusIcon = 'navigation';
+      break;
+    case 'error':
+      statusElement.className += ' bg-red-100 text-red-700';
+      statusText = 'GPS Error';
+      statusIcon = 'navigation-off';
+      break;
+    case 'inactive':
+    default:
+      statusElement.style.display = 'none';
+      return;
+  }
+  
+  statusElement.style.display = 'flex';
+  statusElement.innerHTML = `
+    <i data-lucide="${statusIcon}" class="w-3 h-3 mr-1 ${status === 'getting' ? 'animate-spin' : ''}"></i>
+    <span>${statusText}</span>
+  `;
+  
+  // Re-initialize Lucide icons for the new icon
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+}
+
+function createGPSStatusIndicator() {
+  const indicator = document.createElement('div');
+  indicator.id = 'gps-status-indicator';
+  indicator.className = 'text-xs px-2 py-1 rounded-full flex items-center';
+  indicator.style.display = 'none';
+  return indicator;
+}
+
 // Function to handle host button click
 function handleHostButtonClick() {
   // Check if user is already authenticated as a host
@@ -1838,3 +1925,4 @@ window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
 window.updateScoreboard = updateScoreboard;
 window.updateGameStatusText = updateGameStatusText;
+window.updateGPSStatusDisplay = updateGPSStatusDisplay;

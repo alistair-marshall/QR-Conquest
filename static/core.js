@@ -15,6 +15,14 @@ const appState = {
   loading: false,
   error: null,
   pendingQRCode: null,
+  gps: {
+    isTracking: false,
+    watchId: null,
+    currentPosition: null,
+    accuracy: null,
+    status: 'inactive', // 'inactive', 'getting', 'ready', 'poor', 'error'
+    lastUpdate: null
+  },
   siteAdmin: {
     isAuthenticated: false,
     token: null,
@@ -418,47 +426,193 @@ async function handleUnassignedQR(qrCode) {
   }
 }
 
-// Capture base with GPS location verification
-async function captureBaseWithLocation(baseId) {
+// GPS tracking management functions
+function startGPSTracking() {
   if (!navigator.geolocation) {
-    throw new Error('Location services are not available on this device.');
+    console.warn('Geolocation not supported');
+    appState.gps.status = 'error';
+    updateGPSStatusUI();
+    return;
   }
 
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      function(position) {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-        captureBase(baseId, latitude, longitude)
-          .then(resolve)
-          .catch(reject);
-      },
-      function(error) {
-        let errorMessage = 'Unable to get your location. ';
+  if (appState.gps.isTracking) {
+    console.log('GPS tracking already active');
+    return;
+  }
 
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage += 'Please enable location services and try again.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage += 'Location information is unavailable.';
-            break;
-          case error.TIMEOUT:
-            errorMessage += 'Location request timed out. Please try again.';
-            break;
-          default:
-            errorMessage += 'Please check your GPS settings and try again.';
-            break;
-        }
-        reject(new Error(errorMessage));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+  console.log('Starting GPS tracking');
+  appState.gps.status = 'getting';
+  appState.gps.isTracking = true;
+  updateGPSStatusUI();
+
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 5000 // Allow cached position up to 5 seconds old
+  };
+
+  appState.gps.watchId = navigator.geolocation.watchPosition(
+    handleGPSSuccess,
+    handleGPSError,
+    options
+  );
+}
+
+function stopGPSTracking() {
+  if (!appState.gps.isTracking) {
+    return;
+  }
+
+  console.log('Stopping GPS tracking');
+  
+  if (appState.gps.watchId !== null) {
+    navigator.geolocation.clearWatch(appState.gps.watchId);
+    appState.gps.watchId = null;
+  }
+
+  appState.gps.isTracking = false;
+  appState.gps.status = 'inactive';
+  appState.gps.currentPosition = null;
+  appState.gps.accuracy = null;
+  appState.gps.lastUpdate = null;
+  
+  updateGPSStatusUI();
+}
+
+function handleGPSSuccess(position) {
+  appState.gps.currentPosition = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude
+  };
+  appState.gps.accuracy = position.coords.accuracy;
+  appState.gps.lastUpdate = Date.now();
+
+  // Determine GPS status based on accuracy
+  if (appState.gps.accuracy <= 15) {
+    appState.gps.status = 'ready';
+  } else {
+    appState.gps.status = 'poor';
+  }
+
+  updateGPSStatusUI();
+  console.log(`GPS updated: accuracy ±${appState.gps.accuracy.toFixed(1)}m`);
+}
+
+function handleGPSError(error) {
+  console.error('GPS error:', error);
+  appState.gps.status = 'error';
+  appState.gps.currentPosition = null;
+  appState.gps.accuracy = null;
+  
+  updateGPSStatusUI();
+
+  let errorMessage = '';
+  switch(error.code) {
+    case error.PERMISSION_DENIED:
+      errorMessage = 'Location access denied';
+      break;
+    case error.POSITION_UNAVAILABLE:
+      errorMessage = 'Location unavailable';
+      break;
+    case error.TIMEOUT:
+      errorMessage = 'Location timeout';
+      break;
+    default:
+      errorMessage = 'Location error';
+      break;
+  }
+
+  if (window.showNotification) {
+    window.showNotification(`GPS Error: ${errorMessage}`, 'error');
+  }
+}
+
+function updateGPSStatusUI() {
+  // This will be called by UI functions
+  if (window.updateGPSStatusDisplay) {
+    window.updateGPSStatusDisplay();
+  }
+}
+
+// Capture base with GPS location verification
+async function captureBaseWithLocation(baseId) {
+  let latitude, longitude, accuracy;
+  let usingFreshGPS = false;
+
+  // Try to use continuous GPS first
+  if (appState.gps.currentPosition && 
+      appState.gps.lastUpdate && 
+      (Date.now() - appState.gps.lastUpdate) <= 30000) {
+    
+    latitude = appState.gps.currentPosition.latitude;
+    longitude = appState.gps.currentPosition.longitude;
+    accuracy = appState.gps.accuracy;
+    
+  } else {
+    // Fall back to fresh GPS request
+    if (window.showNotification) {
+      window.showNotification('Getting location for capture...', 'info');
+    }
+    
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000
+        });
+      });
+      
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+      accuracy = position.coords.accuracy;
+      usingFreshGPS = true;
+      
+    } catch (error) {
+      // Only throw error if we truly can't get any GPS
+      let errorMessage = 'Unable to verify your location for base capture. ';
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage += 'Please enable location services and try again.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage += 'Location services are unavailable.';
+          break;
+        case error.TIMEOUT:
+          errorMessage += 'Location request timed out. Please try again.';
+          break;
+        default:
+          errorMessage += 'Please check your GPS settings and try again.';
+          break;
       }
-    );
-  });
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Provide feedback about GPS accuracy but don't block capture
+  if (accuracy > 20) {
+    if (window.showNotification) {
+      window.showNotification(
+        `Capturing with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`, 
+        'warning'
+      );
+    }
+  }
+
+  // Always attempt the capture - let the server validate distance
+  try {
+    await captureBase(baseId, latitude, longitude);
+    
+    // Show success with GPS info
+    if (window.showNotification) {
+      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
+      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
+    }
+    
+  } catch (err) {
+    throw err; // Let capture errors (like "too far from base") bubble up
+  }
 }
 
 // =============================================================================
