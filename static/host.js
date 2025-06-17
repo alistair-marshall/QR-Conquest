@@ -154,7 +154,7 @@ function renderHostPanel() {
   function formatDuration(minutes) {
     // Convert to number and handle edge cases
     const numMinutes = parseInt(minutes);
-    
+
     // Check if we have a valid positive number
     if (isNaN(numMinutes) || numMinutes <= 0) {
       return 'Manual end';
@@ -191,7 +191,7 @@ function renderHostPanel() {
   radiusCard.appendChild(radiusValue);
   settingsGrid.appendChild(radiusCard);
 
-  // Points Interval  
+  // Points Interval
   const intervalCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
   const intervalLabel = UIBuilder.createElement('div', {
     className: 'text-sm text-gray-600 font-medium',
@@ -245,17 +245,17 @@ function renderHostPanel() {
     const settingsActions = UIBuilder.createElement('div', {
       className: 'mt-4 pt-3 border-t'
     });
-    
+
     const editSettingsBtn = UIBuilder.createButton('Edit Settings', function() {
       renderGameSettingsModal();
     }, 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm', 'settings');
-    
+
     settingsActions.appendChild(editSettingsBtn);
     settingsSection.appendChild(settingsActions);
   }
 
   grid.appendChild(settingsSection);
-  
+
   // QR Code Management Section
   const qrSection = UIBuilder.createElement('div', {
     className: 'bg-white rounded-lg shadow-md p-4'
@@ -580,7 +580,7 @@ function renderHostPanel() {
   }
 
   const exitButton = UIBuilder.createButton('Exit Host Panel', function() {
-    navigateTo('landing');
+    navigateTo('gameView');
   }, 'w-full bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors text-lg font-medium flex items-center justify-center', 'log-out');
   controlButtons.appendChild(exitButton);
 
@@ -806,7 +806,7 @@ function buildGameSettingsForm(options = {}) {
   radiusGroup.appendChild(radiusLabel);
 
   const radiusContainer = UIBuilder.createElement('div', { className: 'flex items-center space-x-2' });
-  
+
   const radiusInput = UIBuilder.createElement('input', {
     type: 'number',
     min: '5',
@@ -842,7 +842,7 @@ function buildGameSettingsForm(options = {}) {
   intervalGroup.appendChild(intervalLabel);
 
   const intervalContainer = UIBuilder.createElement('div', { className: 'space-y-2' });
-  
+
   const intervalSelect = UIBuilder.createElement('select', {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'points-interval-select'
@@ -866,12 +866,12 @@ function buildGameSettingsForm(options = {}) {
       value: option.value,
       textContent: option.label
     });
-    
+
     if (option.value === currentInterval) {
       optionElement.selected = true;
       foundStandardInterval = true;
     }
-    
+
     intervalSelect.appendChild(optionElement);
   });
 
@@ -930,20 +930,20 @@ function buildGameSettingsForm(options = {}) {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'auto-start-input'
   });
-  
+
   // Set current value for editing
   if (isEditing && currentSettings.auto_start_time) {
     const startTime = new Date(currentSettings.auto_start_time * 1000);
     autoStartInput.value = startTime.toISOString().slice(0, 16);
   }
-  
+
   // Set minimum to current time
   const now = new Date();
   if (!isEditing) {
     now.setMinutes(now.getMinutes() + 5); // Default to 5 minutes from now for creation
   }
   autoStartInput.min = now.toISOString().slice(0, 16);
-  
+
   autoStartGroup.appendChild(autoStartInput);
 
   const autoStartHelp = UIBuilder.createElement('p', {
@@ -990,12 +990,12 @@ function buildGameSettingsForm(options = {}) {
       value: option.value,
       textContent: option.label
     });
-    
+
     if (option.value === currentDuration || (option.value === '' && !currentDuration)) {
       optionElement.selected = true;
       foundStandardDuration = true;
     }
-    
+
     durationSelect.appendChild(optionElement);
   });
 
@@ -1103,15 +1103,15 @@ function buildGameSettingsForm(options = {}) {
     const durationSelect = document.getElementById('duration-select');
     const customDurationInput = document.getElementById('custom-duration-input');
     const warning = document.getElementById('validation-warning');
-    
+
     // Safety checks
     if (!radiusInput || !intervalSelect || !durationSelect || !warning) {
       console.warn('Validation elements not ready yet');
       return true;
     }
-    
+
     const radius = parseInt(radiusInput.value);
-    
+
     // Get points interval
     let interval;
     if (intervalSelect.value === 'custom') {
@@ -1119,7 +1119,7 @@ function buildGameSettingsForm(options = {}) {
     } else {
       interval = parseInt(intervalSelect.value);
     }
-    
+
     // Get duration
     let duration = null;
     if (durationSelect.value === 'custom') {
@@ -1127,12 +1127,12 @@ function buildGameSettingsForm(options = {}) {
     } else if (durationSelect.value) {
       duration = parseInt(durationSelect.value);
     }
-    
+
     // Check duration vs interval ratio
     if (duration && interval) {
       const durationSeconds = duration * 60;
       const minDurationSeconds = interval * 10;
-      
+
       if (durationSeconds < minDurationSeconds) {
         const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
         warning.textContent = `⚠️ Game duration should be at least ${minDurationMinutes} minutes for ${interval}s interval (10x ratio recommended)`;
@@ -1140,7 +1140,7 @@ function buildGameSettingsForm(options = {}) {
         return false;
       }
     }
-    
+
     warning.style.display = 'none';
     return true;
   }
@@ -1151,7 +1151,7 @@ function buildGameSettingsForm(options = {}) {
     const customIntervalInput = document.getElementById('custom-interval-input');
     const durationSelect = document.getElementById('duration-select');
     const customDurationInput = document.getElementById('custom-duration-input');
-    
+
     if (intervalSelect) {
       intervalSelect.addEventListener('change', validateSettings);
     }
@@ -1164,7 +1164,7 @@ function buildGameSettingsForm(options = {}) {
     if (customDurationInput) {
       customDurationInput.addEventListener('input', validateSettings);
     }
-    
+
     // Initial validation
     validateSettings();
   }, 100);
@@ -1188,12 +1188,12 @@ function renderGameSettingsModal() {
     gameData: appState.gameData,
     onSubmit: async function(e) {
       e.preventDefault();
-      
+
       const validatedSettings = validateGameSettings();
       if (!validatedSettings) {
         return; // Validation failed
       }
-      
+
       try {
         // Call API to update settings
         const authState = getAuthState();
@@ -1209,15 +1209,15 @@ function renderGameSettingsModal() {
         });
 
         await handleApiResponse(response, 'Failed to update game settings');
-        
+
         // Close modal
         modal.close();
-        
+
         // Refresh game data
         await fetchGameData(appState.gameData.id);
-        
+
         showNotification('Game settings updated successfully!', 'success');
-        
+
       } catch (error) {
         console.error('Error updating settings:', error);
         showNotification(error.message || 'Failed to update settings', 'error');
@@ -2312,19 +2312,19 @@ function renderResultsPage() {
 // Consolidated game settings form builder
 function renderGameSettingsModal() {
   const settings = appState.gameData.settings || {};
-  
+
   const settingsForm = buildGameSettingsForm({
     isEditing: true,
     currentSettings: settings,
     gameData: appState.gameData,
     onSubmit: async function(e) {
       e.preventDefault();
-      
+
       const validatedSettings = validateGameSettings();
       if (!validatedSettings) {
         return;
       }
-      
+
       try {
         const authState = getAuthState();
         const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/settings`, {
@@ -2339,11 +2339,11 @@ function renderGameSettingsModal() {
         });
 
         await handleApiResponse(response, 'Failed to update game settings');
-        
+
         modal.close();
         await fetchGameData(appState.gameData.id);
         showNotification('Game settings updated successfully!', 'success');
-        
+
       } catch (error) {
         console.error('Error updating settings:', error);
         showNotification(error.message || 'Failed to update settings', 'error');
