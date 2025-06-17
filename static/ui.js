@@ -318,6 +318,17 @@ function navigateTo(page) {
     startScorePolling();
   }
 
+  if (appState.page === 'gameView' || appState.page === 'hostPanel') {
+    if (gameMapInstance) {
+      try {
+        gameMapInstance.remove();
+      } catch (e) {
+        console.warn('Error cleaning up map:', e);
+      }
+      gameMapInstance = null;
+    }
+  }
+
   if (page === 'siteAdminPanel' && appState.siteAdmin.isAuthenticated) {
     // Trigger host data loading if not already loaded/loading
     if (!appState.siteAdmin.hostsLoaded && !appState.siteAdmin.hostsLoading) {
@@ -1187,42 +1198,45 @@ function initGameMap() {
     return;
   }
 
-  // Only initialize the map if it doesn't exist yet
-  if (!gameMapInstance) {
-    // Initialize the map
-    gameMapInstance = L.map(mapElement);
-
-    // Add OpenStreetMap tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19,
-    }).addTo(gameMapInstance);
-
-    // Initialize empty markers array
-    gameMapInstance.baseMarkers = [];
+  // Clean up existing map instance if it exists
+  if (gameMapInstance) {
+    try {
+      gameMapInstance.remove();
+    } catch (e) {
+      console.warn('Error removing existing map:', e);
+    }
+    gameMapInstance = null;
   }
+
+  // Always initialize a new map instance
+  gameMapInstance = L.map(mapElement);
+
+  // Add OpenStreetMap tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(gameMapInstance);
+
+  // Initialize empty markers array
+  gameMapInstance.baseMarkers = [];
 
   // Create or update all markers
   updateMapMarkers();
 
-  // Set initial view if this is the first time
-  if (!gameMapInstance._boundsSet) {
-    const latLngs = [];
-    appState.gameData.bases.forEach(base => {
-      if (typeof base.lat === 'number' && typeof base.lng === 'number') {
-        latLngs.push([base.lat, base.lng]);
-      }
-    });
-
-    if (latLngs.length > 0) {
-      const bounds = L.latLngBounds(latLngs);
-      gameMapInstance.fitBounds(bounds.pad(0.2));
-      gameMapInstance._boundsSet = true;
-    } else {
-      gameMapInstance.setView([55.94763, -3.16202], 16);
-      gameMapInstance._boundsSet = true;
-      mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
+  // Set initial view
+  const latLngs = [];
+  appState.gameData.bases.forEach(base => {
+    if (typeof base.lat === 'number' && typeof base.lng === 'number') {
+      latLngs.push([base.lat, base.lng]);
     }
+  });
+
+  if (latLngs.length > 0) {
+    const bounds = L.latLngBounds(latLngs);
+    gameMapInstance.fitBounds(bounds.pad(0.2));
+  } else {
+    gameMapInstance.setView([55.94763, -3.16202], 16);
+    mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
   }
 }
 
