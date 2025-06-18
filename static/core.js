@@ -313,6 +313,7 @@ async function handleHostQR(qrCode, statusData) {
 }
 
 // Handle team QR codes
+// Handle team QR codes
 async function handleTeamQR(qrCode, statusData) {
   try {
     const authState = getAuthState();
@@ -321,44 +322,108 @@ async function handleTeamQR(qrCode, statusData) {
 
     console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
 
-    // If user is already on a team
-    if (authState.teamId === teamId) {
-      throw new Error('You are already a member of this team.');
-    } else {
-      const currentTeamName = getTeamName(authState.teamId);
-      const newTeamName = getTeamName(teamId);
+    // Helper function to start registration flow
+    const startRegistration = async () => {
+      updateAuthState({ gameId: gameId });
+      await fetchGameData(gameId);
+      sessionStorage.setItem('pendingTeamId', teamId);
+      if (window.navigateTo) {
+        window.navigateTo('playerRegistration');
+      }
+    };
 
-      if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
-        // Proceed with team switch
-        await joinTeam(teamId);
+    // Already on this exact team - just navigate to game
+    if (authState.teamId === teamId && authState.gameId === gameId) {
+      if (window.showNotification) {
+        window.showNotification('You are already a member of this team.', 'info');
+      }
+      if (window.navigateTo) {
+        window.navigateTo('gameView');
+      }
+      return;
+    }
+
+    // No previous game - treat as new player
+    if (!authState.hasGame) {
+      console.log('New player - no previous game');
+      await startRegistration();
+      return;
+    }
+
+    // Same game, different team - confirm team change
+    if (authState.gameId === gameId) {
+      if (authState.hasTeam) {
+        const currentTeamName = getTeamName(authState.teamId);
+        const newTeamName = getTeamName(teamId);
+        
+        if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
+          console.log('Player confirmed team change within same game');
+          await joinTeam(teamId);
+        } else {
+          if (window.navigateTo) {
+            window.navigateTo('gameView');
+          }
+        }
       } else {
-        // User cancelled, navigate back to game
+        // Same game, no team yet
+        console.log('Same game, no team - go to registration');
+        sessionStorage.setItem('pendingTeamId', teamId);
+        if (window.navigateTo) {
+          window.navigateTo('playerRegistration');
+        }
+      }
+      return;
+    }
+
+    // Different game - check if previous game is still active
+    console.log('User in different game, checking previous game status');
+    
+    try {
+      const previousGameResponse = await fetch(`${API_BASE_URL}/games/${authState.gameId}`);
+      
+      // Previous game deleted/not found or ended - auto-switch
+      if (!previousGameResponse.ok) {
+        console.log('Previous game not found, clearing data');
+        clearGameState();
+        await startRegistration();
+        return;
+      }
+
+      const previousGameData = await previousGameResponse.json();
+      if (previousGameData.status === 'ended') {
+        console.log('Previous game ended, switching to new game');
+        clearGameState();
+        await startRegistration();
+        return;
+      }
+      
+      // Previous game is still active      
+      if (confirm(`You are currently in a game which is still active. Do you want to leave it and join a new game?`)) {
+        console.log('Player confirmed leaving active game');
+        clearGameState();
+        await startRegistration();
+      } else {
         if (window.navigateTo) {
           window.navigateTo('gameView');
         }
-        return;
+      }
+
+    } catch (networkError) {
+      console.warn('Network error checking previous game:', networkError);
+      
+      if (confirm('You appear to be in another game. Do you want to leave it and join this new game?')) {
+        console.log('Player confirmed leaving game despite network error');
+        clearGameState();
+        await startRegistration();
+      } else {
+        if (window.navigateTo) {
+          window.navigateTo('gameView');
+        }
       }
     }
 
-    // If we have a game loaded but QR is for different game
-    if (authState.hasGame && authState.gameId !== gameId) {
-      throw new Error(`This team belongs to a different game. You are currently in game ${authState.gameId}.`);
-    }
-
-    // If no game is loaded yet but QR code has a game ID
-    if (!authState.hasGame && gameId) {
-      console.log('Loading game from team QR code, Game ID:', gameId);
-      updateAuthState({ gameId: gameId });
-      await fetchGameData(gameId);
-    }
-
-    // Store team ID and go to registration - UI will handle this
-    sessionStorage.setItem('pendingTeamId', teamId);
-    if (window.navigateTo) {
-      window.navigateTo('playerRegistration');
-    }
   } catch (err) {
-    // If this was an error during team handling, navigate appropriately
+    console.error('Error in handleTeamQR:', err);
     if (getAuthState().hasTeam && window.navigateTo) {
       window.navigateTo('gameView');
     }
