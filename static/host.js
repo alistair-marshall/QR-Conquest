@@ -1415,6 +1415,7 @@ function renderTeamCreationForm(qrId, container) {
     { value: 'bg-green-500', label: 'Green' },
     { value: 'bg-yellow-500', label: 'Yellow' },
     { value: 'bg-purple-500', label: 'Purple' },
+    { value: 'bg-orange-500', label: 'Orange' },
     { value: 'bg-pink-500', label: 'Pink' },
     { value: 'bg-indigo-500', label: 'Indigo' },
     { value: 'bg-teal-500', label: 'Teal' }
@@ -1536,6 +1537,7 @@ function renderTeamEditModal(team) {
     { value: 'bg-green-500', label: 'Green' },
     { value: 'bg-yellow-500', label: 'Yellow' },
     { value: 'bg-purple-500', label: 'Purple' },
+    { value: 'bg-orange-500', label: 'Orange' },
     { value: 'bg-pink-500', label: 'Pink' },
     { value: 'bg-indigo-500', label: 'Indigo' },
     { value: 'bg-teal-500', label: 'Teal' }
