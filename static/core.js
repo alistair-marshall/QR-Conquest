@@ -313,7 +313,6 @@ async function handleHostQR(qrCode, statusData) {
 }
 
 // Handle team QR codes
-// Handle team QR codes
 async function handleTeamQR(qrCode, statusData) {
   try {
     const authState = getAuthState();
