@@ -1127,7 +1127,7 @@ function renderQRScanner() {
 
     // Create script element to load jsQR
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+    script.src = '/libs/jsQR.js';
     script.onload = scanWithJsQR;
     script.onerror = () => {
       setStatusMessage('Failed to load QR scanner library', 'error');
