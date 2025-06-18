@@ -273,6 +273,13 @@ function renderHostPanel() {
   });
   qrSection.appendChild(qrDescription);
 
+  // GPS status for hosts (unobtrusive)
+const gpsStatusContainer = UIBuilder.createElement('div', {
+  className: 'mb-4 flex justify-center'
+});
+gpsStatusContainer.appendChild(createGPSStatusIndicator());
+qrSection.appendChild(gpsStatusContainer);
+
   // QR Code actions container
   const qrActionsContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
 
@@ -1305,6 +1312,16 @@ function renderQRAssignmentPage() {
   });
   container.appendChild(qrInfo);
 
+  const gpsStatusContainer = UIBuilder.createElement('div', {
+    className: 'mb-4 flex justify-center'
+  });
+  gpsStatusContainer.appendChild(createGPSStatusIndicator());
+  container.appendChild(gpsStatusContainer);
+
+  setTimeout(() => {
+    updateGPSStatusDisplay();
+  }, 100);
+
   // Options
   const options = UIBuilder.createElement('div', { className: 'flex flex-col gap-4' });
 
@@ -1578,6 +1595,13 @@ function renderBaseCreationForm(qrId, container) {
   });
   container.appendChild(qrInfo);
 
+  // GPS status
+  const gpsStatusContainer = UIBuilder.createElement('div', {
+    className: 'mb-4 flex justify-center'
+  });
+  gpsStatusContainer.appendChild(createGPSStatusIndicator());
+  container.appendChild(gpsStatusContainer);
+
   // Determine default base name (Base XX)
   let nextBaseNumber = 1;
 
@@ -1651,26 +1675,24 @@ function renderBaseCreationForm(qrId, container) {
 
   locationGroup.appendChild(mapPreviewContainer);
 
-  // Get location button group
+  // Location control buttons
   const locationButtonGroup = UIBuilder.createElement('div', { className: 'flex gap-2' });
 
-  // Get location button
-  const getLocationBtn = UIBuilder.createButton('Get GPS Location', null, 'flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded', 'navigation');
+  // Use Current GPS button
+  const useCurrentGpsBtn = UIBuilder.createButton('Use Current GPS', function() {
+    useCurrentGPSLocation();
+  }, 'flex-1 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded', 'navigation');
 
   // Reset to GPS button (initially hidden)
-  const resetToGpsBtn = UIBuilder.createButton('Reset to GPS', null, 'bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded', 'rotate-ccw');
+  const resetToGpsBtn = UIBuilder.createButton('Reset to GPS', function() {
+    resetToCurrentGPS();
+  }, 'bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded', 'rotate-ccw');
   resetToGpsBtn.id = 'reset-to-gps';
   resetToGpsBtn.style.display = 'none';
 
-  // High accuracy toggle button
-  const highAccuracyBtn = UIBuilder.createButton('', null, 'bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded', 'crosshair');
-  highAccuracyBtn.id = 'high-accuracy-toggle';
-  highAccuracyBtn.title = 'High Accuracy Mode: ON';
-
   // Add to button group
-  locationButtonGroup.appendChild(getLocationBtn);
+  locationButtonGroup.appendChild(useCurrentGpsBtn);
   locationButtonGroup.appendChild(resetToGpsBtn);
-  locationButtonGroup.appendChild(highAccuracyBtn);
   locationGroup.appendChild(locationButtonGroup);
 
   // Hidden fields for location data
@@ -1692,36 +1714,13 @@ function renderBaseCreationForm(qrId, container) {
     name: 'accuracy'
   });
 
-  const watchIdInput = UIBuilder.createElement('input', {
-    type: 'hidden',
-    id: 'location-watch-id'
-  });
-
-  // GPS coordinates storage
-  const gpsLatInput = UIBuilder.createElement('input', {
-    type: 'hidden',
-    id: 'gps-latitude'
-  });
-
-  const gpsLngInput = UIBuilder.createElement('input', {
-    type: 'hidden',
-    id: 'gps-longitude'
-  });
-
   // Add all hidden inputs
   locationGroup.appendChild(latInput);
   locationGroup.appendChild(lngInput);
   locationGroup.appendChild(accuracyInput);
-  locationGroup.appendChild(watchIdInput);
-  locationGroup.appendChild(gpsLatInput);
-  locationGroup.appendChild(gpsLngInput);
 
   // Location source state
-  let currentLocationSource = 'gps'; // 'gps' or 'manual'
-  let highAccuracyMode = true;
-
-  // Initialize high accuracy button state
-  updateHighAccuracyButtonContent(highAccuracyBtn, true);
+  let currentLocationSource = 'none'; // 'none', 'gps', 'manual'
 
   // Map instance and markers
   let baseLocationMap = null;
@@ -1729,39 +1728,91 @@ function renderBaseCreationForm(qrId, container) {
   let manualMarker = null;
   let accuracyCircle = null;
 
-  // Toggle high accuracy mode
-  highAccuracyBtn.addEventListener('click', function(e) {
-    e.preventDefault();
-    highAccuracyMode = !highAccuracyMode;
+  // Use current GPS location from continuous tracking
+  function useCurrentGPSLocation() {
+    if (appState.gps.currentPosition && appState.gps.accuracy) {
+      // Use the continuously tracked position
+      const lat = appState.gps.currentPosition.latitude;
+      const lng = appState.gps.currentPosition.longitude;
+      const accuracy = appState.gps.accuracy;
 
-    if (highAccuracyMode) {
-      highAccuracyBtn.classList.remove('bg-amber-500', 'hover:bg-amber-700');
-      highAccuracyBtn.classList.add('bg-green-500', 'hover:bg-green-700');
-      highAccuracyBtn.title = 'High Accuracy Mode: ON';
+      // Update form fields
+      document.getElementById('latitude').value = lat;
+      document.getElementById('longitude').value = lng;
+      document.getElementById('accuracy').value = accuracy;
+
+      // Initialize or update map
+      initBaseLocationMap(lat, lng);
+      
+      currentLocationSource = 'gps';
+      updateLocationDisplay();
+
+      if (window.showNotification) {
+        window.showNotification(`Using current GPS location (±${accuracy.toFixed(1)}m)`, 'success');
+      }
     } else {
-      highAccuracyBtn.classList.remove('bg-green-500', 'hover:bg-green-700');
-      highAccuracyBtn.classList.add('bg-amber-500', 'hover:bg-amber-700');
-      highAccuracyBtn.title = 'High Accuracy Mode: OFF';
+      // Fall back to fresh GPS request if continuous tracking not available
+      if (window.showNotification) {
+        window.showNotification('Getting fresh GPS location...', 'info');
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const accuracy = position.coords.accuracy;
+
+          // Update form fields
+          document.getElementById('latitude').value = lat;
+          document.getElementById('longitude').value = lng;
+          document.getElementById('accuracy').value = accuracy;
+
+          // Initialize or update map
+          initBaseLocationMap(lat, lng);
+          
+          currentLocationSource = 'gps';
+          updateLocationDisplay();
+
+          if (window.showNotification) {
+            window.showNotification(`GPS location acquired (±${accuracy.toFixed(1)}m)`, 'success');
+          }
+        },
+        function(error) {
+          let errorMessage = 'Unable to get GPS location: ';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Location access denied';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location unavailable';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location timeout';
+              break;
+            default:
+              errorMessage += 'Unknown error';
+              break;
+          }
+          
+          if (window.showNotification) {
+            window.showNotification(errorMessage, 'error');
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
     }
+  }
 
-    updateHighAccuracyButtonContent(highAccuracyBtn, highAccuracyMode);
+  // Reset to current GPS button handler
+  function resetToCurrentGPS() {
+    if (appState.gps.currentPosition) {
+      const gpsLat = appState.gps.currentPosition.latitude;
+      const gpsLng = appState.gps.currentPosition.longitude;
 
-    // If we're currently watching location, restart with new settings
-    const watchId = document.getElementById('location-watch-id').value;
-    if (watchId) {
-      navigator.geolocation.clearWatch(parseInt(watchId));
-      startLocationTracking();
-    }
-  });
-
-  // Reset to GPS button handler
-  resetToGpsBtn.addEventListener('click', function(e) {
-    e.preventDefault();
-
-    const gpsLat = parseFloat(document.getElementById('gps-latitude').value);
-    const gpsLng = parseFloat(document.getElementById('gps-longitude').value);
-
-    if (!isNaN(gpsLat) && !isNaN(gpsLng)) {
       // Reset manual marker to GPS position
       if (manualMarker) {
         manualMarker.setLatLng([gpsLat, gpsLng]);
@@ -1770,19 +1821,20 @@ function renderBaseCreationForm(qrId, container) {
       // Update coordinates
       document.getElementById('latitude').value = gpsLat;
       document.getElementById('longitude').value = gpsLng;
+      document.getElementById('accuracy').value = appState.gps.accuracy;
 
       // Switch to GPS source
       currentLocationSource = 'gps';
       updateLocationDisplay();
+
+      if (window.showNotification) {
+        window.showNotification('Location reset to current GPS position', 'info');
+      }
     }
-  });
+  }
 
   // Function to initialize the map
   function initBaseLocationMap(lat, lng) {
-    // Show the map container
-    const mapContainer = document.getElementById('base-location-map');
-    mapContainer.classList.remove('hidden');
-
     // Initialize map if it doesn't exist
     if (!baseLocationMap) {
       baseLocationMap = L.map('base-location-map').setView([lat, lng], 18);
@@ -1812,13 +1864,8 @@ function renderBaseCreationForm(qrId, container) {
       });
     }
 
-    // Only center/zoom if this is the first time or we don't have manual coordinates
-    const hasManualCoords = !isNaN(parseFloat(document.getElementById('latitude').value)) &&
-                           currentLocationSource === 'manual';
-
-    if (!hasManualCoords) {
-      baseLocationMap.setView([lat, lng], 18);
-    }
+    // Center map on the provided coordinates
+    baseLocationMap.setView([lat, lng], 18);
 
     // Create or update GPS marker
     if (gpsMarker) {
@@ -1839,6 +1886,23 @@ function renderBaseCreationForm(qrId, container) {
     // Create manual marker if it doesn't exist (initially at GPS location)
     if (!manualMarker) {
       createManualMarker(lat, lng);
+    }
+
+    // Update accuracy circle if we have accuracy data
+    if (appState.gps.accuracy || document.getElementById('accuracy').value) {
+      const accuracy = appState.gps.accuracy || parseFloat(document.getElementById('accuracy').value);
+      
+      if (accuracyCircle) {
+        baseLocationMap.removeLayer(accuracyCircle);
+      }
+
+      accuracyCircle = L.circle([lat, lng], {
+        radius: accuracy,
+        color: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+        fillColor: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+        fillOpacity: 0.1,
+        weight: 1
+      }).addTo(baseLocationMap);
     }
 
     updateLocationDisplay();
@@ -1884,7 +1948,7 @@ function renderBaseCreationForm(qrId, container) {
     }
 
     // Show/hide elements based on state
-    const hasGpsData = !isNaN(parseFloat(document.getElementById('gps-latitude').value));
+    const hasGpsData = appState.gps.currentPosition;
 
     if (hasGpsData) {
       resetBtn.style.display = currentLocationSource === 'manual' ? 'block' : 'none';
@@ -1911,119 +1975,6 @@ function renderBaseCreationForm(qrId, container) {
     }
   }
 
-  // Function to start continuous location tracking
-  function startLocationTracking() {
-    if (!navigator.geolocation) {
-      showNotification('Geolocation is not supported by this browser.', 'error');
-      return;
-    }
-
-    // Update button state
-    getLocationBtn.disabled = true;
-    updateLocationButtonContent(getLocationBtn, 'loader-2', 'Getting location...', 'animate-spin');
-
-    // Set up high accuracy options
-    const options = {
-      enableHighAccuracy: highAccuracyMode,
-      timeout: 10000,
-      maximumAge: 0
-    };
-
-    // Function to handle position updates
-    function handlePositionUpdate(position) {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      const accuracy = position.coords.accuracy;
-
-      // Store GPS coordinates
-      document.getElementById('gps-latitude').value = latitude;
-      document.getElementById('gps-longitude').value = longitude;
-      document.getElementById('accuracy').value = accuracy;
-
-      // Only update current coordinates if we don't have a manual position yet
-      const hasManualPosition = currentLocationSource === 'manual' &&
-                               !isNaN(parseFloat(document.getElementById('latitude').value));
-
-      if (!hasManualPosition) {
-        // Set current coordinates to GPS initially
-        document.getElementById('latitude').value = latitude;
-        document.getElementById('longitude').value = longitude;
-      }
-
-      // Initialize or update map
-      initBaseLocationMap(latitude, longitude);
-
-      // Update accuracy circle
-      if (accuracyCircle) {
-        baseLocationMap.removeLayer(accuracyCircle);
-      }
-
-      if (accuracy && !isNaN(accuracy)) {
-        accuracyCircle = L.circle([latitude, longitude], {
-          radius: accuracy,
-          color: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
-          fillColor: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
-          fillOpacity: 0.1,
-          weight: 1
-        }).addTo(baseLocationMap);
-      }
-
-      // Update button state
-      getLocationBtn.disabled = false;
-      updateLocationButtonContent(getLocationBtn, 'navigation', 'Update GPS Location');
-
-      // Only suggest manual adjustment for new GPS readings without manual position
-      if (!hasManualPosition && accuracy > 15) {
-        // Poor accuracy - suggest manual adjustment
-        currentLocationSource = 'gps'; // Start with GPS but show adjustment options
-      }
-
-      updateLocationDisplay();
-    }
-
-    // Function to handle errors
-    function handlePositionError(error) {
-      let errorMessage = 'Unknown error occurred while getting location.';
-
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage = 'Location permission was denied.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage = 'Location information is unavailable.';
-          break;
-        case error.TIMEOUT:
-          errorMessage = 'Location request timed out.';
-          break;
-      }
-
-      // Update button state
-      getLocationBtn.disabled = false;
-      updateLocationButtonContent(getLocationBtn, 'navigation', 'Try Again');
-
-      showNotification(errorMessage, 'error');
-    }
-
-    // Clear any previous watch
-    const oldWatchId = document.getElementById('location-watch-id').value;
-    if (oldWatchId) {
-      navigator.geolocation.clearWatch(parseInt(oldWatchId));
-    }
-
-    // Start watching position
-    const watchId = navigator.geolocation.watchPosition(
-      handlePositionUpdate,
-      handlePositionError,
-      options
-    );
-
-    // Store watch ID
-    document.getElementById('location-watch-id').value = watchId;
-  }
-
-  // Add event listener for get location button
-  getLocationBtn.addEventListener('click', startLocationTracking);
-
   form.appendChild(locationGroup);
 
   // Submit button
@@ -2039,7 +1990,7 @@ function renderBaseCreationForm(qrId, container) {
     const lng = parseFloat(document.getElementById('longitude').value);
 
     if (isNaN(lat) || isNaN(lng)) {
-      showNotification('Please get the location for this base first.', 'error');
+      showNotification('Please set the location for this base first.', 'error');
       return;
     }
 
@@ -2052,12 +2003,6 @@ function renderBaseCreationForm(qrId, container) {
       }
     }
 
-    // Clear any location watch
-    const watchId = document.getElementById('location-watch-id').value;
-    if (watchId) {
-      navigator.geolocation.clearWatch(parseInt(watchId));
-    }
-
     // Call the API function from core.js
     createBase(qrId, nameInput.value, lat, lng);
   });
@@ -2066,16 +2011,20 @@ function renderBaseCreationForm(qrId, container) {
 
   // Cancel button
   const cancelButton = UIBuilder.createButton('Cancel', function() {
-    // Clear any location watch
-    const watchId = document.getElementById('location-watch-id').value;
-    if (watchId) {
-      navigator.geolocation.clearWatch(parseInt(watchId));
-    }
-
     sessionStorage.removeItem('pendingQRCode');
     navigateTo('hostPanel');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
+
+  // Initialize with current GPS if available
+  setTimeout(() => {
+    updateGPSStatusDisplay();
+    
+    // Auto-populate with current GPS if available
+    if (appState.gps.currentPosition && appState.gps.status === 'ready') {
+      useCurrentGPSLocation();
+    }
+  }, 100);
 
   return container;
 }
@@ -2434,32 +2383,4 @@ function validateGameSettings() {
     auto_start_time: autoStartTime,
     game_duration_minutes: gameDuration
   };
-}
-
-function updateLocationButtonContent(button, iconName, text, extraClasses = '') {
-  // Clear existing content
-  button.innerHTML = '';
-
-  const icon = UIBuilder.createElement('i', {
-    'data-lucide': iconName,
-    className: `inline mr-1 ${extraClasses}`
-  });
-  button.appendChild(icon);
-
-  const textNode = document.createTextNode(` ${text}`);
-  button.appendChild(textNode);
-}
-
-function updateHighAccuracyButtonContent(button, isOn) {
-  // Clear existing content
-  button.innerHTML = '';
-
-  const icon = UIBuilder.createElement('i', {
-    'data-lucide': 'crosshair',
-    className: 'inline mr-1'
-  });
-  button.appendChild(icon);
-
-  const text = document.createTextNode(` High Accuracy: ${isOn ? 'ON' : 'OFF'}`);
-  button.appendChild(text);
 }

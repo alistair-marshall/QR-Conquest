@@ -320,7 +320,7 @@ function navigateTo(page) {
   }
 
   // GPS tracking management
-  const gpsPages = ['gameView', 'scanQR'];
+  const gpsPages = ['gameView', 'scanQR', 'hostPanel', 'qrAssignment'];
   const wasOnGPSPage = gpsPages.includes(previousPage);
   const isOnGPSPage = gpsPages.includes(page);
 
