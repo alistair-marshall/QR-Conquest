@@ -9,7 +9,7 @@ const appState = {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
-    status: 'setup'
+    status: null
   },
   loading: false,
   error: null,
@@ -166,7 +166,7 @@ function clearGameState() {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
-    status: 'setup'
+    status: null
   };
 
   // Clear any pending QR code
