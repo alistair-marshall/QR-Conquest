@@ -260,6 +260,7 @@ async function handleQRCode(qrCode, context = 'scan') {
 
 // Route QR code to appropriate handler based on type
 async function routeQRCode(qrCode, statusData) {
+  console.log('Routing QR code:', qrCode, 'Status:', statusData.status);
   try {
     switch (statusData.status) {
       case 'host':
@@ -482,7 +483,7 @@ async function handleUnassignedQR(qrCode) {
       // Store pending QR code for first-time user flow
       appState.pendingQRCode = qrCode;
       if (window.navigateTo) {
-        window.navigateTo('firstTime');
+        window.navigateTo('landing');
       }
     }
   } catch (err) {
