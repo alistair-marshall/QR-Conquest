@@ -480,8 +480,7 @@ async function handleUnassignedQR(qrCode) {
         window.navigateTo('qrAssignment');
       }
     } else {
-      // Store pending QR code for first-time user flow
-      appState.pendingQRCode = qrCode;
+      window.showNotification(`Unknown QR code`, 'warning');
       if (window.navigateTo) {
         window.navigateTo('landing');
       }
