@@ -96,6 +96,13 @@ function renderSiteAdminLogin() {
 
   container.appendChild(form);
 
+  // Debug console button
+  const debugButton = UIBuilder.createButton('Load Debug Console', function() {
+    loadErudaDebugConsole();
+  }, 'w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors mt-2');
+
+  form.appendChild(debugButton);
+
   // Security notice
   const securityNotice = UIBuilder.createElement('div', {
     className: 'bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm mb-6'

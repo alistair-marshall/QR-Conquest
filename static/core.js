@@ -1921,3 +1921,32 @@ function clearGameData() {
     }
   }, 300);
 }
+
+// Load Eruda debug console on demand
+function loadErudaDebugConsole() {
+  // Check if already loaded
+  if (window.eruda) {
+    showNotification('Debug console already loaded', 'info');
+    return;
+  }
+
+  showNotification('Loading debug console...', 'info');
+
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+  document.head.appendChild(script);
+  
+  script.onload = function() {
+    eruda.init({
+      tool: ['console', 'elements', 'network', 'info'],
+      useShadowDom: true,
+      autoScale: true
+    });
+    showNotification('🐛 Debug console loaded! Look for icon in corner.', 'success');
+    console.log('🐛 QR Conquest Debug Console ready');
+  };
+  
+  script.onerror = function() {
+    showNotification('Failed to load debug console', 'error');
+  };
+}
