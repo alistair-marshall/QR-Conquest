@@ -260,8 +260,7 @@ const UIBuilder = {
   // Initialize authentication state from localStorage
   const authState = getAuthState();
   if (authState.isHost) {
-    appState.gameData.hostId = authState.hostId;
-    appState.gameData.hostName = authState.hostName;
+    appState.hostId = authState.hostId;
     console.log('Found host ID in localStorage:', authState.hostId);
   }
 
@@ -413,18 +412,18 @@ function renderLandingPage() {
     instructionText.textContent = 'To join a team, you must scan its QR code. Ask the game host for team QR codes.';
     container.appendChild(instructionText);
 
-    // Join Game button
-    const joinButton = UIBuilder.createButton('Scan Team QR Code', function() {
-      navigateTo('scanQR');
-    }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
-    buttonContainer.appendChild(joinButton);
-
     // Continue Game button (if in a team)
     if (authState.hasTeam) {
       const continueButton = UIBuilder.createButton('Continue Game', function() {
         navigateTo('gameView');
       }, 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 w-full');
       buttonContainer.appendChild(continueButton);
+    } else {
+      // Join Game button
+      const joinButton = UIBuilder.createButton('Scan Team QR Code', function() {
+        navigateTo('scanQR');
+      }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
+      buttonContainer.appendChild(joinButton);
     }
 
     // Host Panel button (if host)
@@ -461,7 +460,7 @@ function renderLandingPage() {
 
     // Logout button
     const logoutButton = UIBuilder.createButton('Logout', function() {
-      clearGameData();
+      logoutHost();
     }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(logoutButton);
   } else {
@@ -471,21 +470,6 @@ function renderLandingPage() {
       navigateTo('scanQR');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
-
-    // Host Login help text
-    const hostLoginLink = document.createElement('p');
-    hostLoginLink.className = 'text-sm text-gray-600 mt-2 text-center';
-    const hostLoginText1 = document.createTextNode('Are you a game host?');
-    hostLoginLink.appendChild(hostLoginText1);
-
-    const lineBreak = document.createElement('br');
-    hostLoginLink.appendChild(lineBreak);
-
-    const hostLoginSpan = document.createElement('span');
-    hostLoginSpan.className = 'text-purple-600';
-    hostLoginSpan.textContent = 'Scan your host QR code above';
-    hostLoginLink.appendChild(hostLoginSpan);
-    buttonContainer.appendChild(hostLoginLink);
   }
 
   container.appendChild(buttonContainer);
@@ -590,133 +574,6 @@ function renderErrorScreen() {
     clearError();
   }, 'bg-purple-600 text-white py-2 px-4 rounded-lg');
   container.appendChild(button);
-
-  return container;
-}
-
-// First Time Page
-function renderFirstTimePage() {
-  const container = document.createElement('div');
-  container.className = 'text-center py-10';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-3xl font-bold mb-4';
-  title.textContent = 'Welcome to QR Conquest!';
-  container.appendChild(title);
-
-  // Description
-  const description = document.createElement('p');
-  description.className = 'mb-8';
-  description.textContent = 'You\'ve scanned a QR code, but you\'re not currently part of any game.';
-  container.appendChild(description);
-
-  // QR code info
-  const qrInfo = document.createElement('div');
-  qrInfo.className = 'bg-purple-100 border border-purple-400 text-purple-700 px-4 py-3 rounded mb-6 inline-block';
-  qrInfo.textContent = `QR Code: ${appState.pendingQRCode}`;
-  container.appendChild(qrInfo);
-
-  // Options
-  const optionsContainer = document.createElement('div');
-  optionsContainer.className = 'flex flex-col space-y-4 max-w-xs mx-auto';
-
-  // Join existing game
-  const joinButton = UIBuilder.createButton('Join a Game', function() {
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('joinGame');
-  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
-  optionsContainer.appendChild(joinButton);
-
-  // Create new game (admin)
-  const createButton = UIBuilder.createButton('Create a New Game', function() {
-    sessionStorage.setItem('pendingQRCode', appState.pendingQRCode);
-    navigateTo('hostPanel');
-  }, 'bg-green-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-green-700 w-full');
-  optionsContainer.appendChild(createButton);
-
-  // Information about QR code approach
-  const infoBox = document.createElement('div');
-  infoBox.className = 'mt-6 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg text-left text-sm max-w-xs mx-auto';
-  infoBox.innerHTML = '<p><strong>Note:</strong> In QR Conquest, all teams and bases are created by scanning QR codes first. This QR code can be used later to create a team or base after you join or create a game.</p>';
-
-  container.appendChild(optionsContainer);
-  container.appendChild(infoBox);
-
-  return container;
-}
-
-// Join Game Page
-function renderJoinGamePage() {
-  const container = document.createElement('div');
-  container.className = 'max-w-md mx-auto py-8';
-
-  // Title
-  const title = document.createElement('h2');
-  title.className = 'text-2xl font-bold mb-6 text-center';
-  title.textContent = 'Join a Game';
-  container.appendChild(title);
-
-  // Form
-  const form = document.createElement('form');
-  form.className = 'bg-white rounded-lg shadow-md p-6 mb-6';
-
-  // Game ID
-  const idGroup = document.createElement('div');
-  idGroup.className = 'mb-4';
-
-  const idLabel = document.createElement('label');
-  idLabel.className = 'block text-gray-700 text-sm font-bold mb-2';
-  idLabel.htmlFor = 'game-id';
-  idLabel.textContent = 'Game ID';
-  idGroup.appendChild(idLabel);
-
-  const idInput = document.createElement('input');
-  idInput.id = 'game-id';
-  idInput.type = 'text';
-  idInput.className = 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline';
-  idInput.required = true;
-  idInput.placeholder = 'Enter game ID (e.g., brave-apple)';
-  idGroup.appendChild(idInput);
-
-  form.appendChild(idGroup);
-
-  // Join button
-  const joinButton = UIBuilder.createButton('Join Game', null, 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg');
-  joinButton.type = 'submit';
-  form.appendChild(joinButton);
-
-  // Handle form submission
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const gameId = idInput.value.trim();
-    if (!gameId) {
-      showNotification('Please enter a valid Game ID','warning');
-      return;
-    }
-
-    // Load the game and store in localStorage
-    localStorage.setItem('gameId', gameId);
-    fetchGameData(gameId).then(() => {
-      // Process the pending QR code after loading game data
-      const pendingQR = sessionStorage.getItem('pendingQRCode');
-      if (pendingQR) {
-        handleQRScan(pendingQR);
-        sessionStorage.removeItem('pendingQRCode');
-      } else {
-        navigateTo('scanQR');
-      }
-    });
-  });
-
-  container.appendChild(form);
-
-  // Back button
-  const backButton = UIBuilder.createButton('← Back to Home', function() {
-    navigateTo('landing');
-  }, 'text-purple-600 hover:underline');
-  container.appendChild(backButton);
 
   return container;
 }
@@ -888,8 +745,10 @@ function renderQRScanner() {
       navigateTo('hostPanel');
     } else if (authState.isHost) {
       navigateTo('hostPanel');
-    } else {
+    } else if (authState.hasGame) {
       navigateTo('gameView');
+    } else {
+      navigateTo('landing');
     }
   }, 'flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-gray-700');
   actionsContainer.appendChild(cancelButton);
@@ -1540,12 +1399,6 @@ function renderApp() {
           break;
         case 'playerRegistration':
           main.appendChild(renderPlayerRegistrationPage());
-          break;
-        case 'firstTime':
-          main.appendChild(renderFirstTimePage());
-          break;
-        case 'joinGame':
-          main.appendChild(renderJoinGamePage());
           break;
         case 'siteAdminLogin':
           main.appendChild(renderSiteAdminLogin());

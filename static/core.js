@@ -8,7 +8,6 @@ const appState = {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    hostId: null,
     hostName: null,
     status: 'setup'
   },
@@ -23,6 +22,8 @@ const appState = {
     status: 'inactive', // 'inactive', 'getting', 'ready', 'poor', 'error'
     lastUpdate: null
   },
+  // Authentication state
+  hostId: null,
   siteAdmin: {
     isAuthenticated: false,
     token: null,
@@ -87,7 +88,7 @@ function getAuthState() {
   return {
     isHost: !!localStorage.getItem('hostId'),
     hostId: localStorage.getItem('hostId'),
-    hostName: localStorage.getItem('hostName'),
+    hostName: localStorage.getItem('hostName') || 'Host',
     isSiteAdmin: appState.siteAdmin.isAuthenticated,
     hasGame: !!localStorage.getItem('gameId'),
     gameId: localStorage.getItem('gameId'),
@@ -106,7 +107,6 @@ function updateAuthState(authData) {
       localStorage.setItem('hostName', authData.hostName || 'Host');
     } else {
       localStorage.removeItem('hostId');
-      localStorage.removeItem('hostName');
     }
   }
 
@@ -130,8 +130,7 @@ function updateAuthState(authData) {
 
   // Update app state for runtime use
   if (authData.hostId !== undefined) {
-    appState.gameData.hostId = authData.hostId;
-    appState.gameData.hostName = authData.hostName;
+    appState.hostId = authData.hostId;
   }
 
   if (authData.teamId !== undefined) {
@@ -146,8 +145,10 @@ function clearGameState() {
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
-  // keep hostId so hosts stay logged in.
-  localStorage.removeItem('hostName');
+  // Only remove hostName if we're not a host
+  if (!appState.hostId) {
+    localStorage.removeItem('hostName'); 
+  }
 
   // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
@@ -164,7 +165,6 @@ function clearGameState() {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    hostId: null,
     hostName: null,
     status: 'setup'
   };
@@ -174,7 +174,7 @@ function clearGameState() {
   appState.error = null;
   appState.loading = false;
 
-  console.log('Authentication state cleared');
+  console.log('Game state cleared');
 }
 
 // =============================================================================
@@ -250,7 +250,7 @@ async function handleQRCode(qrCode, context = 'scan') {
     if (!getAuthState().hasGame) {
       appState.pendingQRCode = qrCode;
       if (window.navigateTo) {
-        window.navigateTo('firstTime');
+        window.navigateTo('landing');
       }
     }
   } finally {
@@ -260,6 +260,7 @@ async function handleQRCode(qrCode, context = 'scan') {
 
 // Route QR code to appropriate handler based on type
 async function routeQRCode(qrCode, statusData) {
+  console.log('Routing QR code:', qrCode, 'Status:', statusData.status);
   try {
     switch (statusData.status) {
       case 'host':
@@ -479,10 +480,9 @@ async function handleUnassignedQR(qrCode) {
         window.navigateTo('qrAssignment');
       }
     } else {
-      // Store pending QR code for first-time user flow
-      appState.pendingQRCode = qrCode;
+      window.showNotification(`Unknown QR code`, 'warning');
       if (window.navigateTo) {
-        window.navigateTo('firstTime');
+        window.navigateTo('landing');
       }
     }
   } catch (err) {
@@ -735,15 +735,6 @@ async function fetchGameData(gameId) {
     appState.gameData.hostName = data.hostName;
     appState.gameData.settings = data.settings || {};
 
-    // IMPORTANT: Keep existing host auth if user is authenticated as host
-    // The hostId is maintained from localStorage, not from game data
-    const authState = getAuthState();
-    if (authState.isHost) {
-      appState.gameData.hostId = authState.hostId;
-      appState.gameData.hostName = authState.hostName;
-      console.log('Maintaining host authentication for:', authState.hostName);
-    }
-
     // Show offline notification if data came from cache
     if (fromCache && window.showNotification) {
       window.showNotification('Using cached game data (offline mode)', 'warning');
@@ -786,6 +777,12 @@ async function fetchGameUpdates() {
 
     // Update game status in case it changed
     appState.gameData.status = gameData.status;
+
+    if (gameData.status === 'ended') {
+      // If the game has ended, stop polling
+      stopScorePolling();
+      navigateTo('results');
+    }
 
     // Only update specific UI components instead of full re-render
     if (appState.page === 'gameView') {
@@ -1920,6 +1917,18 @@ function clearGameData() {
       window.showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.', 'success');
     }
   }, 300);
+}
+
+// Logout host completely
+function logoutHost() {
+  // Clear host authentication
+  localStorage.removeItem('hostId');
+  appState.hostId = null;
+  
+  // Also clear any game data
+  clearGameState();
+  
+  console.log('Host logged out completely');
 }
 
 // Load Eruda debug console on demand
