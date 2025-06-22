@@ -240,8 +240,8 @@ function renderHostPanel() {
 
   settingsSection.appendChild(settingsGrid);
 
-  // Settings actions (only show for games in setup)
-  if (appState.gameData.status === 'setup') {
+  // Settings actions (only show for games in setup or active state)
+  if (appState.gameData.status === 'setup' || appState.gameData.status === 'active') {
     const settingsActions = UIBuilder.createElement('div', {
       className: 'mt-4 pt-3 border-t'
     });
@@ -924,42 +924,44 @@ function buildGameSettingsForm(options = {}) {
 
   settingsGrid.appendChild(intervalGroup);
 
-  // Auto-start time
-  const autoStartGroup = UIBuilder.createElement('div');
-  const autoStartLabel = UIBuilder.createElement('label', {
-    className: 'block text-sm font-medium text-gray-700 mb-1',
-    textContent: 'Auto-start Time (optional)'
-  });
-  autoStartGroup.appendChild(autoStartLabel);
+  // Auto-start time (only show for setup games)
+  if (gameData.status !== 'active') {
+    const autoStartGroup = UIBuilder.createElement('div');
+    const autoStartLabel = UIBuilder.createElement('label', {
+      className: 'block text-sm font-medium text-gray-700 mb-1',
+      textContent: 'Auto-start Time (optional)'
+    });
+    autoStartGroup.appendChild(autoStartLabel);
 
-  const autoStartInput = UIBuilder.createElement('input', {
-    type: 'datetime-local',
-    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
-    id: 'auto-start-input'
-  });
+    const autoStartInput = UIBuilder.createElement('input', {
+      type: 'datetime-local',
+      className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+      id: 'auto-start-input'
+    });
 
-  // Set current value for editing
-  if (isEditing && currentSettings.auto_start_time) {
-    const startTime = new Date(currentSettings.auto_start_time * 1000);
-    autoStartInput.value = startTime.toISOString().slice(0, 16);
+    // Set current value for editing
+    if (isEditing && currentSettings.auto_start_time) {
+      const startTime = new Date(currentSettings.auto_start_time * 1000);
+      autoStartInput.value = startTime.toISOString().slice(0, 16);
+    }
+
+    // Set minimum to current time
+    const now = new Date();
+    if (!isEditing) {
+      now.setMinutes(now.getMinutes() + 5); // Default to 5 minutes from now for creation
+    }
+    autoStartInput.min = now.toISOString().slice(0, 16);
+
+    autoStartGroup.appendChild(autoStartInput);
+
+    const autoStartHelp = UIBuilder.createElement('p', {
+      className: 'text-xs text-gray-500 mt-1',
+      textContent: 'Game will start automatically at this time'
+    });
+    autoStartGroup.appendChild(autoStartHelp);
+
+    settingsGrid.appendChild(autoStartGroup);
   }
-
-  // Set minimum to current time
-  const now = new Date();
-  if (!isEditing) {
-    now.setMinutes(now.getMinutes() + 5); // Default to 5 minutes from now for creation
-  }
-  autoStartInput.min = now.toISOString().slice(0, 16);
-
-  autoStartGroup.appendChild(autoStartInput);
-
-  const autoStartHelp = UIBuilder.createElement('p', {
-    className: 'text-xs text-gray-500 mt-1',
-    textContent: 'Game will start automatically at this time'
-  });
-  autoStartGroup.appendChild(autoStartHelp);
-
-  settingsGrid.appendChild(autoStartGroup);
 
   // Game duration
   const durationGroup = UIBuilder.createElement('div');
@@ -1143,6 +1145,16 @@ function buildGameSettingsForm(options = {}) {
       if (durationSeconds < minDurationSeconds) {
         const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
         warning.textContent = `⚠️ Game duration should be at least ${minDurationMinutes} minutes for ${interval}s interval (10x ratio recommended)`;
+        warning.style.display = 'block';
+        return false;
+      }
+    }
+
+    // For active games, check if new duration would immediately end the game
+    if (isEditing && gameData.status === 'active' && duration && gameData.settings?.start_time) {
+      const elapsedMinutes = Math.floor((Date.now() / 1000 - gameData.settings.start_time) / 60);
+      if (duration <= elapsedMinutes) {
+        warning.textContent = `⚠️ Cannot set duration to ${duration} minutes as ${elapsedMinutes} minutes have already elapsed. Use 'End Game' button instead.`;
         warning.style.display = 'block';
         return false;
       }
@@ -2376,13 +2388,30 @@ function validateGameSettings() {
       );
       return null;
     }
+
+    if (appState.gameData.status === 'active' && appState.gameData.settings?.start_time) {
+      const elapsedMinutes = Math.floor((Date.now() / 1000 - appState.gameData.settings.start_time) / 60);
+      if (gameDuration <= elapsedMinutes) {
+        showNotification(
+          `Cannot set duration to ${gameDuration} minutes as ${elapsedMinutes} minutes have already elapsed. Use 'End Game' button to end the game immediately.`,
+          'error'
+        );
+        return null;
+      }
+    }
   }
 
-  return {
+  const settings = {
     name: gameName,
     capture_radius_meters: captureRadius,
     points_interval_seconds: pointsInterval,
-    auto_start_time: autoStartTime,
     game_duration_minutes: gameDuration
   };
+
+  // Only include auto_start_time for setup games
+  if (autoStartTime !== null && (appState.gameData.status === 'setup' || appState.gameData.status === null)) {
+    settings.auto_start_time = autoStartTime;
+  }
+
+  return settings;
 }

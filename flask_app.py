@@ -372,7 +372,7 @@ def verify_host(qr_code):
 # ==========================================================
 
 # Helper function to validate game settings
-def validate_game_settings(capture_radius, points_interval, game_duration):
+def validate_game_settings(capture_radius, points_interval, game_duration, game_status=None, start_time=None):
     """Validate game settings and return error message if invalid"""
     
     # Validate capture radius (5m to 100m)
@@ -395,6 +395,12 @@ def validate_game_settings(capture_radius, points_interval, game_duration):
         if game_duration_seconds < min_duration_seconds:
             min_duration_minutes = min_duration_seconds // 60
             return f'Game duration must be at least 10x the points interval (minimum {min_duration_minutes} minutes for {points_interval}s interval)'
+    
+    # Active game duration validation
+    if game_status == 'active' and start_time and game_duration:
+        elapsed_minutes = (time.time() - start_time) / 60
+        if game_duration <= elapsed_minutes:
+            return f"Cannot set duration to {game_duration} minutes as {int(elapsed_minutes)} minutes have already elapsed. Use 'End Game' button to end the game immediately."
     
     return None  # No validation errors
 
@@ -476,18 +482,19 @@ def update_game_settings(game_id):
         conn.close()
         return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
-    # Can only update settings for games in setup status
-    if game['status'] != 'setup':
-        conn.close()
-        return jsonify({'error': 'Cannot update settings for games that have started'}), 400
-
     # Extract current settings for validation
     capture_radius = data.get('capture_radius_meters', game['capture_radius_meters'])
     points_interval = data.get('points_interval_seconds', game['points_interval_seconds'])
     game_duration = data.get('game_duration_minutes', game['game_duration_minutes'])
     
     # Validate all settings together
-    validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
+    validation_error = validate_game_settings(
+        capture_radius, 
+        points_interval, 
+        game_duration,
+        game_status=game['status'],
+        start_time=game['start_time']
+    )
     if validation_error:
         conn.close()
         return jsonify({'error': validation_error}), 400
