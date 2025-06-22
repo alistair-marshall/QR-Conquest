@@ -2355,7 +2355,7 @@ function validateGameSettings() {
   // Get auto-start time (optional)
   let autoStartTime = null;
   const autoStartInput = document.getElementById('auto-start-input');
-  if (autoStartInput.value) {
+  if (autoStartInput && autoStartInput.value) {
     autoStartTime = Math.floor(new Date(autoStartInput.value).getTime() / 1000);
     if (autoStartTime <= Math.floor(Date.now() / 1000)) {
       showNotification('Auto-start time must be in the future', 'error');
@@ -2408,8 +2408,8 @@ function validateGameSettings() {
     game_duration_minutes: gameDuration
   };
 
-  // Only include auto_start_time for setup games
-  if (autoStartTime !== null && (appState.gameData.status === 'setup' || appState.gameData.status === null)) {
+  // Only include auto_start_time if the field exists and has a value
+  if (autoStartTime !== null) {
     settings.auto_start_time = autoStartTime;
   }
 
