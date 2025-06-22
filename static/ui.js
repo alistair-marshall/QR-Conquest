@@ -745,8 +745,10 @@ function renderQRScanner() {
       navigateTo('hostPanel');
     } else if (authState.isHost) {
       navigateTo('hostPanel');
-    } else {
+    } else if (authState.hasGame) {
       navigateTo('gameView');
+    } else {
+      navigateTo('landing');
     }
   }, 'flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-gray-700');
   actionsContainer.appendChild(cancelButton);
