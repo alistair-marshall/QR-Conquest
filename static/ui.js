@@ -260,8 +260,7 @@ const UIBuilder = {
   // Initialize authentication state from localStorage
   const authState = getAuthState();
   if (authState.isHost) {
-    appState.gameData.hostId = authState.hostId;
-    appState.gameData.hostName = authState.hostName;
+    appState.hostId = authState.hostId;
     console.log('Found host ID in localStorage:', authState.hostId);
   }
 
@@ -461,7 +460,7 @@ function renderLandingPage() {
 
     // Logout button
     const logoutButton = UIBuilder.createButton('Logout', function() {
-      clearGameData();
+      logoutHost();
     }, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700 w-full');
     buttonContainer.appendChild(logoutButton);
   } else {

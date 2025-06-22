@@ -8,7 +8,6 @@ const appState = {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    hostId: null,
     hostName: null,
     status: 'setup'
   },
@@ -23,6 +22,8 @@ const appState = {
     status: 'inactive', // 'inactive', 'getting', 'ready', 'poor', 'error'
     lastUpdate: null
   },
+  // Authentication state
+  hostId: null,
   siteAdmin: {
     isAuthenticated: false,
     token: null,
@@ -87,7 +88,6 @@ function getAuthState() {
   return {
     isHost: !!localStorage.getItem('hostId'),
     hostId: localStorage.getItem('hostId'),
-    hostName: localStorage.getItem('hostName'),
     isSiteAdmin: appState.siteAdmin.isAuthenticated,
     hasGame: !!localStorage.getItem('gameId'),
     gameId: localStorage.getItem('gameId'),
@@ -106,7 +106,6 @@ function updateAuthState(authData) {
       localStorage.setItem('hostName', authData.hostName || 'Host');
     } else {
       localStorage.removeItem('hostId');
-      localStorage.removeItem('hostName');
     }
   }
 
@@ -130,8 +129,7 @@ function updateAuthState(authData) {
 
   // Update app state for runtime use
   if (authData.hostId !== undefined) {
-    appState.gameData.hostId = authData.hostId;
-    appState.gameData.hostName = authData.hostName;
+    appState.hostId = authData.hostId;
   }
 
   if (authData.teamId !== undefined) {
@@ -146,8 +144,10 @@ function clearGameState() {
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
-  // keep hostId so hosts stay logged in.
-  localStorage.removeItem('hostName');
+  // Only remove hostName if we're not a host
+  if (!appState.hostId) {
+    localStorage.removeItem('hostName'); 
+  }
 
   // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
@@ -164,7 +164,6 @@ function clearGameState() {
     bases: [],
     currentTeam: null,
     currentPlayer: null,
-    hostId: null,
     hostName: null,
     status: 'setup'
   };
@@ -734,15 +733,6 @@ async function fetchGameData(gameId) {
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
     appState.gameData.settings = data.settings || {};
-
-    // IMPORTANT: Keep existing host auth if user is authenticated as host
-    // The hostId is maintained from localStorage, not from game data
-    const authState = getAuthState();
-    if (authState.isHost) {
-      appState.gameData.hostId = authState.hostId;
-      appState.gameData.hostName = authState.hostName;
-      console.log('Maintaining host authentication for:', authState.hostName);
-    }
 
     // Show offline notification if data came from cache
     if (fromCache && window.showNotification) {
@@ -1920,6 +1910,18 @@ function clearGameData() {
       window.showNotification('You have successfully left the game. Scan a QR code or create a new game to play again.', 'success');
     }
   }, 300);
+}
+
+// Logout host completely
+function logoutHost() {
+  // Clear host authentication
+  localStorage.removeItem('hostId');
+  appState.hostId = null;
+  
+  // Also clear any game data
+  clearGameState();
+  
+  console.log('Host logged out completely');
 }
 
 // Load Eruda debug console on demand
