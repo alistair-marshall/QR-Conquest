@@ -470,21 +470,6 @@ function renderLandingPage() {
       navigateTo('scanQR');
     }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 w-full');
     buttonContainer.appendChild(scanButton);
-
-    // Host Login help text
-    const hostLoginLink = document.createElement('p');
-    hostLoginLink.className = 'text-sm text-gray-600 mt-2 text-center';
-    const hostLoginText1 = document.createTextNode('Are you a game host?');
-    hostLoginLink.appendChild(hostLoginText1);
-
-    const lineBreak = document.createElement('br');
-    hostLoginLink.appendChild(lineBreak);
-
-    const hostLoginSpan = document.createElement('span');
-    hostLoginSpan.className = 'text-purple-600';
-    hostLoginSpan.textContent = 'Scan your host QR code above';
-    hostLoginLink.appendChild(hostLoginSpan);
-    buttonContainer.appendChild(hostLoginLink);
   }
 
   container.appendChild(buttonContainer);

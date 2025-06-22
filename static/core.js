@@ -88,6 +88,7 @@ function getAuthState() {
   return {
     isHost: !!localStorage.getItem('hostId'),
     hostId: localStorage.getItem('hostId'),
+    hostName: localStorage.getItem('hostName') || 'Host',
     isSiteAdmin: appState.siteAdmin.isAuthenticated,
     hasGame: !!localStorage.getItem('gameId'),
     gameId: localStorage.getItem('gameId'),
@@ -173,7 +174,7 @@ function clearGameState() {
   appState.error = null;
   appState.loading = false;
 
-  console.log('Authentication state cleared');
+  console.log('Game state cleared');
 }
 
 // =============================================================================
