@@ -778,6 +778,12 @@ async function fetchGameUpdates() {
     // Update game status in case it changed
     appState.gameData.status = gameData.status;
 
+    if (gameData.status === 'ended') {
+      // If the game has ended, stop polling
+      stopScorePolling();
+      navigateTo('results');
+    }
+
     // Only update specific UI components instead of full re-render
     if (appState.page === 'gameView') {
       // Update scoreboard
