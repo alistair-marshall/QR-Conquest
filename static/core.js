@@ -250,7 +250,7 @@ async function handleQRCode(qrCode, context = 'scan') {
     if (!getAuthState().hasGame) {
       appState.pendingQRCode = qrCode;
       if (window.navigateTo) {
-        window.navigateTo('firstTime');
+        window.navigateTo('landing');
       }
     }
   } finally {
