@@ -1,0 +1,94 @@
+/* Custom marker styles for GPS and manual markers */
+.gps-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
+.manual-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Ensure map markers are interactive */
+.leaflet-marker-icon {
+    cursor: pointer;
+}
+
+.leaflet-marker-icon.leaflet-drag-target {
+    cursor: move;
+}
+
+/* Map instructions styling */
+#map-instructions {
+    z-index: 1000;
+    pointer-events: none;
+}
+
+/* Print styles for host QR code setup guide */
+@media print {
+  /* Hide everything except the print content */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only the print content and its children */
+  .print-content,
+  .print-content * {
+    visibility: visible;
+  }
+  
+  /* Position the print content */
+  .print-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 20px !important;
+  }
+  
+  /* Hide screen-only elements */
+  .screen-only {
+    display: none !important;
+  }
+  
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Ensure QR code prints well */
+  #qr-host-container canvas,
+  #qr-host-container img {
+    max-width: 200px !important;
+    max-height: 200px !important;
+    page-break-inside: avoid;
+  }
+  
+  /* Print typography adjustments */
+  h1, h2, h3 {
+    color: black !important;
+  }
+  
+  /* Ensure lists print properly */
+  ol, ul {
+    page-break-inside: avoid;
+  }
+  
+  /* Keep important sections together */
+  .bg-blue-50,
+  .bg-amber-50 {
+    page-break-inside: avoid;
+    background: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+  }
+}
+
+/* Hide print-only content on screen */
+.print-only {
+  display: none;
+}

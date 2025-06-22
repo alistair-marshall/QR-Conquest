@@ -52,33 +52,7 @@
     // Add detailed logging for debugging
     console.log('Document loaded, waiting for DOM content to load');
   </script>
-  <style>
-    /* Custom marker styles for GPS and manual markers */
-    .gps-marker {
-      background: transparent !important;
-      border: none !important;
-    }
-
-    .manual-marker {
-      background: transparent !important;
-      border: none !important;
-    }
-
-    /* Ensure map markers are interactive */
-    .leaflet-marker-icon {
-      cursor: pointer;
-    }
-
-    .leaflet-marker-icon.leaflet-drag-target {
-      cursor: move;
-    }
-
-    /* Map instructions styling */
-    #map-instructions {
-      z-index: 1000;
-      pointer-events: none;
-    }
-    </style>
+  <link rel="stylesheet" href="site.css"/>
 </head>
 <body class="bg-gray-100">
   <div id="error-container" style="display: none;" class="max-w-md mx-auto mt-4"></div>

@@ -805,7 +805,29 @@ function renderHostCreationModal() {
 // Host QR code modal
 function renderHostQRModal(host) {
   // Create QR code content
-  const qrContent = UIBuilder.createElement('div');
+  const qrContent = UIBuilder.createElement('div', {
+    id: 'host-qr-print-content',
+    className: 'print-content'
+  });
+  
+  // Print header (only visible when printing)
+  const printHeader = UIBuilder.createElement('div', {
+    className: 'print-only text-center mb-6'
+  });
+  
+  const printTitle = UIBuilder.createElement('h1', {
+    className: 'text-2xl font-bold text-gray-900 mb-2',
+    textContent: 'QR Conquest Host Setup'
+  });
+  printHeader.appendChild(printTitle);
+  
+  const printSubtitle = UIBuilder.createElement('p', {
+    className: 'text-lg text-gray-700',
+    textContent: `Host: ${host.name}`
+  });
+  printHeader.appendChild(printSubtitle);
+  
+  qrContent.appendChild(printHeader);
   
   // Host status indicator
   const statusContainer = UIBuilder.createElement('div', {
@@ -888,11 +910,88 @@ function renderHostQRModal(host) {
   qrContainer.appendChild(linkContainer);
   qrContent.appendChild(qrContainer);
 
+  // Setup instructions
+  const instructionsContainer = UIBuilder.createElement('div', {
+    className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4'
+  });
+  
+  const instructionsTitle = UIBuilder.createElement('h3', {
+    className: 'text-lg font-semibold text-blue-900 mb-3',
+    textContent: 'Host Setup Instructions'
+  });
+  instructionsContainer.appendChild(instructionsTitle);
+  
+  const instructionsList = UIBuilder.createElement('ol', {
+    className: 'list-decimal list-inside space-y-2 text-sm text-blue-800'
+  });
+  
+  const instructions = [
+    'Use your phone to scan the QR code above (or visit the secret link)',
+    'This will authenticate you as a game host and give you access to game management',
+    'Click "Host a Game" to create your first game',
+    'Print QR codes for teams and bases using the "Print QR Codes" button',
+    'Place base QR codes at physical locations around your game area',
+    'Scan each printed QR code to assign it as either a team or base',
+    'Share team QR codes with players so they can join teams',
+    'Start the game when you have at least 2 teams and your bases are ready'
+  ];
+  
+  instructions.forEach(instruction => {
+    const listItem = UIBuilder.createElement('li', {
+      className: 'mb-1',
+      textContent: instruction
+    });
+    instructionsList.appendChild(listItem);
+  });
+  
+  instructionsContainer.appendChild(instructionsList);
+  
+  // Important notes
+  const notesContainer = UIBuilder.createElement('div', {
+    className: 'mt-4 p-3 bg-amber-50 border border-amber-200 rounded'
+  });
+  
+  const notesTitle = UIBuilder.createElement('p', {
+    className: 'font-semibold text-amber-800 mb-2',
+    textContent: 'Important Notes:'
+  });
+  notesContainer.appendChild(notesTitle);
+  
+  const notesList = UIBuilder.createElement('ul', {
+    className: 'list-disc list-inside space-y-1 text-sm text-amber-700'
+  });
+  
+  const notes = [
+    'Keep this QR code private - anyone who scans it can host games',
+    'For best GPS performance, install the game as a PWA when prompted',
+    'Players need to be close to bases (within 15m by default) to capture them'
+  ];
+  
+  notes.forEach(note => {
+    const listItem = UIBuilder.createElement('li', {
+      textContent: note
+    });
+    notesList.appendChild(listItem);
+  });
+  
+  notesContainer.appendChild(notesList);
+  instructionsContainer.appendChild(notesContainer);
+  
+  qrContent.appendChild(instructionsContainer);
+
   const modal = UIBuilder.createModal({
     title: `Host QR Code: ${host.name}`,
     content: qrContent,
     size: 'lg',
     actions: [
+      {
+        text: 'Print Setup Guide',
+        onClick: () => {
+          window.print();
+        },
+        className: 'bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center',
+        icon: 'printer'
+      },
       {
         text: 'Copy ID',
         onClick: () => {
