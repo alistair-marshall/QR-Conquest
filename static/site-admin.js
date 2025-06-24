@@ -30,7 +30,7 @@ function logoutSiteAdmin() {
   appState.siteAdmin.isAuthenticated = false;
   appState.siteAdmin.token = null;
   clearSiteAdminData(); // Clear data on logout
-  
+
   navigateTo('landing');
   showNotification('Logged out successfully', 'info');
 }
@@ -80,7 +80,7 @@ function renderSiteAdminLogin() {
   // Handle form submission
   form.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const password = passwordInput.value.trim();
     if (!password) {
       showNotification('Please enter the admin password', 'warning');
@@ -115,8 +115,8 @@ function renderSiteAdminLogin() {
   // Back to Home link
   const backLink = UIBuilder.createElement('div', { className: 'text-center' });
 
-  const backButton = UIBuilder.createButton('Back to Home', function() { 
-    navigateTo('landing'); 
+  const backButton = UIBuilder.createButton('Back to Home', function() {
+    navigateTo('landing');
   }, 'text-purple-600 hover:text-purple-800 underline');
   backLink.appendChild(backButton);
 
@@ -164,21 +164,21 @@ function renderSiteAdminPanel() {
 
     // Add navigation tabs for Hosts and Games
     const tabsSection = UIBuilder.createElement('div', { className: 'mb-6' });
-    
+
     const tabsContainer = UIBuilder.createElement('div', {
       className: 'border-b border-gray-200'
     });
-    
+
     const tabsList = UIBuilder.createElement('nav', { className: 'flex space-x-8' });
-    
+
     // Hosts tab
     const hostsTab = UIBuilder.createButton('Host Management', null, 'py-2 px-1 border-b-2 font-medium text-sm');
     hostsTab.id = 'hosts-tab';
-    
+
     // Games tab
     const gamesTab = UIBuilder.createButton('Game Management', null, 'py-2 px-1 border-b-2 font-medium text-sm');
     gamesTab.id = 'games-tab';
-    
+
     tabsList.appendChild(hostsTab);
     tabsList.appendChild(gamesTab);
     tabsContainer.appendChild(tabsList);
@@ -188,10 +188,10 @@ function renderSiteAdminPanel() {
     // IMPORTANT: Create content area BEFORE setting up tab functionality
     const contentArea = UIBuilder.createElement('div', { id: 'admin-content-area' });
     container.appendChild(contentArea);
-    
+
     // Tab state management - moved after content area creation
     const currentTab = sessionStorage.getItem('siteAdminActiveTab') || 'hosts';
-    
+
     function setActiveTab(tabName) {
         // Add safety check for content area
         const contentArea = document.getElementById('admin-content-area');
@@ -199,9 +199,9 @@ function renderSiteAdminPanel() {
             console.error('Content area not found when setting active tab');
             return;
         }
-        
+
         sessionStorage.setItem('siteAdminActiveTab', tabName);
-        
+
         if (tabName === 'hosts') {
             hostsTab.className = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
             gamesTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
@@ -212,42 +212,42 @@ function renderSiteAdminPanel() {
             showGamesSection();
         }
     }
-    
+
     function showHostsSection() {
         const contentArea = document.getElementById('admin-content-area');
         if (!contentArea) {
             console.error('Content area not found in showHostsSection');
             return;
         }
-        
+
         contentArea.innerHTML = '';
-        
+
         const hostListContainer = buildHostListSection();
         contentArea.appendChild(hostListContainer);
     }
-    
+
     function showGamesSection() {
         const contentArea = document.getElementById('admin-content-area');
         if (!contentArea) {
             console.error('Content area not found in showGamesSection');
             return;
         }
-        
+
         contentArea.innerHTML = '';
-        
+
         const gameListContainer = buildGameListSection();
         contentArea.appendChild(gameListContainer);
-        
+
         // Trigger games loading if not already loaded/loading
         if (!appState.siteAdmin.gamesLoaded && !appState.siteAdmin.gamesLoading) {
             loadSiteAdminGames();
         }
     }
-    
+
     // Set up event listeners after functions are defined
     hostsTab.addEventListener('click', () => setActiveTab('hosts'));
     gamesTab.addEventListener('click', () => setActiveTab('games'));
-    
+
     // Use setTimeout to ensure DOM is ready before setting initial tab
     setTimeout(() => {
         setActiveTab(currentTab);
@@ -265,7 +265,7 @@ function buildGameListSection() {
   const gameListHeader = UIBuilder.createElement('div', {
     className: 'flex justify-between items-center mb-6'
   });
-  
+
   const gameListTitle = UIBuilder.createElement('h3', {
     className: 'text-xl font-semibold text-gray-900',
     textContent: 'All Games'
@@ -276,7 +276,7 @@ function buildGameListSection() {
   const refreshButton = UIBuilder.createButton('Refresh', function() {
     refreshSiteAdminGames();
   }, 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center', 'refresh-cw');
-  
+
   gameListHeader.appendChild(refreshButton);
   gameListContainer.appendChild(gameListHeader);
 
@@ -306,15 +306,15 @@ function buildGameListSection() {
 // Build games table
 function buildGamesTable(container, games) {
     const tableContainer = UIBuilder.createElement('div', { className: 'overflow-x-auto' });
-    
+
     const table = UIBuilder.createElement('table', {
       className: 'min-w-full divide-y divide-gray-200'
     });
-    
+
     // Table header
     const thead = UIBuilder.createElement('thead', { className: 'bg-gray-50' });
     const headerRow = UIBuilder.createElement('tr');
-    
+
     const headers = ['Game Name', 'Host', 'Status', 'Teams', 'Bases', 'Players', 'Created', 'Actions'];
     headers.forEach(function(headerText) {
         const th = UIBuilder.createElement('th', {
@@ -323,20 +323,20 @@ function buildGamesTable(container, games) {
         });
         headerRow.appendChild(th);
     });
-    
+
     thead.appendChild(headerRow);
     table.appendChild(thead);
-    
+
     // Table body
     const tbody = UIBuilder.createElement('tbody', {
       className: 'bg-white divide-y divide-gray-200'
     });
-    
+
     games.forEach(function(game) {
         const row = buildGameRow(game);
         tbody.appendChild(row);
     });
-    
+
     table.appendChild(tbody);
     tableContainer.appendChild(table);
     container.appendChild(tableContainer);
@@ -345,49 +345,49 @@ function buildGamesTable(container, games) {
 // Build individual game row
 function buildGameRow(game) {
     const row = UIBuilder.createElement('tr', { className: 'hover:bg-gray-50' });
-    
+
     // Game name cell
     const nameCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     const nameContainer = UIBuilder.createElement('div');
     const gameName = UIBuilder.createElement('div', {
       className: 'text-sm font-medium text-gray-900',
       textContent: game.name
     });
     nameContainer.appendChild(gameName);
-    
+
     const gameId = UIBuilder.createElement('div', {
       className: 'text-sm text-gray-500',
       textContent: `ID: ${game.id}`
     });
     nameContainer.appendChild(gameId);
-    
+
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);
-    
+
     // Host cell
     const hostCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     const hostName = UIBuilder.createElement('div', {
       className: 'text-sm text-gray-900',
       textContent: game.host_name
     });
     hostCell.appendChild(hostName);
-    
+
     row.appendChild(hostCell);
-    
+
     // Status cell
     const statusCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     let statusClass = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
     let statusText = game.status;
-    
+
     switch (game.status) {
         case 'active':
             statusClass += ' bg-green-100 text-green-800';
@@ -404,40 +404,40 @@ function buildGameRow(game) {
         default:
             statusClass += ' bg-blue-100 text-blue-800';
     }
-    
+
     const statusBadge = UIBuilder.createElement('span', {
       className: statusClass,
       textContent: statusText
     });
     statusCell.appendChild(statusBadge);
     row.appendChild(statusCell);
-    
+
     // Teams count cell
     const teamsCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900',
       textContent: game.teams_count || 0
     });
     row.appendChild(teamsCell);
-    
+
     // Bases count cell
     const basesCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900',
       textContent: game.bases_count || 0
     });
     row.appendChild(basesCell);
-    
+
     // Players count cell
     const playersCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900',
       textContent: game.players_count || 0
     });
     row.appendChild(playersCell);
-    
+
     // Created date cell
     const createdCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500'
     });
-    
+
     if (game.start_time) {
         const createdDate = new Date(game.start_time * 1000);
         createdCell.textContent = createdDate.toLocaleDateString();
@@ -445,16 +445,16 @@ function buildGameRow(game) {
         createdCell.textContent = 'Not started';
     }
     row.appendChild(createdCell);
-    
+
     // Actions cell
     const actionsCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium'
     });
-    
+
     const actionsContainer = UIBuilder.createElement('div', {
       className: 'flex space-x-2'
     });
-    
+
     // Complete button (only for active games)
     if (game.status === 'active') {
         const completeButton = UIBuilder.createButton('Complete', function() {
@@ -465,7 +465,7 @@ function buildGameRow(game) {
         completeButton.title = 'End game and release QR codes';
         actionsContainer.appendChild(completeButton);
     }
-    
+
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
       if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- All associated data\n\nThis action CANNOT be undone!`)) {
@@ -474,10 +474,10 @@ function buildGameRow(game) {
     }, 'text-red-600 hover:text-red-900 transition-colors');
     deleteButton.title = 'Permanently delete game and all data';
     actionsContainer.appendChild(deleteButton);
-    
+
     actionsCell.appendChild(actionsContainer);
     row.appendChild(actionsCell);
-    
+
     return row;
 }
 
@@ -489,7 +489,7 @@ function buildHostListSection() {
   const hostListHeader = UIBuilder.createElement('div', {
     className: 'flex justify-between items-center mb-6'
   });
-  
+
   const hostListTitle = UIBuilder.createElement('h3', {
     className: 'text-xl font-semibold text-gray-900',
     textContent: 'All Hosts'
@@ -500,7 +500,7 @@ function buildHostListSection() {
   const addHostButton = UIBuilder.createButton('Add New Host', function() {
     renderHostCreationModal();
   }, 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center', 'plus');
-  
+
   hostListHeader.appendChild(addHostButton);
   hostListContainer.appendChild(hostListHeader);
 
@@ -533,15 +533,15 @@ function buildHostListSection() {
 // Build hosts table
 function buildHostsTable(container, hosts) {
     const tableContainer = UIBuilder.createElement('div', { className: 'overflow-x-auto' });
-    
+
     const table = UIBuilder.createElement('table', {
       className: 'min-w-full divide-y divide-gray-200'
     });
-    
+
     // Table header
     const thead = UIBuilder.createElement('thead', { className: 'bg-gray-50' });
     const headerRow = UIBuilder.createElement('tr');
-    
+
     const headers = ['Host Name', 'Copy Link', 'Status', 'Expiry Date', 'Created', 'Actions'];
     headers.forEach(function(headerText) {
         const th = UIBuilder.createElement('th', {
@@ -550,20 +550,20 @@ function buildHostsTable(container, hosts) {
         });
         headerRow.appendChild(th);
     });
-    
+
     thead.appendChild(headerRow);
     table.appendChild(thead);
-    
+
     // Table body
     const tbody = UIBuilder.createElement('tbody', {
       className: 'bg-white divide-y divide-gray-200'
     });
-    
+
     hosts.forEach(function(host) {
         const row = buildHostRow(host);
         tbody.appendChild(row);
     });
-    
+
     table.appendChild(tbody);
     tableContainer.appendChild(table);
     container.appendChild(tableContainer);
@@ -572,22 +572,22 @@ function buildHostsTable(container, hosts) {
 // Build individual host row
 function buildHostRow(host) {
     const row = UIBuilder.createElement('tr', { className: 'hover:bg-gray-50' });
-    
+
     // Name cell
     const nameCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     const nameContainer = UIBuilder.createElement('div');
     const hostName = UIBuilder.createElement('div', {
       className: 'text-sm font-medium text-gray-900',
       textContent: host.name
     });
     nameContainer.appendChild(hostName);
-    
+
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);
-    
+
     // Copy Link cell
     const linkCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
@@ -605,19 +605,19 @@ function buildHostRow(host) {
 
     linkCell.appendChild(copyButton);
     row.appendChild(linkCell);
-    
+
     // Status cell
     const statusCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap'
     });
-    
+
     const now = Date.now() / 1000;
     const isExpired = host.expiry_date && host.expiry_date <= now;
     const isExpiringSoon = host.expiry_date && !isExpired && (host.expiry_date - now) < 7 * 24 * 60 * 60; // 7 days
-    
+
     let statusClass = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
     let statusText;
-    
+
     if (isExpired) {
         statusClass += ' bg-red-100 text-red-800';
         statusText = 'Expired';
@@ -628,19 +628,19 @@ function buildHostRow(host) {
         statusClass += ' bg-green-100 text-green-800';
         statusText = 'Active';
     }
-    
+
     const statusBadge = UIBuilder.createElement('span', {
       className: statusClass,
       textContent: statusText
     });
     statusCell.appendChild(statusBadge);
     row.appendChild(statusCell);
-    
+
     // Expiry Date cell
     const expiryCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
     });
-    
+
     if (host.expiry_date) {
         const expiryDate = new Date(host.expiry_date * 1000);
         expiryCell.textContent = expiryDate.toLocaleDateString();
@@ -648,40 +648,40 @@ function buildHostRow(host) {
         expiryCell.textContent = 'Never';
         expiryCell.className += ' text-gray-500';
     }
-    
+
     row.appendChild(expiryCell);
-    
+
     // Created Date cell
     const createdCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500'
     });
-    
+
     const createdDate = new Date(host.creation_date * 1000);
     createdCell.textContent = createdDate.toLocaleDateString();
     row.appendChild(createdCell);
-    
+
     // Actions cell
     const actionsCell = UIBuilder.createElement('td', {
       className: 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium'
     });
-    
+
     const actionsContainer = UIBuilder.createElement('div', {
       className: 'flex space-x-2'
     });
-    
+
     // View QR button
     const qrButton = UIBuilder.createButton('QR', function() {
       renderHostQRModal(host);
     }, 'text-purple-600 hover:text-purple-900 transition-colors');
     qrButton.title = 'View QR Code';
     actionsContainer.appendChild(qrButton);
-    
+
     // Edit button
     const editButton = UIBuilder.createButton('Edit', function() {
       renderHostEditModal(host);
     }, 'text-blue-600 hover:text-blue-900 transition-colors');
     actionsContainer.appendChild(editButton);
-    
+
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
       if (confirm(`Are you sure you want to delete host "${host.name}"?\n\nThis action cannot be undone.`)) {
@@ -694,10 +694,10 @@ function buildHostRow(host) {
       }
     }, 'text-red-600 hover:text-red-900 transition-colors');
     actionsContainer.appendChild(deleteButton);
-    
+
     actionsCell.appendChild(actionsContainer);
     row.appendChild(actionsCell);
-    
+
     return row;
 }
 
@@ -714,7 +714,7 @@ function renderHostCreationModal() {
     textContent: 'Host Name'
   });
   nameGroup.appendChild(nameLabel);
-  
+
   const nameInput = UIBuilder.createElement('input', {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500',
     id: 'new-host-name',
@@ -733,20 +733,20 @@ function renderHostCreationModal() {
     textContent: 'Expiry Date (optional)'
   });
   expiryGroup.appendChild(expiryLabel);
-  
+
   const expiryInput = UIBuilder.createElement('input', {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500',
     id: 'new-host-expiry',
     type: 'date'
   });
-  
+
   // Set min date to today
   const today = new Date();
   const formattedDate = today.toISOString().split('T')[0];
   expiryInput.min = formattedDate;
-  
+
   expiryGroup.appendChild(expiryInput);
-  
+
   const expiryNote = UIBuilder.createElement('p', {
     className: 'text-sm text-gray-500 mt-1',
     textContent: 'Leave blank for no expiry date'
@@ -768,19 +768,19 @@ function renderHostCreationModal() {
         onClick: async () => {
           const name = nameInput.value.trim();
           const expiryDateStr = expiryInput.value;
-          
+
           if (!name) {
             showNotification('Please enter a host name', 'warning');
             return;
           }
-          
+
           let expiryDate = null;
           if (expiryDateStr) {
             expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
           }
-          
+
           const hostData = { name, expiry_date: expiryDate };
-          
+
           try {
             const result = await createHost(hostData);
             if (result) {
@@ -804,180 +804,135 @@ function renderHostCreationModal() {
 
 // Host QR code modal
 function renderHostQRModal(host) {
-  // Create QR code content
+  // Simple, print-first content structure
   const qrContent = UIBuilder.createElement('div', {
-    id: 'host-qr-print-content',
-    className: 'print-content'
+    className: 'host-qr-content'
   });
-  
-  // Print header (only visible when printing)
-  const printHeader = UIBuilder.createElement('div', {
-    className: 'print-only text-center mb-6'
+
+  // Print header
+  const header = UIBuilder.createElement('div', {
+    className: 'print-header'
   });
-  
-  const printTitle = UIBuilder.createElement('h1', {
-    className: 'text-2xl font-bold text-gray-900 mb-2',
-    textContent: 'QR Conquest Host Setup'
+
+  const title = UIBuilder.createElement('h1', {
+    textContent: 'QR Conquest Host Setup Guide'
   });
-  printHeader.appendChild(printTitle);
-  
-  const printSubtitle = UIBuilder.createElement('p', {
-    className: 'text-lg text-gray-700',
-    textContent: `Host: ${host.name}`
-  });
-  printHeader.appendChild(printSubtitle);
-  
-  qrContent.appendChild(printHeader);
-  
-  // Host status indicator
-  const statusContainer = UIBuilder.createElement('div', {
-    className: 'flex justify-center mb-4'
-  });
-  
+  header.appendChild(title);
+
+  // Determine status for inline display
   const now = Date.now() / 1000;
   const isExpired = host.expiry_date && host.expiry_date <= now;
   const isExpiringSoon = host.expiry_date && !isExpired && (host.expiry_date - now) < 7 * 24 * 60 * 60;
-  
-  let statusClass = 'px-3 py-1 text-sm font-medium rounded-full';
-  let statusText;
-  
+
+  let statusText = 'Active';
   if (isExpired) {
-    statusClass += ' bg-red-100 text-red-800';
     statusText = 'Expired';
   } else if (isExpiringSoon) {
-    statusClass += ' bg-yellow-100 text-yellow-800';
     statusText = 'Expiring Soon';
-  } else {
-    statusClass += ' bg-green-100 text-green-800';
-    statusText = 'Active';
   }
-  
-  const statusBadge = UIBuilder.createElement('span', {
-    className: statusClass,
-    textContent: statusText
+
+  const hostInfo = UIBuilder.createElement('p', {
+    textContent: `Host: ${host.name} [${statusText}]`
   });
-  statusContainer.appendChild(statusBadge);
-  qrContent.appendChild(statusContainer);
-  
-  // QR code container
-  const qrContainer = UIBuilder.createElement('div', {
-    className: 'bg-gray-50 p-6 rounded-lg flex flex-col items-center justify-center mb-6'
+  header.appendChild(hostInfo);
+
+  const dateInfo = UIBuilder.createElement('p', {
+    textContent: `Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}`
   });
-  
-  // QR code div (will contain the actual QR code)
+  header.appendChild(dateInfo);
+
+  qrContent.appendChild(header);
+
+  // QR code
   const qrDiv = UIBuilder.createElement('div', {
     id: `qr-host-${host.id}`,
-    className: 'mb-4 bg-white p-4 rounded-lg shadow-sm flex items-center justify-center',
-    style: { minHeight: '200px', minWidth: '200px' }
+    className: 'qr-code'
   });
-  qrContainer.appendChild(qrDiv);
-  
+  qrContent.appendChild(qrDiv);
+
   // Generate host secret link
   const baseUrl = window.location.protocol + '//' + window.location.host;
   const hostUrl = `${baseUrl}/?id=${host.qr_code}`;
-  
-  // Host QR code value display
-  const qrValue = UIBuilder.createElement('div', { className: 'text-center mb-4' });
-  
-  const qrLabel = UIBuilder.createElement('p', {
-    className: 'text-sm text-gray-600 mb-2',
+
+  // QR Code ID
+  const qrIdLabel = UIBuilder.createElement('h4', {
     textContent: 'QR Code ID:'
   });
-  qrValue.appendChild(qrLabel);
-  
-  const qrCode = UIBuilder.createElement('p', {
-    className: 'text-sm font-mono bg-gray-100 px-3 py-2 rounded break-all',
+  qrContent.appendChild(qrIdLabel);
+
+  const qrIdValue = UIBuilder.createElement('p', {
+    className: 'code-value',
     textContent: host.qr_code
   });
-  qrValue.appendChild(qrCode);
-  
-  qrContainer.appendChild(qrValue);
-  
-  const linkContainer = UIBuilder.createElement('div', { className: 'text-center mb-4' });
-  
-  const linkLabel = UIBuilder.createElement('p', {
-    className: 'text-sm text-gray-600 mb-2',
+  qrContent.appendChild(qrIdValue);
+
+  // Secret Link
+  const linkLabel = UIBuilder.createElement('h4', {
     textContent: 'Secret Link:'
   });
-  linkContainer.appendChild(linkLabel);
-  
-  const hostLink = UIBuilder.createElement('p', {
-    className: 'text-sm text-blue-600 bg-gray-100 px-3 py-2 rounded break-all',
+  qrContent.appendChild(linkLabel);
+
+  const linkValue = UIBuilder.createElement('p', {
+    className: 'code-value',
     textContent: hostUrl
   });
-  linkContainer.appendChild(hostLink);
-  
-  qrContainer.appendChild(linkContainer);
-  qrContent.appendChild(qrContainer);
+  qrContent.appendChild(linkValue);
 
-  // Setup instructions
-  const instructionsContainer = UIBuilder.createElement('div', {
-    className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4'
-  });
-  
+  // Instructions
   const instructionsTitle = UIBuilder.createElement('h3', {
-    className: 'text-lg font-semibold text-blue-900 mb-3',
     textContent: 'Host Setup Instructions'
   });
-  instructionsContainer.appendChild(instructionsTitle);
-  
+  qrContent.appendChild(instructionsTitle);
+
   const instructionsList = UIBuilder.createElement('ol', {
-    className: 'list-decimal list-inside space-y-2 text-sm text-blue-800'
+    className: 'instructions-list'
   });
-  
+
   const instructions = [
-    'Use your phone to scan the QR code above (or visit the secret link)',
-    'This will authenticate you as a game host and give you access to game management',
-    'Click "Host a Game" to create your first game',
-    'Print QR codes for teams and bases using the "Print QR Codes" button',
+    'Scan the QR code above with your phone camera (or visit the secret link)',
+    'This authenticates you as a game host and unlocks game management features',
+    'Click "Host a Game" and create your game with appropriate settings',
+    'Use "Print QR Codes" to generate QR codes for teams and bases',
     'Place base QR codes at physical locations around your game area',
-    'Scan each printed QR code to assign it as either a team or base',
+    'Scan each QR code to assign as team or base',
+    'Check that the base locations are correct on the map',
     'Share team QR codes with players so they can join teams',
     'Start the game when you have at least 2 teams and your bases are ready'
   ];
-  
+
   instructions.forEach(instruction => {
     const listItem = UIBuilder.createElement('li', {
-      className: 'mb-1',
       textContent: instruction
     });
     instructionsList.appendChild(listItem);
   });
-  
-  instructionsContainer.appendChild(instructionsList);
-  
+
+  qrContent.appendChild(instructionsList);
+
   // Important notes
-  const notesContainer = UIBuilder.createElement('div', {
-    className: 'mt-4 p-3 bg-amber-50 border border-amber-200 rounded'
-  });
-  
-  const notesTitle = UIBuilder.createElement('p', {
-    className: 'font-semibold text-amber-800 mb-2',
+  const notesTitle = UIBuilder.createElement('h4', {
     textContent: 'Important Notes:'
   });
-  notesContainer.appendChild(notesTitle);
-  
+  qrContent.appendChild(notesTitle);
+
   const notesList = UIBuilder.createElement('ul', {
-    className: 'list-disc list-inside space-y-1 text-sm text-amber-700'
+    className: 'notes-list'
   });
-  
+
   const notes = [
     'Keep this QR code private - anyone who scans it can host games',
     'For best GPS performance, install the game as a PWA when prompted',
     'Players need to be close to bases (within 15m by default) to capture them'
   ];
-  
+
   notes.forEach(note => {
     const listItem = UIBuilder.createElement('li', {
       textContent: note
     });
     notesList.appendChild(listItem);
   });
-  
-  notesContainer.appendChild(notesList);
-  instructionsContainer.appendChild(notesContainer);
-  
-  qrContent.appendChild(instructionsContainer);
+
+  qrContent.appendChild(notesList);
 
   const modal = UIBuilder.createModal({
     title: `Host QR Code: ${host.name}`,
@@ -986,10 +941,8 @@ function renderHostQRModal(host) {
     actions: [
       {
         text: 'Print Setup Guide',
-        onClick: () => {
-          window.print();
-        },
-        className: 'bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center',
+        onClick: () => window.print(),
+        className: 'bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors',
         icon: 'printer'
       },
       {
@@ -998,7 +951,7 @@ function renderHostQRModal(host) {
           navigator.clipboard.writeText(host.qr_code);
           showNotification('QR code ID copied to clipboard', 'success');
         },
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center',
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors',
         icon: 'copy'
       },
       {
@@ -1007,7 +960,7 @@ function renderHostQRModal(host) {
           navigator.clipboard.writeText(hostUrl);
           showNotification('Host link copied to clipboard', 'success');
         },
-        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center',
+        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors',
         icon: 'link'
       },
       {
@@ -1018,14 +971,11 @@ function renderHostQRModal(host) {
     ]
   });
 
+  modal.classList.add('host-qr-modal');
   document.body.appendChild(modal);
-  
-  // Generate QR code after modal is in DOM
-  setTimeout(() => {
-    generateQRCodeForHost(qrDiv.id, hostUrl);
-  }, 100);
-}
 
+  setTimeout(() => generateQRCodeForHost(qrDiv.id, hostUrl), 100);
+}
 // New function to generate QR codes with library loading
 async function generateQRCodeForHost(elementId, url) {
   const qrDiv = document.getElementById(elementId);
@@ -1037,10 +987,10 @@ async function generateQRCodeForHost(elementId, url) {
   try {
     // Load QR code library if not already loaded
     await loadQRCodeLibrary();
-    
+
     // Clear any existing content
     qrDiv.innerHTML = '';
-    
+
     // Generate QR code
     new QRCode(qrDiv, {
       text: url,
@@ -1050,16 +1000,16 @@ async function generateQRCodeForHost(elementId, url) {
       colorLight: "#ffffff",
       correctLevel: QRCode.CorrectLevel.H
     });
-    
+
   } catch (error) {
     console.error('Failed to generate QR code:', error);
-    
+
     // Show fallback content
     qrDiv.innerHTML = '';
     const fallbackContainer = UIBuilder.createElement('div', {
       className: 'text-center text-gray-600 p-8'
     });
-    
+
     const fallbackIcon = UIBuilder.createElement('i', {
       'data-lucide': 'alert-circle',
       className: 'mx-auto h-12 w-12 text-gray-400 mb-2'
@@ -1076,7 +1026,7 @@ async function generateQRCodeForHost(elementId, url) {
       textContent: 'Use the link above instead'
     });
     fallbackContainer.appendChild(fallbackText2);
-    
+
     qrDiv.appendChild(fallbackContainer);
   }
 }
@@ -1085,17 +1035,17 @@ async function generateQRCodeForHost(elementId, url) {
 function renderHostEditModal(host) {
   // Create form content
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
-  
+
   // Host name field
   const nameGroup = UIBuilder.createElement('div');
-  
+
   const nameLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'edit-host-name',
     textContent: 'Host Name'
   });
   nameGroup.appendChild(nameLabel);
-  
+
   const nameInput = UIBuilder.createElement('input', {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'edit-host-name',
@@ -1104,46 +1054,46 @@ function renderHostEditModal(host) {
     required: true
   });
   nameGroup.appendChild(nameInput);
-  
+
   form.appendChild(nameGroup);
-  
+
   // Expiry date field
   const expiryGroup = UIBuilder.createElement('div');
-  
+
   const expiryLabel = UIBuilder.createElement('label', {
     className: 'block text-gray-700 text-sm font-bold mb-2',
     htmlFor: 'edit-host-expiry',
     textContent: 'Expiry Date (optional)'
   });
   expiryGroup.appendChild(expiryLabel);
-  
+
   const expiryInput = UIBuilder.createElement('input', {
     className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
     id: 'edit-host-expiry',
     type: 'date'
   });
-  
+
   // Set min date to today
   const today = new Date();
   const formattedDate = today.toISOString().split('T')[0];
   expiryInput.min = formattedDate;
-  
+
   // Set current expiry date if exists
   if (host.expiry_date) {
     const expiryDate = new Date(host.expiry_date * 1000);
     expiryInput.value = expiryDate.toISOString().split('T')[0];
   }
-  
+
   expiryGroup.appendChild(expiryInput);
-  
+
   const expiryNote = UIBuilder.createElement('p', {
     className: 'text-sm text-gray-500 mt-1',
     textContent: 'Leave blank for no expiry date'
   });
   expiryGroup.appendChild(expiryNote);
-  
+
   form.appendChild(expiryGroup);
-  
+
   // Reset button for removing expiry date
   if (host.expiry_date) {
     const resetButton = UIBuilder.createButton('Remove Expiry Date', function() {
@@ -1166,23 +1116,23 @@ function renderHostEditModal(host) {
         onClick: async () => {
           const name = nameInput.value.trim();
           const expiryDateStr = expiryInput.value;
-          
+
           if (!name) {
             showNotification('Please enter a host name', 'warning');
             return;
           }
-          
+
           let expiryDate = null;
           if (expiryDateStr) {
             // Convert date string to timestamp (seconds)
             expiryDate = Math.floor(new Date(expiryDateStr + 'T23:59:59').getTime() / 1000);
           }
-          
+
           const hostData = {
             name,
             expiry_date: expiryDate
           };
-          
+
           try {
             // Call the API function from core.js
             const result = await updateHost(host.id, hostData);

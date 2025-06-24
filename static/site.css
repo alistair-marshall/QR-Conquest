@@ -24,71 +24,371 @@
     pointer-events: none;
 }
 
-/* Print styles for host QR code setup guide */
+/* Host QR Modal - Disable Tailwind for Print */
+
 @media print {
-  /* Hide everything except the print content */
-  body * {
-    visibility: hidden;
+  /* Disable ALL Tailwind classes for print */
+  * {
+    all: unset !important;
+    display: revert !important;
+    box-sizing: border-box !important;
   }
-  
-  /* Show only the print content and its children */
-  .print-content,
-  .print-content * {
-    visibility: visible;
-  }
-  
-  /* Position the print content */
-  .print-content {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+
+  /* Re-establish basic document structure */
+  html, body {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+    color: black !important;
     background: white !important;
+  }
+
+  /* Hide EVERYTHING except the modal content */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Hide the root container and other page structure */
+  #root,
+  header,
+  footer,
+  main {
+    all: unset !important;
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .host-qr-modal,
+  .host-qr-modal * {
+    visibility: visible !important;
+  }
+
+  /* Basic page setup */
+  @page {
+    margin: 20mm;
+    size: A4;
+  }
+
+  /* Reset modal to behave like the document root */
+  .host-qr-modal {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+    color: black !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    margin: 0 !important;
-    padding: 20px !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    inset: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
   }
-  
-  /* Hide screen-only elements */
-  .screen-only {
+
+  /* Hide modal buttons and screen elements */
+  .host-qr-modal button,
+  .host-qr-modal .border-t,
+  .status-badge {
     display: none !important;
   }
-  
-  /* Show print-only elements */
-  .print-only {
+
+  /* Show print header, hide modal title */
+  .print-header {
     display: block !important;
+    text-align: center !important;
+    margin: 0 0 20pt 0 !important;
+    border-bottom: 2pt solid black !important;
+    padding-bottom: 10pt !important;
   }
-  
-  /* Ensure QR code prints well */
-  #qr-host-container canvas,
-  #qr-host-container img {
-    max-width: 200px !important;
-    max-height: 200px !important;
-    page-break-inside: avoid;
+
+  .host-qr-modal h3:first-child {
+    display: none !important;
   }
-  
-  /* Print typography adjustments */
-  h1, h2, h3 {
+
+  /* Reset all content elements */
+  .host-qr-content,
+  .host-qr-content * {
+    all: unset !important;
+    display: revert !important;
     color: black !important;
+    background: white !important;
+    font-family: Arial, sans-serif !important;
   }
-  
-  /* Ensure lists print properly */
+
+  .host-qr-content {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Typography */
+  .print-header h1 {
+    display: block !important;
+    font-size: 18pt !important;
+    font-weight: bold !important;
+    margin: 0 0 8pt 0 !important;
+    text-align: center !important;
+  }
+
+  .print-header p {
+    display: block !important;
+    font-size: 12pt !important;
+    margin: 2pt 0 !important;
+    text-align: center !important;
+  }
+
+  h3 {
+    display: block !important;
+    font-size: 14pt !important;
+    font-weight: bold !important;
+    margin: 12pt 0 6pt 0 !important;
+  }
+
+  h4 {
+    display: block !important;
+    font-size: 12pt !important;
+    font-weight: bold !important;
+    margin: 10pt 0 4pt 0 !important;
+  }
+
+  p {
+    display: block !important;
+    margin: 4pt 0 !important;
+    font-size: 11pt !important;
+  }
+
+  /* QR Code - hide canvas, show only img */
+  .qr-code {
+    display: block !important;
+    text-align: center !important;
+    margin: 15pt 0 !important;
+  }
+
+  .qr-code div {
+    display: block !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+  }
+
+  .qr-code canvas {
+    display: none !important;
+  }
+
+  .qr-code img {
+    display: block !important;
+    width: 150pt !important;
+    height: 150pt !important;
+    border: 2pt solid black !important;
+    padding: 5pt !important;
+    margin: 0 auto !important;
+    background: white !important;
+  }
+
+  /* Code values */
+  .code-value {
+    display: block !important;
+    font-family: "Courier New", monospace !important;
+    font-size: 10pt !important;
+    border: 1pt solid black !important;
+    padding: 4pt !important;
+    margin: 4pt 0 8pt 0 !important;
+    word-break: break-all !important;
+    background: #f5f5f5 !important;
+  }
+
+  /* Lists */
   ol, ul {
-    page-break-inside: avoid;
+    display: block !important;
+    margin: 6pt 0 !important;
+    padding-left: 15pt !important;
   }
-  
-  /* Keep important sections together */
-  .bg-blue-50,
-  .bg-amber-50 {
-    page-break-inside: avoid;
-    background: #f8f9fa !important;
-    border: 1px solid #dee2e6 !important;
+
+  ol {
+    list-style-type: decimal !important;
+  }
+
+  ul {
+    list-style-type: disc !important;
+  }
+
+  li {
+    display: list-item !important;
+    margin: 3pt 0 !important;
+    font-size: 11pt !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Force block display for all structural elements */
+  div, section, article, main, header, footer {
+    display: block !important;
   }
 }
 
-/* Hide print-only content on screen */
-.print-only {
-  display: none;
+/* Host QR Modal - Disable Tailwind for Print */
+
+@media print {
+  /* ... existing styles ... */
+
+  /* Lists with proper bullet points */
+  ol, ul {
+    display: block !important;
+    margin: 6pt 0 !important;
+    padding-left: 15pt !important;
+  }
+
+  ol {
+    list-style-type: decimal !important;
+    list-style-position: outside !important;
+  }
+
+  ul {
+    list-style-type: disc !important;
+    list-style-position: outside !important;
+  }
+
+  li {
+    display: list-item !important;
+    margin: 3pt 0 !important;
+    font-size: 11pt !important;
+    line-height: 1.3 !important;
+    padding-left: 3pt !important;
+  }
+
+  /* ... rest of existing print styles ... */
+}
+
+/* Screen styles */
+@media screen {
+  .print-header {
+    display: none;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .status-active {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+
+  .status-expiring {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .status-expired {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .host-qr-content {
+    padding: 1.5rem;
+  }
+
+  .qr-code {
+    background-color: #f9fafb;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .qr-code > div {
+    margin-bottom: 1rem;
+    background-color: white;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    min-width: 200px;
+  }
+
+  h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e40af;
+    margin: 1.5rem 0 0.75rem 0;
+  }
+
+  h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 1rem 0 0.5rem 0;
+  }
+
+  .code-value {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.875rem;
+    background-color: #f3f4f6;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    word-break: break-all;
+    margin-bottom: 1rem;
+  }
+
+  .instructions-list {
+    list-style-type: decimal;
+    list-style-position: outside;
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.5rem;
+    padding: 1rem 1rem 1rem 2rem;
+    margin: 0.5rem 0;
+  }
+
+  .instructions-list li {
+    color: #1e40af;
+    font-size: 0.875rem;
+    margin: 0.5rem 0;
+    line-height: 1.25rem;
+    padding-left: 0.25rem;
+  }
+
+  .notes-list {
+    list-style-type: disc;
+    list-style-position: outside;
+    background-color: #fffbeb;
+    border: 1px solid #fed7aa;
+    border-radius: 0.375rem;
+    padding: 0.75rem 0.75rem 0.75rem 1.5rem;
+    margin: 1rem 0 0.5rem 0;
+  }
+
+  .notes-list li {
+    color: #92400e;
+    font-size: 0.875rem;
+    margin: 0.5rem 0;
+    line-height: 1.25rem;
+    padding-left: 0.25rem;
+  }
 }
