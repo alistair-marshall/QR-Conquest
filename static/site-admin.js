@@ -1,29 +1,5 @@
 // Site Admin module for managing hosts - UI components only, API calls handled by core.js
 
-function loadQRCodeLibrary() {
-  return new Promise((resolve, reject) => {
-    // Check if QRCode library is already loaded
-    if (window.QRCode) {
-      resolve();
-      return;
-    }
-
-    // Create script element to load QRCode.js
-    const script = UIBuilder.createElement('script', {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-      onLoad: () => {
-        console.log('QRCode library loaded successfully');
-        resolve();
-      },
-      onError: () => {
-        console.error('Failed to load QRCode library');
-        reject(new Error('Failed to load QR code library'));
-      }
-    });
-    document.head.appendChild(script);
-  });
-}
-
 // Site admin logout - UI handling only
 function logoutSiteAdmin() {
   // Reset site admin state - core.js handles this
@@ -854,18 +830,6 @@ function renderHostQRModal(host) {
   const baseUrl = window.location.protocol + '//' + window.location.host;
   const hostUrl = `${baseUrl}/?id=${host.qr_code}`;
 
-  // QR Code ID
-  const qrIdLabel = UIBuilder.createElement('h4', {
-    textContent: 'QR Code ID:'
-  });
-  qrContent.appendChild(qrIdLabel);
-
-  const qrIdValue = UIBuilder.createElement('p', {
-    className: 'code-value',
-    textContent: host.qr_code
-  });
-  qrContent.appendChild(qrIdValue);
-
   // Secret Link
   const linkLabel = UIBuilder.createElement('h4', {
     textContent: 'Secret Link:'
@@ -946,15 +910,6 @@ function renderHostQRModal(host) {
         icon: 'printer'
       },
       {
-        text: 'Copy ID',
-        onClick: () => {
-          navigator.clipboard.writeText(host.qr_code);
-          showNotification('QR code ID copied to clipboard', 'success');
-        },
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors',
-        icon: 'copy'
-      },
-      {
         text: 'Copy Link',
         onClick: () => {
           navigator.clipboard.writeText(hostUrl);
@@ -974,61 +929,7 @@ function renderHostQRModal(host) {
   modal.classList.add('host-qr-modal');
   document.body.appendChild(modal);
 
-  setTimeout(() => generateQRCodeForHost(qrDiv.id, hostUrl), 100);
-}
-// New function to generate QR codes with library loading
-async function generateQRCodeForHost(elementId, url) {
-  const qrDiv = document.getElementById(elementId);
-  if (!qrDiv) {
-    console.error('QR code container not found:', elementId);
-    return;
-  }
-
-  try {
-    // Load QR code library if not already loaded
-    await loadQRCodeLibrary();
-
-    // Clear any existing content
-    qrDiv.innerHTML = '';
-
-    // Generate QR code
-    new QRCode(qrDiv, {
-      text: url,
-      width: 200,
-      height: 200,
-      colorDark: "#000000",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.H
-    });
-
-  } catch (error) {
-    console.error('Failed to generate QR code:', error);
-
-    // Show fallback content
-    qrDiv.innerHTML = '';
-    const fallbackContainer = UIBuilder.createElement('div', {
-      className: 'text-center text-gray-600 p-8'
-    });
-
-    const fallbackIcon = UIBuilder.createElement('i', {
-      'data-lucide': 'alert-circle',
-      className: 'mx-auto h-12 w-12 text-gray-400 mb-2'
-    });
-    fallbackContainer.appendChild(fallbackIcon);
-
-    const fallbackText1 = UIBuilder.createElement('p', {
-      textContent: 'QR Code generation failed'
-    });
-    fallbackContainer.appendChild(fallbackText1);
-
-    const fallbackText2 = UIBuilder.createElement('p', {
-      className: 'text-xs mt-1',
-      textContent: 'Use the link above instead'
-    });
-    fallbackContainer.appendChild(fallbackText2);
-
-    qrDiv.appendChild(fallbackContainer);
-  }
+  setTimeout(() => generateQRCode(qrDiv.id, hostUrl), 100);
 }
 
 // Host edit modal

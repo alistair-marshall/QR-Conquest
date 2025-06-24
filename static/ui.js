@@ -228,6 +228,30 @@ const UIBuilder = {
   }
 };
 
+function loadQRCodeLibrary() {
+  return new Promise((resolve, reject) => {
+    // Check if QRCode library is already loaded
+    if (window.QRCode) {
+      resolve();
+      return;
+    }
+
+    // Create script element to load QRCode.js
+    const script = UIBuilder.createElement('script', {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+      onLoad: () => {
+        console.log('QRCode library loaded successfully');
+        resolve();
+      },
+      onError: () => {
+        console.error('Failed to load QRCode library');
+        reject(new Error('Failed to load QR code library'));
+      }
+    });
+    document.head.appendChild(script);
+  });
+}
+
 // Initialize app immediately when script is loaded
 (function initializeApp() {
   console.log('UI system loaded, initializing app immediately');
@@ -1744,6 +1768,61 @@ function updateOnlineStatus(isOnline) {
   }
 }
 
+// Generate QR codes with library loading
+async function generateQRCode(elementId, url) {
+  const qrDiv = document.getElementById(elementId);
+  if (!qrDiv) {
+    console.error('QR code container not found:', elementId);
+    return;
+  }
+
+  try {
+    // Load QR code library if not already loaded
+    await loadQRCodeLibrary();
+
+    // Clear any existing content
+    qrDiv.innerHTML = '';
+
+    // Generate QR code
+    new QRCode(qrDiv, {
+      text: url,
+      width: 200,
+      height: 200,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+  } catch (error) {
+    console.error('Failed to generate QR code:', error);
+
+    // Show fallback content
+    qrDiv.innerHTML = '';
+    const fallbackContainer = UIBuilder.createElement('div', {
+      className: 'text-center text-gray-600 p-8'
+    });
+
+    const fallbackIcon = UIBuilder.createElement('i', {
+      'data-lucide': 'alert-circle',
+      className: 'mx-auto h-12 w-12 text-gray-400 mb-2'
+    });
+    fallbackContainer.appendChild(fallbackIcon);
+
+    const fallbackText1 = UIBuilder.createElement('p', {
+      textContent: 'QR Code generation failed'
+    });
+    fallbackContainer.appendChild(fallbackText1);
+
+    const fallbackText2 = UIBuilder.createElement('p', {
+      className: 'text-xs mt-1',
+      textContent: 'Use the link above instead'
+    });
+    fallbackContainer.appendChild(fallbackText2);
+
+    qrDiv.appendChild(fallbackContainer);
+  }
+}
+
 let headerTimerInterval = null;
 
 function startHeaderTimer() {
@@ -1780,3 +1859,4 @@ window.updateMapMarkers = updateMapMarkers;
 window.updateScoreboard = updateScoreboard;
 window.updateGameStatusText = updateGameStatusText;
 window.updateGPSStatusDisplay = updateGPSStatusDisplay;
+window.generateQRCode = generateQRCode;

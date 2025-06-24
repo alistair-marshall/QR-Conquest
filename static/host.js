@@ -343,6 +343,9 @@ qrSection.appendChild(gpsStatusContainer);
         className: 'text-lg font-semibold text-gray-900',
         textContent: team.name
       });
+      teamName.addEventListener('click', function() {
+        renderTeamQRModal(team);
+      });
       teamNameContainer.appendChild(teamName);
 
       teamHeader.appendChild(teamNameContainer);
@@ -1588,6 +1591,135 @@ function renderTeamEditModal(team) {
   });
 
   document.body.appendChild(modal);
+}
+
+// Function to display team QR code modal
+function renderTeamQRModal(team) {
+  // Create content container
+  const qrContent = UIBuilder.createElement('div', {
+    className: 'text-center'
+  });
+
+  // Team info
+  const teamInfo = UIBuilder.createElement('div', {
+    className: 'mb-4'
+  });
+
+  const teamColorDot = UIBuilder.createElement('div', {
+    className: `w-8 h-8 rounded-full ${team.color} mx-auto mb-2`
+  });
+  teamInfo.appendChild(teamColorDot);
+
+  const teamNameDisplay = UIBuilder.createElement('p', {
+    className: 'text-lg font-semibold text-gray-900',
+    textContent: team.name
+  });
+  teamInfo.appendChild(teamNameDisplay);
+
+  qrContent.appendChild(teamInfo);
+
+  // QR code container
+  const qrContainer = UIBuilder.createElement('div', {
+    className: 'bg-gray-100 p-6 rounded-lg mb-4'
+  });
+
+  const qrDiv = UIBuilder.createElement('div', {
+    id: `qr-team-${team.id}`,
+    className: 'flex justify-center'
+  });
+  qrContainer.appendChild(qrDiv);
+
+  qrContent.appendChild(qrContainer);
+
+  // Generate team QR URL
+  const baseUrl = window.location.protocol + '//' + window.location.host;
+  const teamUrl = `${baseUrl}/?id=${team.id}`;
+
+  // URL display
+  const urlInfo = UIBuilder.createElement('div', {
+    className: 'mb-4'
+  });
+
+  const urlLabel = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600 mb-1',
+    textContent: 'Team Join URL:'
+  });
+  urlInfo.appendChild(urlLabel);
+
+  const urlValue = UIBuilder.createElement('p', {
+    className: 'font-mono text-xs bg-gray-100 p-2 rounded break-all',
+    textContent: teamUrl
+  });
+  urlInfo.appendChild(urlValue);
+
+  qrContent.appendChild(urlInfo);
+
+  // Instructions
+  const instructions = UIBuilder.createElement('div', {
+    className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 text-left mb-4'
+  });
+
+  const instructionsTitle = UIBuilder.createElement('p', {
+    className: 'font-semibold text-blue-900 mb-2',
+    textContent: 'How to use this QR code:'
+  });
+  instructions.appendChild(instructionsTitle);
+
+  const instructionsList = UIBuilder.createElement('ul', {
+    className: 'text-sm text-blue-800 space-y-1 list-disc list-inside'
+  });
+
+  const instructionItems = [
+    'Share this QR code with new players who want to join this team',
+    'Players scan the code with their phone camera',
+    'They will be prompted to enter their name and join the team',
+    'Players can switch teams by scanning a different team QR code'
+  ];
+
+  instructionItems.forEach(item => {
+    const li = UIBuilder.createElement('li', { textContent: item });
+    instructionsList.appendChild(li);
+  });
+
+  instructions.appendChild(instructionsList);
+  qrContent.appendChild(instructions);
+
+  // Player count
+  const playerCount = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600',
+    textContent: `Current players: ${team.playerCount || 0}`
+  });
+  qrContent.appendChild(playerCount);
+
+  // Create modal
+  const modal = UIBuilder.createModal({
+    title: `${team.name} - Team QR Code`,
+    content: qrContent,
+    size: 'md',
+    actions: [
+      {
+        text: 'Copy Link',
+        onClick: () => {
+          navigator.clipboard.writeText(teamUrl);
+          showNotification('Team join link copied to clipboard', 'success');
+        },
+        className: 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors',
+        icon: 'link'
+      },
+      {
+        text: 'Close',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+
+  // Generate QR code after modal is added to DOM
+  setTimeout(() => {
+    generateQRCode(qrDiv.id, teamUrl);
+  }, 100);
 }
 
 // Render base creation form
