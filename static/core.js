@@ -706,6 +706,21 @@ async function fetchGameData(gameId) {
             console.warn('Failed to cache game data:', cacheErr);
           });
         }
+      } else if (response.status === 404) {
+        // Game has been deleted - clear state and handle gracefully
+        console.log('Game not found (404) - game may have been deleted');
+        clearGameState();
+        
+        if (window.showNotification) {
+          window.showNotification('This game no longer exists. It may have been deleted by the host.', 'warning');
+        }
+        
+        // Navigate to landing page
+        if (window.navigateTo) {
+          window.navigateTo('landing');
+        }
+        
+        return; // Exit early, don't try cache fallback
       } else {
         throw new Error('Failed to load game data from server');
       }
