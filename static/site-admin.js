@@ -854,18 +854,6 @@ function renderHostQRModal(host) {
   const baseUrl = window.location.protocol + '//' + window.location.host;
   const hostUrl = `${baseUrl}/?id=${host.qr_code}`;
 
-  // QR Code ID
-  const qrIdLabel = UIBuilder.createElement('h4', {
-    textContent: 'QR Code ID:'
-  });
-  qrContent.appendChild(qrIdLabel);
-
-  const qrIdValue = UIBuilder.createElement('p', {
-    className: 'code-value',
-    textContent: host.qr_code
-  });
-  qrContent.appendChild(qrIdValue);
-
   // Secret Link
   const linkLabel = UIBuilder.createElement('h4', {
     textContent: 'Secret Link:'
@@ -944,15 +932,6 @@ function renderHostQRModal(host) {
         onClick: () => window.print(),
         className: 'bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors',
         icon: 'printer'
-      },
-      {
-        text: 'Copy ID',
-        onClick: () => {
-          navigator.clipboard.writeText(host.qr_code);
-          showNotification('QR code ID copied to clipboard', 'success');
-        },
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors',
-        icon: 'copy'
       },
       {
         text: 'Copy Link',
