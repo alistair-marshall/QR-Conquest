@@ -138,6 +138,7 @@ def init_db():
         game_id TEXT NOT NULL,
         name TEXT NOT NULL,
         color TEXT NOT NULL,
+        qr_code TEXT UNIQUE,
         FOREIGN KEY (game_id) REFERENCES games (id)
     )
     ''')
@@ -170,14 +171,6 @@ def init_db():
         team_id TEXT NOT NULL,
         capture_time INTEGER NOT NULL,
         FOREIGN KEY (base_id) REFERENCES bases (id),
-        FOREIGN KEY (team_id) REFERENCES teams (id)
-    )
-    ''')
-
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS team_qr_codes (
-        team_id TEXT PRIMARY KEY,
-        qr_code TEXT UNIQUE NOT NULL,
         FOREIGN KEY (team_id) REFERENCES teams (id)
     )
     ''')
@@ -579,6 +572,7 @@ def get_game(game_id):
             'id': team['id'],
             'name': team['name'],
             'color': team['color'],
+            'qrCode': team['qr_code'], 
             'playerCount': player_count,
             'score': team_score,
         })
@@ -820,8 +814,9 @@ def end_game(game_id):
 
     # Clear QR code assignments for all teams in this game
     cursor.execute('''
-    DELETE FROM team_qr_codes
-    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    UPDATE teams
+    SET qr_code = NULL
+    WHERE game_id = ?
     ''', (game_id,))
     
     team_count = cursor.rowcount
@@ -1064,10 +1059,10 @@ def add_team(game_id):
         return jsonify({'error': 'QR code already assigned to a base'}), 400
         
     # Check if QR code is already assigned to a team
-    cursor.execute('SELECT qr_code FROM team_qr_codes WHERE qr_code = ?', (data['qr_code'],))
-    existing_team_qr = cursor.fetchone()
+    cursor.execute('SELECT qr_code FROM teams WHERE qr_code = ?', (data['qr_code'],))
+    existing_team = cursor.fetchone()
     
-    if existing_team_qr:
+    if existing_team:
         conn.close()
         return jsonify({'error': 'QR code already assigned to a team'}), 400
 
@@ -1077,16 +1072,10 @@ def add_team(game_id):
     try:
         # Insert the team
         cursor.execute('''
-        INSERT INTO teams (id, game_id, name, color)
+        INSERT INTO teams (id, game_id, name, color, qr_code)
         VALUES (?, ?, ?, ?)
-        ''', (team_id, game_id, data['name'], data['color']))
+        ''', (team_id, game_id, data['name'], data['color'], data['qr_code']))
         
-        # Store the QR code mapping
-        cursor.execute('''
-        INSERT INTO team_qr_codes (team_id, qr_code)
-        VALUES (?, ?)
-        ''', (team_id, data['qr_code']))
-
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -1103,11 +1092,7 @@ def check_qr_code_status(qr_code):
     cursor = conn.cursor()
 
     # Check if QR code is assigned to a team
-    cursor.execute('''
-    SELECT t.id, t.game_id FROM teams t
-    JOIN team_qr_codes qr ON t.id = qr.team_id
-    WHERE qr.qr_code = ?
-    ''', (qr_code,))
+    cursor.execute('SELECT id, game_id FROM teams WHERE qr_code = ?', (qr_code,))
     team = cursor.fetchone()
     
     if team:
@@ -1272,10 +1257,6 @@ def delete_game(game_id):
         
         cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
         teams_count = cursor.fetchone()[0]
-        
-        # Delete team QR code mappings
-        for team_id in team_ids:
-            cursor.execute('DELETE FROM team_qr_codes WHERE team_id = ?', (team_id,))
         
         # Delete captures (must be deleted before bases and teams due to foreign keys)
         cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
