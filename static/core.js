@@ -1047,17 +1047,28 @@ async function endGame() {
 // =============================================================================
 
 // Join team
-async function joinTeam(teamId) {
+async function joinTeam(teamId, playerName = 'Anonymous Player') {
   try {
     setLoading(true);
-    console.log('Joining team:', teamId);
+    console.log('Joining team:', teamId, 'with name:', playerName);
+
+    const authState = getAuthState();
+    const requestBody = {
+      player_name: playerName
+    };
+
+    // If player already has an ID (team change), include it to preserve identity
+    if (authState.playerId) {
+      requestBody.player_id = authState.playerId;
+      console.log('Including existing player ID for team change:', authState.playerId);
+    }
 
     const response = await fetch(API_BASE_URL + '/teams/' + teamId + '/join', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({})
+      body: JSON.stringify({requestBody})
     });
 
     const data = await handleApiResponse(response, 'Failed to join team');

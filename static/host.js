@@ -274,11 +274,11 @@ function renderHostPanel() {
   qrSection.appendChild(qrDescription);
 
   // GPS status for hosts (unobtrusive)
-const gpsStatusContainer = UIBuilder.createElement('div', {
-  className: 'mb-4 flex justify-center'
-});
-gpsStatusContainer.appendChild(createGPSStatusIndicator());
-qrSection.appendChild(gpsStatusContainer);
+  const gpsStatusContainer = UIBuilder.createElement('div', {
+    className: 'mb-4 flex justify-center'
+  });
+  gpsStatusContainer.appendChild(createGPSStatusIndicator());
+  qrSection.appendChild(gpsStatusContainer);
 
   // QR Code actions container
   const qrActionsContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
@@ -296,13 +296,6 @@ qrSection.appendChild(gpsStatusContainer);
   qrActionsContainer.appendChild(printQRButton);
 
   qrSection.appendChild(qrActionsContainer);
-
-  // Add instruction text to emphasise the QR-first approach
-  const instructionText = UIBuilder.createElement('p', {
-    className: 'text-amber-600 text-sm mt-2 text-center',
-    textContent: 'Note: Teams and bases can only be created by scanning QR codes first.'
-  });
-  qrSection.appendChild(instructionText);
 
   grid.appendChild(qrSection);
 
@@ -358,8 +351,8 @@ qrSection.appendChild(gpsStatusContainer);
 
       teamCard.appendChild(teamHeader);
 
-      // Team stats
-      const teamStats = UIBuilder.createElement('div', { className: 'grid grid-cols-2 gap-4' });
+      // Team stats and player list
+      const teamStats = UIBuilder.createElement('div', { className: 'grid grid-cols-1 gap-4' });
 
       const playersContainer = UIBuilder.createElement('div', {
         className: 'text-center bg-white p-3 rounded-lg'
@@ -374,6 +367,27 @@ qrSection.appendChild(gpsStatusContainer);
         textContent: team.playerCount || 0
       });
       playersContainer.appendChild(playersValue);
+
+      // Add player names list if there are players
+      if (team.players && team.players.length > 0) {
+        const playersList = UIBuilder.createElement('div', {
+          className: 'mt-2 text-xs text-gray-600'
+        });
+        
+        const playerNames = team.players.map(player => player.name).join(', ');
+        const playersText = UIBuilder.createElement('div', {
+          className: 'italic',
+          textContent: playerNames
+        });
+        playersList.appendChild(playersText);
+        playersContainer.appendChild(playersList);
+      } else {
+        const noPlayersText = UIBuilder.createElement('div', {
+          className: 'mt-2 text-xs text-gray-400 italic',
+          textContent: 'No players yet'
+        });
+        playersContainer.appendChild(noPlayersText);
+      }
 
       const scoreContainer = UIBuilder.createElement('div', {
         className: 'text-center bg-white p-3 rounded-lg'
@@ -2175,7 +2189,7 @@ function renderBaseCreationForm(qrId, container) {
   return container;
 }
 
-// Player Registration Page - New page for players to register when joining a team
+// Player Registration Page
 function renderPlayerRegistrationPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
@@ -2238,7 +2252,8 @@ function renderPlayerRegistrationPage() {
     className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
     id: 'player-name',
     type: 'text',
-    placeholder: 'Enter your name'
+    placeholder: 'Enter your name',
+    required: true
   });
   nameGroup.appendChild(nameInput);
 
@@ -2253,11 +2268,13 @@ function renderPlayerRegistrationPage() {
   form.addEventListener('submit', function(e) {
     e.preventDefault();
 
-    // Get player name (optional)
-    const playerName = nameInput.value.trim() || 'Anonymous Player';
+    const playerName = nameInput.value.trim();
+    if (!playerName) {
+      showNotification('Please enter your name', 'warning');
+      return;
+    }
 
-    // Call the API function from core.js
-    joinTeam(teamId);
+    joinTeam(teamId, playerName);
 
     // Clear pending team
     sessionStorage.removeItem('pendingTeamId');

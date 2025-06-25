@@ -147,6 +147,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS players (
         id TEXT PRIMARY KEY,
         team_id TEXT NOT NULL,
+        name TEXT NOT NULL,
         join_time INTEGER NOT NULL,
         FOREIGN KEY (team_id) REFERENCES teams (id)
     )
@@ -561,9 +562,18 @@ def get_game(game_id):
     teams = []
 
     for team in teams_data:
-        # Count players
-        cursor.execute('SELECT COUNT(*) FROM players WHERE team_id = ?', (team['id'],))
-        player_count = cursor.fetchone()[0]
+        # Get players with their names
+        cursor.execute('SELECT id, name, join_time FROM players WHERE team_id = ? ORDER BY join_time ASC', (team['id'],))
+        players_data = cursor.fetchall()
+        
+        players = []
+        for player in players_data:
+            players.append({
+                'id': player['id'],
+                'name': player['name'],
+                'joinTime': player['join_time']
+            })
+
 
         # Calculate team score (fixed logic)
         team_score = calculate_team_score(cursor, team['id'], game)
@@ -573,7 +583,8 @@ def get_game(game_id):
             'name': team['name'],
             'color': team['color'],
             'qrCode': team['qr_code'], 
-            'playerCount': player_count,
+            'playerCount': len(players),
+            'players': players,
             'score': team_score,
         })
 
@@ -835,6 +846,7 @@ def end_game(game_id):
 def join_team(team_id):
     data = request.json
     player_id = data.get('player_id') if data else None
+    player_name = data.get('player_name', 'Anonymous Player') if data else 'Anonymous Player'
     current_time = int(time.time())
 
     conn = get_db_connection()
@@ -868,9 +880,18 @@ def join_team(team_id):
                 conn.close()
                 return jsonify({'error': 'Player is already a member of this team'}), 400
             
-            # Remove player from their current team
-            cursor.execute('DELETE FROM players WHERE id = ?', (player_id,))
-            print(f"Removed player {player_id} from previous team {existing_player['team_id']}")
+            # Update player to new team (preserving their existing name and ID)
+            cursor.execute('''
+            UPDATE players 
+            SET team_id = ?, join_time = ?
+            WHERE id = ?
+            ''', (team_id, current_time, player_id))
+            
+            print(f"Moved player {player_id} ({existing_player['name']}) from team {existing_player['team_id']} to team {team_id}")
+            
+            conn.commit()
+            conn.close()
+            return jsonify({'player_id': player_id})
 
     # Generate new player ID if not provided (new player joining)
     if not player_id:
@@ -878,9 +899,9 @@ def join_team(team_id):
 
     # Add player to the new team
     cursor.execute('''
-    INSERT INTO players (id, team_id, join_time)
+    INSERT INTO players (id, team_id, name, join_time)
     VALUES (?, ?, ?)
-    ''', (player_id, team_id, current_time))
+    ''', (player_id, team_id, player_name, current_time))
 
     conn.commit()
     conn.close()
