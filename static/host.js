@@ -373,7 +373,7 @@ function renderHostPanel() {
         const playersList = UIBuilder.createElement('div', {
           className: 'mt-2 text-xs text-gray-600'
         });
-        
+
         const playerNames = team.players.map(player => player.name).join(', ');
         const playersText = UIBuilder.createElement('div', {
           className: 'italic',
@@ -1647,7 +1647,7 @@ function renderTeamQRModal(team) {
 
   // Generate team QR URL
   const baseUrl = window.location.protocol + '//' + window.location.host;
-  const teamUrl = `${baseUrl}/?id=${team.id}`;
+  const teamUrl = `${baseUrl}/?id=${team.qrCode}`;
 
   // URL display
   const urlInfo = UIBuilder.createElement('div', {
@@ -1903,7 +1903,7 @@ function renderBaseCreationForm(qrId, container) {
 
       // Initialize or update map
       initBaseLocationMap(lat, lng);
-      
+
       currentLocationSource = 'gps';
       updateLocationDisplay();
 
@@ -1915,7 +1915,7 @@ function renderBaseCreationForm(qrId, container) {
       if (window.showNotification) {
         window.showNotification('Getting fresh GPS location...', 'info');
       }
-      
+
       navigator.geolocation.getCurrentPosition(
         function(position) {
           const lat = position.coords.latitude;
@@ -1929,7 +1929,7 @@ function renderBaseCreationForm(qrId, container) {
 
           // Initialize or update map
           initBaseLocationMap(lat, lng);
-          
+
           currentLocationSource = 'gps';
           updateLocationDisplay();
 
@@ -1953,7 +1953,7 @@ function renderBaseCreationForm(qrId, container) {
               errorMessage += 'Unknown error';
               break;
           }
-          
+
           if (window.showNotification) {
             window.showNotification(errorMessage, 'error');
           }
@@ -2051,7 +2051,7 @@ function renderBaseCreationForm(qrId, container) {
     // Update accuracy circle if we have accuracy data
     if (appState.gps.accuracy || document.getElementById('accuracy').value) {
       const accuracy = appState.gps.accuracy || parseFloat(document.getElementById('accuracy').value);
-      
+
       if (accuracyCircle) {
         baseLocationMap.removeLayer(accuracyCircle);
       }
@@ -2179,7 +2179,7 @@ function renderBaseCreationForm(qrId, container) {
   // Initialize with current GPS if available
   setTimeout(() => {
     updateGPSStatusDisplay();
-    
+
     // Auto-populate with current GPS if available
     if (appState.gps.currentPosition && appState.gps.status === 'ready') {
       useCurrentGPSLocation();

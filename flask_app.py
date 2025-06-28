@@ -31,11 +31,11 @@ def require_site_admin(f):
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({'error': 'Unauthorized'}), 401
-        
+
         token = auth_header.split(' ')[1]
         if token != SITE_ADMIN_PASSWORD:
             return jsonify({'error': 'Unauthorized'}), 401
-            
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -73,7 +73,7 @@ def generate_unique_game_code():
     """Generate a unique friendly game code that doesn't exist in the database"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Try up to 10 times to generate a unique code
     for _ in range(10):
         code = generate_game_code()
@@ -81,7 +81,7 @@ def generate_unique_game_code():
         if not cursor.fetchone():
             conn.close()
             return code
-    
+
     # If we couldn't generate a unique code after 10 attempts,
     # add a random number suffix to ensure uniqueness
     code = f"{generate_game_code()}-{random.randint(1, 999)}"
@@ -198,10 +198,10 @@ def health_check():
 def get_hosts():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('SELECT * FROM hosts ORDER BY creation_date DESC')
     hosts = cursor.fetchall()
-    
+
     result = []
     for host in hosts:
         result.append({
@@ -211,7 +211,7 @@ def get_hosts():
             'expiry_date': host['expiry_date'],
             'creation_date': host['creation_date']
         })
-    
+
     conn.close()
     return jsonify(result)
 
@@ -221,29 +221,29 @@ def create_host():
     data = request.json
     if not data or 'name' not in data:
         return jsonify({'error': 'Host name is required'}), 400
-    
+
     host_id = str(uuid.uuid4())
     qr_code = str(uuid.uuid4())
     name = data['name']
     expiry_date = data.get('expiry_date')  # Can be None
     creation_date = int(time.time())
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute('''
         INSERT INTO hosts (id, name, qr_code, expiry_date, creation_date)
         VALUES (?, ?, ?, ?, ?)
         ''', (host_id, name, qr_code, expiry_date, creation_date))
-        
+
         conn.commit()
     except sqlite3.Error as e:
         conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
     conn.close()
-    
+
     return jsonify({
         'id': host_id,
         'name': name,
@@ -258,36 +258,36 @@ def update_host(host_id):
     data = request.json
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if host exists
     cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     # Update fields
     name = data.get('name', host['name'])
     expiry_date = data.get('expiry_date')
-    
+
     try:
         cursor.execute('''
         UPDATE hosts
         SET name = ?, expiry_date = ?
         WHERE id = ?
         ''', (name, expiry_date, host_id))
-        
+
         conn.commit()
     except sqlite3.Error as e:
         conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
     conn.close()
-    
+
     return jsonify({
         'id': host_id,
         'name': name,
@@ -301,32 +301,32 @@ def update_host(host_id):
 def delete_host(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if host exists
     cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     # Check if host has any games
     cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
     game_count = cursor.fetchone()[0]
-    
+
     if game_count > 0:
         conn.close()
         return jsonify({'error': 'Cannot delete host with active games'}), 400
-    
+
     try:
         cursor.execute('DELETE FROM hosts WHERE id = ?', (host_id,))
         conn.commit()
     except sqlite3.Error as e:
         conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
     conn.close()
-    
+
     return jsonify({'success': True})
 
 # Host verification endpoint
@@ -334,14 +334,14 @@ def delete_host(host_id):
 def verify_host(qr_code):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('SELECT * FROM hosts WHERE qr_code = ?', (qr_code,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Invalid host QR code'}), 404
-    
+
     # Check expiry
     if host['expiry_date'] and host['expiry_date'] < int(time.time()):
         conn.close()
@@ -350,9 +350,9 @@ def verify_host(qr_code):
             'host_id': host['id'],
             'name': host['name']
         })
-    
+
     conn.close()
-    
+
     return jsonify({
         'status': 'valid',
         'host_id': host['id'],
@@ -368,19 +368,19 @@ def verify_host(qr_code):
 # Helper function to validate game settings
 def validate_game_settings(capture_radius, points_interval, game_duration, game_status=None, start_time=None):
     """Validate game settings and return error message if invalid"""
-    
+
     # Validate capture radius (5m to 100m)
     if not (5 <= capture_radius <= 100):
         return 'Capture radius must be between 5 and 100 metres'
-    
+
     # Validate points interval (5 seconds to 1 hour)
     if not (5 <= points_interval <= 3600):
         return 'Points interval must be between 5 seconds and 1 hour'
-    
+
     # Validate game duration if provided (5 minutes to 30 days for festivals)
     if game_duration is not None and not (5 <= game_duration <= 43200):  # 30 days = 43200 minutes
         return 'Game duration must be between 5 minutes and 30 days'
-    
+
     # Ensure game duration is significantly longer than points interval
     if game_duration is not None:
         game_duration_seconds = game_duration * 60
@@ -389,23 +389,23 @@ def validate_game_settings(capture_radius, points_interval, game_duration, game_
         if game_duration_seconds < min_duration_seconds:
             min_duration_minutes = min_duration_seconds // 60
             return f'Game duration must be at least 10x the points interval (minimum {min_duration_minutes} minutes for {points_interval}s interval)'
-    
+
     # Active game duration validation
     if game_status == 'active' and start_time and game_duration:
         elapsed_minutes = (time.time() - start_time) / 60
         if game_duration <= elapsed_minutes:
             return f"Cannot set duration to {game_duration} minutes as {int(elapsed_minutes)} minutes have already elapsed. Use 'End Game' button to end the game immediately."
-    
+
     return None  # No validation errors
 
 @app.route('/api/games', methods=['POST'])
 def create_game():
     data = request.json
     host_id = data.get('host_id')
-    
+
     if not host_id:
         return jsonify({'error': 'Host ID is required'}), 400
-    
+
     # Verify host exists and has not expired
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -413,40 +413,40 @@ def create_game():
     SELECT * FROM hosts WHERE id = ?
     ''', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Invalid host ID'}), 400
-        
+
     if host['expiry_date'] and host['expiry_date'] < int(time.time()):
         conn.close()
         return jsonify({'error': 'Host account has expired'}), 400
-    
+
     game_id = generate_unique_game_code()
-    
+
     # Extract game settings with defaults
     capture_radius = data.get('capture_radius_meters', 15)
     points_interval = data.get('points_interval_seconds', 15)
     auto_start_time = data.get('auto_start_time')  # Can be None
     game_duration = data.get('game_duration_minutes')  # Can be None
-    
+
     # Validate settings
     validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
     if validation_error:
         conn.close()
         return jsonify({'error': validation_error}), 400
-    
+
     if auto_start_time is not None and auto_start_time <= int(time.time()):
         conn.close()
         return jsonify({'error': 'Auto-start time must be in the future'}), 400
 
     current_time = int(time.time())
-    
+
     cursor.execute('''
-    INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds, 
+    INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds,
                       auto_start_time, game_duration_minutes, created_time)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval, 
+    ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval,
           auto_start_time, game_duration, current_time))
 
     conn.commit()
@@ -480,11 +480,11 @@ def update_game_settings(game_id):
     capture_radius = data.get('capture_radius_meters', game['capture_radius_meters'])
     points_interval = data.get('points_interval_seconds', game['points_interval_seconds'])
     game_duration = data.get('game_duration_minutes', game['game_duration_minutes'])
-    
+
     # Validate all settings together
     validation_error = validate_game_settings(
-        capture_radius, 
-        points_interval, 
+        capture_radius,
+        points_interval,
         game_duration,
         game_status=game['status'],
         start_time=game['start_time']
@@ -496,19 +496,19 @@ def update_game_settings(game_id):
     # Extract and validate individual settings
     update_fields = []
     params = []
-    
+
     if 'name' in data:
         update_fields.append('name = ?')
         params.append(data['name'])
-    
+
     if 'capture_radius_meters' in data:
         update_fields.append('capture_radius_meters = ?')
         params.append(data['capture_radius_meters'])
-    
+
     if 'points_interval_seconds' in data:
         update_fields.append('points_interval_seconds = ?')
         params.append(data['points_interval_seconds'])
-    
+
     if 'auto_start_time' in data:
         auto_start_time = data['auto_start_time']
         if auto_start_time is not None and auto_start_time <= int(time.time()):
@@ -516,19 +516,19 @@ def update_game_settings(game_id):
             return jsonify({'error': 'Auto-start time must be in the future'}), 400
         update_fields.append('auto_start_time = ?')
         params.append(auto_start_time)
-    
+
     if 'game_duration_minutes' in data:
         update_fields.append('game_duration_minutes = ?')
         params.append(data['game_duration_minutes'])
-    
+
     if not update_fields:
         conn.close()
         return jsonify({'error': 'No settings to update'}), 400
-    
+
     params.append(game_id)
-    
+
     cursor.execute(
-        f"UPDATE games SET {', '.join(update_fields)} WHERE id = ?", 
+        f"UPDATE games SET {', '.join(update_fields)} WHERE id = ?",
         params
     )
 
@@ -545,7 +545,7 @@ def get_game(game_id):
 
     # Get game info
     cursor.execute('''
-    SELECT g.*, h.name as host_name 
+    SELECT g.*, h.name as host_name
     FROM games g
     JOIN hosts h ON g.host_id = h.id
     WHERE g.id = ?
@@ -565,7 +565,7 @@ def get_game(game_id):
         # Get players with their names
         cursor.execute('SELECT id, name, join_time FROM players WHERE team_id = ? ORDER BY join_time ASC', (team['id'],))
         players_data = cursor.fetchall()
-        
+
         players = []
         for player in players_data:
             players.append({
@@ -582,7 +582,7 @@ def get_game(game_id):
             'id': team['id'],
             'name': team['name'],
             'color': team['color'],
-            'qrCode': team['qr_code'], 
+            'qrCode': team['qr_code'],
             'playerCount': len(players),
             'players': players,
             'score': team_score,
@@ -616,10 +616,10 @@ def get_game(game_id):
 
 # Check for auto-start
     current_time = int(time.time())
-    if (game['status'] == 'setup' and 
-        game['auto_start_time'] and 
+    if (game['status'] == 'setup' and
+        game['auto_start_time'] and
         current_time >= game['auto_start_time']):
-        
+
         # Auto-start the game
         cursor.execute('''
         UPDATE games
@@ -627,10 +627,10 @@ def get_game(game_id):
         WHERE id = ?
         ''', (current_time, game_id))
         conn.commit()
-        
+
         # Refresh game data
         cursor.execute('''
-        SELECT g.*, h.name as host_name 
+        SELECT g.*, h.name as host_name
         FROM games g
         JOIN hosts h ON g.host_id = h.id
         WHERE g.id = ?
@@ -638,10 +638,10 @@ def get_game(game_id):
         game = cursor.fetchone()
 
     # Check for auto-end
-    if (game['status'] == 'active' and 
-        game['start_time'] and 
+    if (game['status'] == 'active' and
+        game['start_time'] and
         game['game_duration_minutes']):
-        
+
         end_time = game['start_time'] + (game['game_duration_minutes'] * 60)
         if current_time >= end_time:
             # Auto-end the game
@@ -651,22 +651,22 @@ def get_game(game_id):
             WHERE id = ?
             ''', (end_time, game_id))
             conn.commit()
-            
+
             # Clear QR code assignments
             cursor.execute('''
             UPDATE bases SET qr_code = NULL WHERE game_id = ?
             ''', (game_id,))
-            
+
             cursor.execute('''
             DELETE FROM team_qr_codes
             WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
             ''', (game_id,))
-            
+
             conn.commit()
-            
+
             # Refresh game data
             cursor.execute('''
-            SELECT g.*, h.name as host_name 
+            SELECT g.*, h.name as host_name
             FROM games g
             JOIN hosts h ON g.host_id = h.id
             WHERE g.id = ?
@@ -706,7 +706,7 @@ def calculate_team_score(cursor, team_id, game):
 
     # Calculate current time or end time if game is over
     current_time = game['end_time'] if game['status'] == 'ended' else int(time.time())
-    
+
     # Get the points interval from game settings
     points_interval = game['points_interval_seconds']
 
@@ -766,7 +766,7 @@ def start_game(game_id):
     # Check team count
     cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
     team_count = cursor.fetchone()[0]
-    
+
     if team_count < 2:
         conn.close()
         return jsonify({'error': 'At least 2 teams are required to start the game'}), 400
@@ -820,7 +820,7 @@ def end_game(game_id):
     SET qr_code = NULL
     WHERE game_id = ?
     ''', (game_id,))
-    
+
     base_count = cursor.rowcount
 
     # Clear QR code assignments for all teams in this game
@@ -829,7 +829,7 @@ def end_game(game_id):
     SET qr_code = NULL
     WHERE game_id = ?
     ''', (game_id,))
-    
+
     team_count = cursor.rowcount
 
     conn.commit()
@@ -871,24 +871,24 @@ def join_team(team_id):
         JOIN teams t ON p.team_id = t.id
         WHERE p.id = ? AND t.game_id = ?
         ''', (player_id, team['game_id']))
-        
+
         existing_player = cursor.fetchone()
-        
+
         if existing_player:
             # Player is already in a team for this game
             if existing_player['team_id'] == team_id:
                 conn.close()
                 return jsonify({'error': 'Player is already a member of this team'}), 400
-            
+
             # Update player to new team (preserving their existing name and ID)
             cursor.execute('''
-            UPDATE players 
+            UPDATE players
             SET team_id = ?, join_time = ?
             WHERE id = ?
             ''', (team_id, current_time, player_id))
-            
+
             print(f"Moved player {player_id} ({existing_player['name']}) from team {existing_player['team_id']} to team {team_id}")
-            
+
             conn.commit()
             conn.close()
             return jsonify({'player_id': player_id})
@@ -900,7 +900,7 @@ def join_team(team_id):
     # Add player to the new team
     cursor.execute('''
     INSERT INTO players (id, team_id, name, join_time)
-    VALUES (?, ?, ?)
+    VALUES (?, ?, ?, ?)
     ''', (player_id, team_id, player_name, current_time))
 
     conn.commit()
@@ -947,7 +947,7 @@ def capture_base(base_id):
     # Use configurable capture radius
     capture_radius = base_data['capture_radius_meters']
     distance = calculate_distance(player_lat, player_lng, base_data['latitude'], base_data['longitude'])
-    
+
     if distance > capture_radius:
         conn.close()
         return jsonify({'error': f'Player is not within {capture_radius}m of the base location'}), 403
@@ -1074,15 +1074,15 @@ def add_team(game_id):
     # Check if QR code is already assigned to a base
     cursor.execute('SELECT id FROM bases WHERE qr_code = ?', (data['qr_code'],))
     existing_base = cursor.fetchone()
-    
+
     if existing_base:
         conn.close()
         return jsonify({'error': 'QR code already assigned to a base'}), 400
-        
+
     # Check if QR code is already assigned to a team
     cursor.execute('SELECT qr_code FROM teams WHERE qr_code = ?', (data['qr_code'],))
     existing_team = cursor.fetchone()
-    
+
     if existing_team:
         conn.close()
         return jsonify({'error': 'QR code already assigned to a team'}), 400
@@ -1094,9 +1094,9 @@ def add_team(game_id):
         # Insert the team
         cursor.execute('''
         INSERT INTO teams (id, game_id, name, color, qr_code)
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
         ''', (team_id, game_id, data['name'], data['color'], data['qr_code']))
-        
+
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -1115,7 +1115,7 @@ def check_qr_code_status(qr_code):
     # Check if QR code is assigned to a team
     cursor.execute('SELECT id, game_id FROM teams WHERE qr_code = ?', (qr_code,))
     team = cursor.fetchone()
-    
+
     if team:
         conn.close()
         return jsonify({
@@ -1127,7 +1127,7 @@ def check_qr_code_status(qr_code):
     # Check if QR code is assigned to a base
     cursor.execute('SELECT id, game_id FROM bases WHERE qr_code = ?', (qr_code,))
     base = cursor.fetchone()
-    
+
     if base:
         conn.close()
         return jsonify({
@@ -1135,17 +1135,17 @@ def check_qr_code_status(qr_code):
             'base_id': base['id'],
             'game_id': base['game_id']
         })
-    
+
     # Check if QR code is assigned to a host
     cursor.execute('SELECT id, name, expiry_date FROM hosts WHERE qr_code = ?', (qr_code,))
     host = cursor.fetchone()
-    
+
     if host:
         # Check if host has expired
         expired = False
         if host['expiry_date'] and host['expiry_date'] < int(time.time()):
             expired = True
-            
+
         conn.close()
         return jsonify({
             'status': 'host',
@@ -1153,7 +1153,7 @@ def check_qr_code_status(qr_code):
             'name': host['name'],
             'expired': expired
         })
-    
+
     # If not assigned
     conn.close()
     return jsonify({'status': 'unassigned'})
@@ -1162,22 +1162,22 @@ def check_qr_code_status(qr_code):
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Haversine formula for calculating distance between GPS coordinates
     R = 6371  # Earth radius in kilometers
-    
+
     # Convert to radians
     lat1_rad = math.radians(lat1)
     lon1_rad = math.radians(lon1)
     lat2_rad = math.radians(lat2)
     lon2_rad = math.radians(lon2)
-    
+
     # Differences
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
-    
+
     # Haversine formula
     a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     distance = R * c
-    
+
     # Convert to meters
     return distance * 1000
 
@@ -1211,23 +1211,23 @@ def update_team(team_id):
     # Update team details
     update_fields = []
     params = []
-    
+
     if 'name' in data:
         update_fields.append('name = ?')
         params.append(data['name'])
-    
+
     if 'color' in data:
         update_fields.append('color = ?')
         params.append(data['color'])
-    
+
     if not update_fields:
         conn.close()
         return jsonify({'error': 'No fields to update'}), 400
-    
+
     params.append(team_id)
-    
+
     cursor.execute(
-        f"UPDATE teams SET {', '.join(update_fields)} WHERE id = ?", 
+        f"UPDATE teams SET {', '.join(update_fields)} WHERE id = ?",
         params
     )
 
@@ -1261,52 +1261,52 @@ def delete_game(game_id):
     try:
         # Begin transaction for cascade deletion
         cursor.execute('BEGIN')
-        
+
         # Get all teams for this game to delete their QR code mappings
         cursor.execute('SELECT id FROM teams WHERE game_id = ?', (game_id,))
         team_ids = [row[0] for row in cursor.fetchall()]
-        
+
         # Count what we're about to delete for reporting
         cursor.execute('SELECT COUNT(*) FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
         captures_count = cursor.fetchone()[0]
-        
+
         cursor.execute('SELECT COUNT(*) FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
         players_count = cursor.fetchone()[0]
-        
+
         cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
         bases_count = cursor.fetchone()[0]
-        
+
         cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
         teams_count = cursor.fetchone()[0]
-        
+
         # Delete captures (must be deleted before bases and teams due to foreign keys)
         cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
-        
+
         # Delete players (must be deleted before teams due to foreign keys)
         cursor.execute('DELETE FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
-        
+
         # Delete teams
         cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
-        
+
         # Delete bases (this will also clear their QR codes)
         cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
-        
+
         # Finally delete the game itself
         cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
-        
+
         # Commit the transaction
         cursor.execute('COMMIT')
-        
+
     except sqlite3.Error as e:
         # Rollback on error
         cursor.execute('ROLLBACK')
         conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
     conn.close()
-    
+
     return jsonify({
-        'success': True, 
+        'success': True,
         'message': 'Game and all associated data deleted successfully',
         'deleted': {
             'teams': teams_count,
@@ -1322,19 +1322,19 @@ def delete_game(game_id):
 def get_host_qr_code(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('SELECT qr_code FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     conn.close()
-    
+
     base_url = request.host_url.rstrip('/')
     qr_url = f"{base_url}/?id={host['qr_code']}"
-    
+
     return jsonify({
         'qr_code': host['qr_code'],
         'url': qr_url
@@ -1345,40 +1345,40 @@ def get_host_qr_code(host_id):
 def get_host_games(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Verify host exists
     cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     # Check if host has expired
     if host['expiry_date'] and host['expiry_date'] < int(time.time()):
         conn.close()
         return jsonify({'error': 'Host account has expired'}), 403
-    
+
     # Get all games for this host
     cursor.execute('''
     SELECT id, name, status, start_time, end_time
     FROM games
     WHERE host_id = ?
-    ORDER BY 
-        CASE 
-            WHEN status = 'active' THEN 1 
-            WHEN status = 'setup' THEN 2 
-            ELSE 3 
+    ORDER BY
+        CASE
+            WHEN status = 'active' THEN 1
+            WHEN status = 'setup' THEN 2
+            ELSE 3
         END,
         COALESCE(start_time, 0) DESC
     ''', (host_id,))
-    
+
     games = []
     for game in cursor.fetchall():
         # Get team count for each game
         cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game['id'],))
         team_count = cursor.fetchone()[0]
-        
+
         games.append({
             'id': game['id'],
             'name': game['name'],
@@ -1387,9 +1387,9 @@ def get_host_games(host_id):
             'end_time': game['end_time'],
             'team_count': team_count
         })
-    
+
     conn.close()
-    
+
     return jsonify(games)
 
 # Get host details
@@ -1397,25 +1397,25 @@ def get_host_games(host_id):
 def get_host(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     # Count games for this host
     cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
     game_count = cursor.fetchone()[0]
-    
+
     # Check if expired
     expired = False
     if host['expiry_date'] and host['expiry_date'] < int(time.time()):
         expired = True
-    
+
     conn.close()
-    
+
     return jsonify({
         'id': host['id'],
         'name': host['name'],
@@ -1432,30 +1432,30 @@ def get_host(host_id):
 def regenerate_host_qr(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if host exists
     cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
-    
+
     if not host:
         conn.close()
         return jsonify({'error': 'Host not found'}), 404
-    
+
     # Generate new QR code
     new_qr = str(uuid.uuid4())
-    
+
     try:
         cursor.execute('''
         UPDATE hosts SET qr_code = ? WHERE id = ?
         ''', (new_qr, host_id))
-        
+
         conn.commit()
     except sqlite3.Error as e:
         conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
     conn.close()
-    
+
     return jsonify({
         'id': host_id,
         'qr_code': new_qr
