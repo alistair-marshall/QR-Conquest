@@ -455,8 +455,8 @@ async function handleBaseQR(qrCode, statusData) {
       throw new Error('The game is not active yet. Please wait for the host to start the game.');
     }
 
-    // Attempt to capture the base with GPS location
-    await captureBaseWithLocation(baseId);
+    // Attempt to capture the base
+    await captureBase(baseId);
   } catch (err) {
     // Navigate appropriately based on error context
     if (!getAuthState().hasTeam && window.navigateTo) {
@@ -1077,72 +1077,13 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
   }
 }
 
-// Handle base capture with offline support
-async function captureBase(baseId, latitude, longitude) {
+// Handle base capture with GPS location verification and offline support
+async function captureBase(baseId) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
   }
 
-  try {
-    setLoading(true);
-
-    // Check if we're online
-    if (navigator.onLine) {
-      // Try online capture
-      const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          player_id: authState.playerId,
-          latitude: latitude,
-          longitude: longitude
-        })
-      });
-
-      await handleApiResponse(response, 'Failed to capture base');
-
-      // Update scores
-      await fetchGameUpdates();
-
-      // Show success message - UI will handle this
-      if (window.showNotification) {
-        window.showNotification('Base captured successfully!', 'success');
-      }
-    } else {
-      // We're offline, store for later sync
-      if (window.dbHelpers && window.dbHelpers.addPendingCapture) {
-        await window.dbHelpers.addPendingCapture(
-          baseId,
-          authState.playerId,
-          latitude,
-          longitude
-        );
-
-        // Show offline message - UI will handle this
-        if (window.showNotification) {
-          window.showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
-        }
-      } else {
-        throw new Error('You are offline and offline capture is not available. Please try again when online.');
-      }
-    }
-  } catch (err) {
-    console.error('Error capturing base:', err);
-    const userMessage = err.message || 'Unable to capture base. Please try again.';
-    if (window.showNotification) {
-      window.showNotification(userMessage, 'error');
-    }
-    throw err;
-  } finally {
-    setLoading(false);
-  }
-}
-
-// Capture base with GPS location verification
-async function captureBaseWithLocation(baseId) {
   let latitude, longitude, accuracy;
   let usingFreshGPS = false;
 
@@ -1209,16 +1150,60 @@ async function captureBaseWithLocation(baseId) {
 
   // Always attempt the capture - let the server validate distance
   try {
-    await captureBase(baseId, latitude, longitude);
-    
-    // Show success with GPS info
-    if (window.showNotification) {
-      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
-      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
+    setLoading(true);
+
+    // Check if we're online
+    if (navigator.onLine) {
+      // Try online capture
+      const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          player_id: authState.playerId,
+          latitude: latitude,
+          longitude: longitude
+        })
+      });
+
+      await handleApiResponse(response, 'Failed to capture base');
+
+      // Update scores
+      await fetchGameUpdates();
+
+      // Show success message with GPS info
+      if (window.showNotification) {
+        const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
+        window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
+      }
+    } else {
+      // We're offline, store for later sync
+      if (window.dbHelpers && window.dbHelpers.addPendingCapture) {
+        await window.dbHelpers.addPendingCapture(
+          baseId,
+          authState.playerId,
+          latitude,
+          longitude
+        );
+
+        // Show offline message
+        if (window.showNotification) {
+          window.showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
+        }
+      } else {
+        throw new Error('You are offline and offline capture is not available. Please try again when online.');
+      }
     }
-    
   } catch (err) {
-    throw err; // Let capture errors (like "too far from base") bubble up
+    console.error('Error capturing base:', err);
+    const userMessage = err.message || 'Unable to capture base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
   }
 }
 
