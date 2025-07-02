@@ -228,29 +228,9 @@ const UIBuilder = {
   }
 };
 
-function loadQRCodeLibrary() {
-  return new Promise((resolve, reject) => {
-    // Check if QRCode library is already loaded
-    if (window.QRCode) {
-      resolve();
-      return;
-    }
-
-    // Create script element to load QRCode.js
-    const script = UIBuilder.createElement('script', {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-      onLoad: () => {
-        console.log('QRCode library loaded successfully');
-        resolve();
-      },
-      onError: () => {
-        console.error('Failed to load QRCode library');
-        reject(new Error('Failed to load QR code library'));
-      }
-    });
-    document.head.appendChild(script);
-  });
-}
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
 
 // Initialize app immediately when script is loaded
 (function initializeApp() {
@@ -322,6 +302,31 @@ function loadQRCodeLibrary() {
     console.log('Found team ID in localStorage:', authState.teamId);
   }
 })();
+
+
+function loadQRCodeLibrary() {
+  return new Promise((resolve, reject) => {
+    // Check if QRCode library is already loaded
+    if (window.QRCode) {
+      resolve();
+      return;
+    }
+
+    // Create script element to load QRCode.js
+    const script = UIBuilder.createElement('script', {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+      onLoad: () => {
+        console.log('QRCode library loaded successfully');
+        resolve();
+      },
+      onError: () => {
+        console.error('Failed to load QRCode library');
+        reject(new Error('Failed to load QR code library'));
+      }
+    });
+    document.head.appendChild(script);
+  });
+}
 
 // =============================================================================
 // NAVIGATION AND STATE MANAGEMENT
@@ -598,6 +603,135 @@ function renderErrorScreen() {
     clearError();
   }, 'bg-purple-600 text-white py-2 px-4 rounded-lg');
   container.appendChild(button);
+
+  return container;
+}
+
+// Results Page
+function renderResultsPage() {
+  const container = UIBuilder.createElement('div', { className: 'text-center py-10' });
+
+  // Find the winner (team with highest score)
+  let winner = { name: 'No Team', score: 0, color: 'bg-gray-500' };
+
+  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
+    winner = appState.gameData.teams.reduce(function(prev, current) {
+      return (prev.score || 0) > (current.score || 0) ? prev : current;
+    }, appState.gameData.teams[0]);
+  }
+
+  // Title
+  const title = UIBuilder.createElement('h2', {
+    className: 'text-3xl font-bold mb-8',
+    textContent: 'Game Results'
+  });
+  container.appendChild(title);
+
+  // Winner section
+  const winnerSection = UIBuilder.createElement('div', { className: 'mb-10' });
+
+  const trophyContainer = UIBuilder.createElement('div', {
+    className: 'inline-block p-6 rounded-full ' + winner.color + ' text-white mb-4'
+  });
+
+  const trophy = UIBuilder.createElement('span', {
+    className: 'text-3xl',
+    textContent: '🏆'
+  });
+  trophyContainer.appendChild(trophy);
+
+  winnerSection.appendChild(trophyContainer);
+
+  const winnerName = UIBuilder.createElement('h3', {
+    className: 'text-2xl font-bold',
+    textContent: winner.name + ' Wins!'
+  });
+  winnerSection.appendChild(winnerName);
+
+  const winnerScore = UIBuilder.createElement('p', {
+    className: 'text-xl',
+    textContent: (winner.score || 0) + ' points'
+  });
+  winnerSection.appendChild(winnerScore);
+
+  container.appendChild(winnerSection);
+
+  // Final scores section
+  const scoresSection = UIBuilder.createElement('div', {
+    className: 'max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-8'
+  });
+
+  const scoresTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold mb-4',
+    textContent: 'Final Scores'
+  });
+  scoresSection.appendChild(scoresTitle);
+
+  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
+    // Sort teams by score (descending)
+    const sortedTeams = [].concat(appState.gameData.teams).sort(function(a, b) {
+      return (b.score || 0) - (a.score || 0);
+    });
+
+    sortedTeams.forEach(function(team, index) {
+      const teamRow = UIBuilder.createElement('div', {
+        className: 'flex justify-between py-2 border-b last:border-b-0'
+      });
+
+      const teamNameContainer = UIBuilder.createElement('div', {
+        className: 'flex items-center'
+      });
+
+      const rank = UIBuilder.createElement('span', {
+        className: 'font-bold mr-2',
+        textContent: '#' + (index + 1)
+      });
+      teamNameContainer.appendChild(rank);
+
+      const teamColor = UIBuilder.createElement('div', {
+        className: 'w-3 h-3 rounded-full ' + team.color + ' mr-2'
+      });
+      teamNameContainer.appendChild(teamColor);
+
+      const teamName = UIBuilder.createElement('span', {
+        textContent: team.name
+      });
+      teamNameContainer.appendChild(teamName);
+
+      teamRow.appendChild(teamNameContainer);
+
+      const teamScore = UIBuilder.createElement('span', {
+        className: 'font-bold',
+        textContent: (team.score || 0) + ' pts'
+      });
+      teamRow.appendChild(teamScore);
+
+      scoresSection.appendChild(teamRow);
+    });
+  } else {
+    const noTeams = UIBuilder.createElement('p', {
+      className: 'text-center text-gray-600',
+      textContent: 'No teams available'
+    });
+    scoresSection.appendChild(noTeams);
+  }
+
+  container.appendChild(scoresSection);
+
+  // Action buttons
+  const actionsContainer = UIBuilder.createElement('div', {
+    className: 'flex flex-col space-y-4 max-w-xs mx-auto'
+  });
+
+  const homeButton = UIBuilder.createButton('Back to Home', function() {
+    navigateTo('landing');
+  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700');
+  actionsContainer.appendChild(homeButton);
+
+  const newGameButton = UIBuilder.createButton('New Game', clearGameData, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700');
+  actionsContainer.appendChild(newGameButton);
+
+  container.appendChild(actionsContainer);
 
   return container;
 }
@@ -1466,6 +1600,47 @@ function renderApp() {
   }
 }
 
+// Function to handle host button click
+function handleHostButtonClick() {
+  // Check if user is already authenticated as a host
+  const authState = getAuthState();
+  if (authState.isHost) {
+    // If already a host, navigate to host panel
+    navigateTo('hostPanel');
+  } else {
+    // If not a host, show scan prompt
+    showHostScanPrompt();
+  }
+}
+
+function showHostScanPrompt() {
+  const modal = UIBuilder.createModal({
+    title: 'Host Authentication',
+    content: UIBuilder.createElement('p', {
+      className: 'mb-4 text-gray-600',
+      textContent: 'Scan your host QR code to access the game management features.'
+    }),
+    actions: [
+      {
+        text: 'Scan Host QR Code',
+        onClick: () => {
+          modal.close();
+          navigateTo('scanQR');
+        },
+        className: 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors',
+        icon: 'qr-code'
+      },
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+}
+
 // Helper function to format time duration
 function formatTimeRemaining(seconds) {
   if (seconds <= 0) return null;
@@ -1595,47 +1770,6 @@ function createGPSStatusIndicator() {
   indicator.className = 'text-xs px-2 py-1 rounded-full flex items-center';
   indicator.style.display = 'none';
   return indicator;
-}
-
-// Function to handle host button click
-function handleHostButtonClick() {
-  // Check if user is already authenticated as a host
-  const authState = getAuthState();
-  if (authState.isHost) {
-    // If already a host, navigate to host panel
-    navigateTo('hostPanel');
-  } else {
-    // If not a host, show scan prompt
-    showHostScanPrompt();
-  }
-}
-
-function showHostScanPrompt() {
-  const modal = UIBuilder.createModal({
-    title: 'Host Authentication',
-    content: UIBuilder.createElement('p', {
-      className: 'mb-4 text-gray-600',
-      textContent: 'Scan your host QR code to access the game management features.'
-    }),
-    actions: [
-      {
-        text: 'Scan Host QR Code',
-        onClick: () => {
-          modal.close();
-          navigateTo('scanQR');
-        },
-        className: 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors',
-        icon: 'qr-code'
-      },
-      {
-        text: 'Cancel',
-        onClick: () => modal.close(),
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
-      }
-    ]
-  });
-
-  document.body.appendChild(modal);
 }
 
 // =============================================================================

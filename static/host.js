@@ -1279,6 +1279,98 @@ function renderGameSettingsModal() {
   document.body.appendChild(modal);
 }
 
+// Shared validation function for game settings
+function validateGameSettings() {
+  const gameName = document.getElementById('game-name-input').value.trim();
+  if (!gameName) {
+    showNotification('Please enter a game name', 'warning');
+    return null;
+  }
+
+  // Get capture radius
+  const captureRadius = parseInt(document.getElementById('capture-radius-input').value);
+  if (isNaN(captureRadius) || captureRadius < 5 || captureRadius > 500) {
+    showNotification('Capture radius must be between 5 and 500 metres', 'error');
+    return null;
+  }
+
+  // Get points interval
+  let pointsInterval;
+  const intervalSelect = document.getElementById('points-interval-select');
+  if (intervalSelect.value === 'custom') {
+    pointsInterval = parseInt(document.getElementById('custom-interval-input').value);
+    if (isNaN(pointsInterval) || pointsInterval < 5 || pointsInterval > 3600) {
+      showNotification('Points interval must be between 5 and 3600 seconds', 'error');
+      return null;
+    }
+  } else {
+    pointsInterval = parseInt(intervalSelect.value);
+  }
+
+  // Get auto-start time (optional)
+  let autoStartTime = null;
+  const autoStartInput = document.getElementById('auto-start-input');
+  if (autoStartInput && autoStartInput.value) {
+    autoStartTime = Math.floor(new Date(autoStartInput.value).getTime() / 1000);
+    if (autoStartTime <= Math.floor(Date.now() / 1000)) {
+      showNotification('Auto-start time must be in the future', 'error');
+      return null;
+    }
+  }
+
+  // Get game duration (optional)
+  let gameDuration = null;
+  const durationSelect = document.getElementById('duration-select');
+  if (durationSelect.value === 'custom') {
+    gameDuration = parseInt(document.getElementById('custom-duration-input').value);
+    if (isNaN(gameDuration) || gameDuration < 1 || gameDuration > 43200) {
+      showNotification('Game duration must be between 1 and 43200 minutes', 'error');
+      return null;
+    }
+  } else if (durationSelect.value) {
+    gameDuration = parseInt(durationSelect.value);
+  }
+
+  // Validate duration vs interval ratio
+  if (gameDuration) {
+    const durationSeconds = gameDuration * 60;
+    const minDurationSeconds = pointsInterval * 10;
+    if (durationSeconds < minDurationSeconds) {
+      const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
+      showNotification(
+        `Game duration must be at least 10x the points interval. Minimum ${minDurationMinutes} minutes for ${pointsInterval}s interval.`,
+        'error'
+      );
+      return null;
+    }
+
+    if (appState.gameData.status === 'active' && appState.gameData.settings?.start_time) {
+      const elapsedMinutes = Math.floor((Date.now() / 1000 - appState.gameData.settings.start_time) / 60);
+      if (gameDuration <= elapsedMinutes) {
+        showNotification(
+          `Cannot set duration to ${gameDuration} minutes as ${elapsedMinutes} minutes have already elapsed. Use 'End Game' button to end the game immediately.`,
+          'error'
+        );
+        return null;
+      }
+    }
+  }
+
+  const settings = {
+    name: gameName,
+    capture_radius_meters: captureRadius,
+    points_interval_seconds: pointsInterval,
+    game_duration_minutes: gameDuration
+  };
+
+  // Only include auto_start_time if the field exists and has a value
+  if (autoStartTime !== null) {
+    settings.auto_start_time = autoStartTime;
+  }
+
+  return settings;
+}
+
 // QR Assignment Page
 function renderQRAssignmentPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
@@ -1520,220 +1612,6 @@ function renderTeamCreationForm(qrId, container) {
     navigateTo('hostPanel');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full transition-colors');
   container.appendChild(cancelButton);
-}
-
-// Function to display a modal for editing team details
-function renderTeamEditModal(team) {
-  // Create form content
-  const formContent = UIBuilder.createElement('form', { className: 'space-y-4' });
-
-  // Team name field
-  const nameGroup = UIBuilder.createElement('div');
-  const nameLabel = UIBuilder.createElement('label', {
-    className: 'block text-gray-700 text-sm font-bold mb-2',
-    htmlFor: 'edit-team-name',
-    textContent: 'Team Name'
-  });
-  nameGroup.appendChild(nameLabel);
-
-  const nameInput = UIBuilder.createElement('input', {
-    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
-    id: 'edit-team-name',
-    type: 'text',
-    value: team.name,
-    required: true
-  });
-  nameGroup.appendChild(nameInput);
-  formContent.appendChild(nameGroup);
-
-  // Team color field
-  const colorGroup = UIBuilder.createElement('div');
-  const colorLabel = UIBuilder.createElement('label', {
-    className: 'block text-gray-700 text-sm font-bold mb-2',
-    htmlFor: 'edit-team-color',
-    textContent: 'Team Color'
-  });
-  colorGroup.appendChild(colorLabel);
-
-  const colorSelect = UIBuilder.createElement('select', {
-    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
-    id: 'edit-team-color'
-  });
-
-  const colors = [
-    { value: 'bg-red-500', label: 'Red' },
-    { value: 'bg-blue-500', label: 'Blue' },
-    { value: 'bg-green-500', label: 'Green' },
-    { value: 'bg-yellow-500', label: 'Yellow' },
-    { value: 'bg-purple-500', label: 'Purple' },
-    { value: 'bg-orange-500', label: 'Orange' },
-    { value: 'bg-pink-500', label: 'Pink' },
-    { value: 'bg-indigo-500', label: 'Indigo' },
-    { value: 'bg-teal-500', label: 'Teal' }
-  ];
-
-  colors.forEach(color => {
-    const option = UIBuilder.createElement('option', {
-      value: color.value,
-      textContent: color.label,
-      selected: color.value === team.color
-    });
-    colorSelect.appendChild(option);
-  });
-
-  colorGroup.appendChild(colorSelect);
-  formContent.appendChild(colorGroup);
-
-  const modal = UIBuilder.createModal({
-    title: 'Edit Team',
-    content: formContent,
-    actions: [
-      {
-        text: 'Cancel',
-        onClick: () => modal.close(),
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
-      },
-      {
-        text: 'Save Changes',
-        onClick: () => {
-          updateTeam(team.id, nameInput.value, colorSelect.value);
-          modal.close();
-        },
-        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors'
-      }
-    ]
-  });
-
-  document.body.appendChild(modal);
-}
-
-// Function to display team QR code modal
-function renderTeamQRModal(team) {
-  // Create content container
-  const qrContent = UIBuilder.createElement('div', {
-    className: 'text-center'
-  });
-
-  // Team info
-  const teamInfo = UIBuilder.createElement('div', {
-    className: 'mb-4'
-  });
-
-  const teamColorDot = UIBuilder.createElement('div', {
-    className: `w-8 h-8 rounded-full ${team.color} mx-auto mb-2`
-  });
-  teamInfo.appendChild(teamColorDot);
-
-  const teamNameDisplay = UIBuilder.createElement('p', {
-    className: 'text-lg font-semibold text-gray-900',
-    textContent: team.name
-  });
-  teamInfo.appendChild(teamNameDisplay);
-
-  qrContent.appendChild(teamInfo);
-
-  // QR code container
-  const qrContainer = UIBuilder.createElement('div', {
-    className: 'bg-gray-100 p-6 rounded-lg mb-4'
-  });
-
-  const qrDiv = UIBuilder.createElement('div', {
-    id: `qr-team-${team.id}`,
-    className: 'flex justify-center'
-  });
-  qrContainer.appendChild(qrDiv);
-
-  qrContent.appendChild(qrContainer);
-
-  // Generate team QR URL
-  const baseUrl = window.location.protocol + '//' + window.location.host;
-  const teamUrl = `${baseUrl}/?id=${team.qrCode}`;
-
-  // URL display
-  const urlInfo = UIBuilder.createElement('div', {
-    className: 'mb-4'
-  });
-
-  const urlLabel = UIBuilder.createElement('p', {
-    className: 'text-sm text-gray-600 mb-1',
-    textContent: 'Team Join URL:'
-  });
-  urlInfo.appendChild(urlLabel);
-
-  const urlValue = UIBuilder.createElement('p', {
-    className: 'font-mono text-xs bg-gray-100 p-2 rounded break-all',
-    textContent: teamUrl
-  });
-  urlInfo.appendChild(urlValue);
-
-  qrContent.appendChild(urlInfo);
-
-  // Instructions
-  const instructions = UIBuilder.createElement('div', {
-    className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 text-left mb-4'
-  });
-
-  const instructionsTitle = UIBuilder.createElement('p', {
-    className: 'font-semibold text-blue-900 mb-2',
-    textContent: 'How to use this QR code:'
-  });
-  instructions.appendChild(instructionsTitle);
-
-  const instructionsList = UIBuilder.createElement('ul', {
-    className: 'text-sm text-blue-800 space-y-1 list-disc list-inside'
-  });
-
-  const instructionItems = [
-    'Share this QR code with new players who want to join this team',
-    'Players scan the code with their phone camera',
-    'They will be prompted to enter their name and join the team',
-    'Players can switch teams by scanning a different team QR code'
-  ];
-
-  instructionItems.forEach(item => {
-    const li = UIBuilder.createElement('li', { textContent: item });
-    instructionsList.appendChild(li);
-  });
-
-  instructions.appendChild(instructionsList);
-  qrContent.appendChild(instructions);
-
-  // Player count
-  const playerCount = UIBuilder.createElement('p', {
-    className: 'text-sm text-gray-600',
-    textContent: `Current players: ${team.playerCount || 0}`
-  });
-  qrContent.appendChild(playerCount);
-
-  // Create modal
-  const modal = UIBuilder.createModal({
-    title: `${team.name} - Team QR Code`,
-    content: qrContent,
-    size: 'md',
-    actions: [
-      {
-        text: 'Copy Link',
-        onClick: () => {
-          navigator.clipboard.writeText(teamUrl);
-          showNotification('Team join link copied to clipboard', 'success');
-        },
-        className: 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors',
-        icon: 'link'
-      },
-      {
-        text: 'Close',
-        onClick: () => modal.close(),
-        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
-      }
-    ]
-  });
-
-  document.body.appendChild(modal);
-
-  // Generate QR code after modal is added to DOM
-  setTimeout(() => {
-    generateQRCode(qrDiv.id, teamUrl);
-  }, 100);
 }
 
 // Render base creation form
@@ -2189,6 +2067,221 @@ function renderBaseCreationForm(qrId, container) {
   return container;
 }
 
+// Function to display a modal for editing team details
+function renderTeamEditModal(team) {
+  // Create form content
+  const formContent = UIBuilder.createElement('form', { className: 'space-y-4' });
+
+  // Team name field
+  const nameGroup = UIBuilder.createElement('div');
+  const nameLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'edit-team-name',
+    textContent: 'Team Name'
+  });
+  nameGroup.appendChild(nameLabel);
+
+  const nameInput = UIBuilder.createElement('input', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'edit-team-name',
+    type: 'text',
+    value: team.name,
+    required: true
+  });
+  nameGroup.appendChild(nameInput);
+  formContent.appendChild(nameGroup);
+
+  // Team color field
+  const colorGroup = UIBuilder.createElement('div');
+  const colorLabel = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'edit-team-color',
+    textContent: 'Team Color'
+  });
+  colorGroup.appendChild(colorLabel);
+
+  const colorSelect = UIBuilder.createElement('select', {
+    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
+    id: 'edit-team-color'
+  });
+
+  const colors = [
+    { value: 'bg-red-500', label: 'Red' },
+    { value: 'bg-blue-500', label: 'Blue' },
+    { value: 'bg-green-500', label: 'Green' },
+    { value: 'bg-yellow-500', label: 'Yellow' },
+    { value: 'bg-purple-500', label: 'Purple' },
+    { value: 'bg-orange-500', label: 'Orange' },
+    { value: 'bg-pink-500', label: 'Pink' },
+    { value: 'bg-indigo-500', label: 'Indigo' },
+    { value: 'bg-teal-500', label: 'Teal' }
+  ];
+
+  colors.forEach(color => {
+    const option = UIBuilder.createElement('option', {
+      value: color.value,
+      textContent: color.label,
+      selected: color.value === team.color
+    });
+    colorSelect.appendChild(option);
+  });
+
+  colorGroup.appendChild(colorSelect);
+  formContent.appendChild(colorGroup);
+
+  const modal = UIBuilder.createModal({
+    title: 'Edit Team',
+    content: formContent,
+    actions: [
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      },
+      {
+        text: 'Save Changes',
+        onClick: () => {
+          updateTeam(team.id, nameInput.value, colorSelect.value);
+          modal.close();
+        },
+        className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+}
+
+// Function to display team QR code modal
+function renderTeamQRModal(team) {
+  // Create content container
+  const qrContent = UIBuilder.createElement('div', {
+    className: 'text-center'
+  });
+
+  // Team info
+  const teamInfo = UIBuilder.createElement('div', {
+    className: 'mb-4'
+  });
+
+  const teamColorDot = UIBuilder.createElement('div', {
+    className: `w-8 h-8 rounded-full ${team.color} mx-auto mb-2`
+  });
+  teamInfo.appendChild(teamColorDot);
+
+  const teamNameDisplay = UIBuilder.createElement('p', {
+    className: 'text-lg font-semibold text-gray-900',
+    textContent: team.name
+  });
+  teamInfo.appendChild(teamNameDisplay);
+
+  qrContent.appendChild(teamInfo);
+
+  // QR code container
+  const qrContainer = UIBuilder.createElement('div', {
+    className: 'bg-gray-100 p-6 rounded-lg mb-4'
+  });
+
+  const qrDiv = UIBuilder.createElement('div', {
+    id: `qr-team-${team.id}`,
+    className: 'flex justify-center'
+  });
+  qrContainer.appendChild(qrDiv);
+
+  qrContent.appendChild(qrContainer);
+
+  // Generate team QR URL
+  const baseUrl = window.location.protocol + '//' + window.location.host;
+  const teamUrl = `${baseUrl}/?id=${team.qrCode}`;
+
+  // URL display
+  const urlInfo = UIBuilder.createElement('div', {
+    className: 'mb-4'
+  });
+
+  const urlLabel = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600 mb-1',
+    textContent: 'Team Join URL:'
+  });
+  urlInfo.appendChild(urlLabel);
+
+  const urlValue = UIBuilder.createElement('p', {
+    className: 'font-mono text-xs bg-gray-100 p-2 rounded break-all',
+    textContent: teamUrl
+  });
+  urlInfo.appendChild(urlValue);
+
+  qrContent.appendChild(urlInfo);
+
+  // Instructions
+  const instructions = UIBuilder.createElement('div', {
+    className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 text-left mb-4'
+  });
+
+  const instructionsTitle = UIBuilder.createElement('p', {
+    className: 'font-semibold text-blue-900 mb-2',
+    textContent: 'How to use this QR code:'
+  });
+  instructions.appendChild(instructionsTitle);
+
+  const instructionsList = UIBuilder.createElement('ul', {
+    className: 'text-sm text-blue-800 space-y-1 list-disc list-inside'
+  });
+
+  const instructionItems = [
+    'Share this QR code with new players who want to join this team',
+    'Players scan the code with their phone camera',
+    'They will be prompted to enter their name and join the team',
+    'Players can switch teams by scanning a different team QR code'
+  ];
+
+  instructionItems.forEach(item => {
+    const li = UIBuilder.createElement('li', { textContent: item });
+    instructionsList.appendChild(li);
+  });
+
+  instructions.appendChild(instructionsList);
+  qrContent.appendChild(instructions);
+
+  // Player count
+  const playerCount = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600',
+    textContent: `Current players: ${team.playerCount || 0}`
+  });
+  qrContent.appendChild(playerCount);
+
+  // Create modal
+  const modal = UIBuilder.createModal({
+    title: `${team.name} - Team QR Code`,
+    content: qrContent,
+    size: 'md',
+    actions: [
+      {
+        text: 'Copy Link',
+        onClick: () => {
+          navigator.clipboard.writeText(teamUrl);
+          showNotification('Team join link copied to clipboard', 'success');
+        },
+        className: 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors',
+        icon: 'link'
+      },
+      {
+        text: 'Close',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+
+  // Generate QR code after modal is added to DOM
+  setTimeout(() => {
+    generateQRCode(qrDiv.id, teamUrl);
+  }, 100);
+}
+
+
 // Player Registration Page
 function renderPlayerRegistrationPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
@@ -2290,277 +2383,4 @@ function renderPlayerRegistrationPage() {
   container.appendChild(cancelButton);
 
   return container;
-}
-
-// Results Page
-function renderResultsPage() {
-  const container = UIBuilder.createElement('div', { className: 'text-center py-10' });
-
-  // Find the winner (team with highest score)
-  let winner = { name: 'No Team', score: 0, color: 'bg-gray-500' };
-
-  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
-    winner = appState.gameData.teams.reduce(function(prev, current) {
-      return (prev.score || 0) > (current.score || 0) ? prev : current;
-    }, appState.gameData.teams[0]);
-  }
-
-  // Title
-  const title = UIBuilder.createElement('h2', {
-    className: 'text-3xl font-bold mb-8',
-    textContent: 'Game Results'
-  });
-  container.appendChild(title);
-
-  // Winner section
-  const winnerSection = UIBuilder.createElement('div', { className: 'mb-10' });
-
-  const trophyContainer = UIBuilder.createElement('div', {
-    className: 'inline-block p-6 rounded-full ' + winner.color + ' text-white mb-4'
-  });
-
-  const trophy = UIBuilder.createElement('span', {
-    className: 'text-3xl',
-    textContent: '🏆'
-  });
-  trophyContainer.appendChild(trophy);
-
-  winnerSection.appendChild(trophyContainer);
-
-  const winnerName = UIBuilder.createElement('h3', {
-    className: 'text-2xl font-bold',
-    textContent: winner.name + ' Wins!'
-  });
-  winnerSection.appendChild(winnerName);
-
-  const winnerScore = UIBuilder.createElement('p', {
-    className: 'text-xl',
-    textContent: (winner.score || 0) + ' points'
-  });
-  winnerSection.appendChild(winnerScore);
-
-  container.appendChild(winnerSection);
-
-  // Final scores section
-  const scoresSection = UIBuilder.createElement('div', {
-    className: 'max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mb-8'
-  });
-
-  const scoresTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-4',
-    textContent: 'Final Scores'
-  });
-  scoresSection.appendChild(scoresTitle);
-
-  if (appState.gameData.teams && appState.gameData.teams.length > 0) {
-    // Sort teams by score (descending)
-    const sortedTeams = [].concat(appState.gameData.teams).sort(function(a, b) {
-      return (b.score || 0) - (a.score || 0);
-    });
-
-    sortedTeams.forEach(function(team, index) {
-      const teamRow = UIBuilder.createElement('div', {
-        className: 'flex justify-between py-2 border-b last:border-b-0'
-      });
-
-      const teamNameContainer = UIBuilder.createElement('div', {
-        className: 'flex items-center'
-      });
-
-      const rank = UIBuilder.createElement('span', {
-        className: 'font-bold mr-2',
-        textContent: '#' + (index + 1)
-      });
-      teamNameContainer.appendChild(rank);
-
-      const teamColor = UIBuilder.createElement('div', {
-        className: 'w-3 h-3 rounded-full ' + team.color + ' mr-2'
-      });
-      teamNameContainer.appendChild(teamColor);
-
-      const teamName = UIBuilder.createElement('span', {
-        textContent: team.name
-      });
-      teamNameContainer.appendChild(teamName);
-
-      teamRow.appendChild(teamNameContainer);
-
-      const teamScore = UIBuilder.createElement('span', {
-        className: 'font-bold',
-        textContent: (team.score || 0) + ' pts'
-      });
-      teamRow.appendChild(teamScore);
-
-      scoresSection.appendChild(teamRow);
-    });
-  } else {
-    const noTeams = UIBuilder.createElement('p', {
-      className: 'text-center text-gray-600',
-      textContent: 'No teams available'
-    });
-    scoresSection.appendChild(noTeams);
-  }
-
-  container.appendChild(scoresSection);
-
-  // Action buttons
-  const actionsContainer = UIBuilder.createElement('div', {
-    className: 'flex flex-col space-y-4 max-w-xs mx-auto'
-  });
-
-  const homeButton = UIBuilder.createButton('Back to Home', function() {
-    navigateTo('landing');
-  }, 'bg-purple-600 text-white py-3 px-6 rounded-lg shadow-md hover:bg-purple-700');
-  actionsContainer.appendChild(homeButton);
-
-  const newGameButton = UIBuilder.createButton('New Game', clearGameData, 'bg-gray-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-gray-700');
-  actionsContainer.appendChild(newGameButton);
-
-  container.appendChild(actionsContainer);
-
-  return container;
-}
-
-// Consolidated game settings form builder
-function renderGameSettingsModal() {
-  const settings = appState.gameData.settings || {};
-
-  const settingsForm = buildGameSettingsForm({
-    isEditing: true,
-    currentSettings: settings,
-    gameData: appState.gameData,
-    onSubmit: async function(e) {
-      e.preventDefault();
-
-      const validatedSettings = validateGameSettings();
-      if (!validatedSettings) {
-        return;
-      }
-
-      try {
-        const authState = getAuthState();
-        const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/settings`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            host_id: authState.hostId,
-            ...validatedSettings
-          })
-        });
-
-        await handleApiResponse(response, 'Failed to update game settings');
-
-        modal.close();
-        await fetchGameData(appState.gameData.id);
-        showNotification('Game settings updated successfully!', 'success');
-
-      } catch (error) {
-        console.error('Error updating settings:', error);
-        showNotification(error.message || 'Failed to update settings', 'error');
-      }
-    },
-    submitButtonText: 'Save Settings'
-  });
-
-  const modal = UIBuilder.createModal({
-    title: 'Edit Game Settings',
-    content: settingsForm,
-    size: 'xl'
-  });
-
-  document.body.appendChild(modal);
-}
-
-// Shared validation function for game settings
-function validateGameSettings() {
-  const gameName = document.getElementById('game-name-input').value.trim();
-  if (!gameName) {
-    showNotification('Please enter a game name', 'warning');
-    return null;
-  }
-
-  // Get capture radius
-  const captureRadius = parseInt(document.getElementById('capture-radius-input').value);
-  if (isNaN(captureRadius) || captureRadius < 5 || captureRadius > 500) {
-    showNotification('Capture radius must be between 5 and 500 metres', 'error');
-    return null;
-  }
-
-  // Get points interval
-  let pointsInterval;
-  const intervalSelect = document.getElementById('points-interval-select');
-  if (intervalSelect.value === 'custom') {
-    pointsInterval = parseInt(document.getElementById('custom-interval-input').value);
-    if (isNaN(pointsInterval) || pointsInterval < 5 || pointsInterval > 3600) {
-      showNotification('Points interval must be between 5 and 3600 seconds', 'error');
-      return null;
-    }
-  } else {
-    pointsInterval = parseInt(intervalSelect.value);
-  }
-
-  // Get auto-start time (optional)
-  let autoStartTime = null;
-  const autoStartInput = document.getElementById('auto-start-input');
-  if (autoStartInput && autoStartInput.value) {
-    autoStartTime = Math.floor(new Date(autoStartInput.value).getTime() / 1000);
-    if (autoStartTime <= Math.floor(Date.now() / 1000)) {
-      showNotification('Auto-start time must be in the future', 'error');
-      return null;
-    }
-  }
-
-  // Get game duration (optional)
-  let gameDuration = null;
-  const durationSelect = document.getElementById('duration-select');
-  if (durationSelect.value === 'custom') {
-    gameDuration = parseInt(document.getElementById('custom-duration-input').value);
-    if (isNaN(gameDuration) || gameDuration < 1 || gameDuration > 43200) {
-      showNotification('Game duration must be between 1 and 43200 minutes', 'error');
-      return null;
-    }
-  } else if (durationSelect.value) {
-    gameDuration = parseInt(durationSelect.value);
-  }
-
-  // Validate duration vs interval ratio
-  if (gameDuration) {
-    const durationSeconds = gameDuration * 60;
-    const minDurationSeconds = pointsInterval * 10;
-    if (durationSeconds < minDurationSeconds) {
-      const minDurationMinutes = Math.ceil(minDurationSeconds / 60);
-      showNotification(
-        `Game duration must be at least 10x the points interval. Minimum ${minDurationMinutes} minutes for ${pointsInterval}s interval.`,
-        'error'
-      );
-      return null;
-    }
-
-    if (appState.gameData.status === 'active' && appState.gameData.settings?.start_time) {
-      const elapsedMinutes = Math.floor((Date.now() / 1000 - appState.gameData.settings.start_time) / 60);
-      if (gameDuration <= elapsedMinutes) {
-        showNotification(
-          `Cannot set duration to ${gameDuration} minutes as ${elapsedMinutes} minutes have already elapsed. Use 'End Game' button to end the game immediately.`,
-          'error'
-        );
-        return null;
-      }
-    }
-  }
-
-  const settings = {
-    name: gameName,
-    capture_radius_meters: captureRadius,
-    points_interval_seconds: pointsInterval,
-    game_duration_minutes: gameDuration
-  };
-
-  // Only include auto_start_time if the field exists and has a value
-  if (autoStartTime !== null) {
-    settings.auto_start_time = autoStartTime;
-  }
-
-  return settings;
 }

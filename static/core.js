@@ -80,7 +80,7 @@ async function handleApiResponse(response, errorMessage) {
 }
 
 // =============================================================================
-// AUTHENTICATION MANAGEMENT - Consolidated auth state handling
+// AUTHENTICATION MANAGEMENT
 // =============================================================================
 
 // Get current authentication state
@@ -178,7 +178,7 @@ function clearGameState() {
 }
 
 // =============================================================================
-// QR CODE HANDLING - Consolidated QR processing logic
+// QR CODE HANDLING
 // =============================================================================
 
 // Helper function to extract 'id' from a URL string
@@ -197,7 +197,7 @@ function extractIdFromUrl(urlString) {
   return urlString; // Return original string if not a URL with 'id' or if parsing fails
 }
 
-// Main QR code handler - consolidates all QR processing logic
+// Main QR code handler
 async function handleQRCode(qrCode, context = 'scan') {
   console.log('Processing QR code:', qrCode, 'Context:', context);
 
@@ -490,6 +490,10 @@ async function handleUnassignedQR(qrCode) {
   }
 }
 
+// =============================================================================
+// GPS MANAGEMENT
+// =============================================================================
+
 // GPS tracking management functions
 function startGPSTracking() {
   if (!navigator.geolocation) {
@@ -595,87 +599,6 @@ function updateGPSStatusUI() {
   // This will be called by UI functions
   if (window.updateGPSStatusDisplay) {
     window.updateGPSStatusDisplay();
-  }
-}
-
-// Capture base with GPS location verification
-async function captureBaseWithLocation(baseId) {
-  let latitude, longitude, accuracy;
-  let usingFreshGPS = false;
-
-  // Try to use continuous GPS first
-  if (appState.gps.currentPosition && 
-      appState.gps.lastUpdate && 
-      (Date.now() - appState.gps.lastUpdate) <= 30000) {
-    
-    latitude = appState.gps.currentPosition.latitude;
-    longitude = appState.gps.currentPosition.longitude;
-    accuracy = appState.gps.accuracy;
-    
-  } else {
-    // Fall back to fresh GPS request
-    if (window.showNotification) {
-      window.showNotification('Getting location for capture...', 'info');
-    }
-    
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 5000
-        });
-      });
-      
-      latitude = position.coords.latitude;
-      longitude = position.coords.longitude;
-      accuracy = position.coords.accuracy;
-      usingFreshGPS = true;
-      
-    } catch (error) {
-      // Only throw error if we truly can't get any GPS
-      let errorMessage = 'Unable to verify your location for base capture. ';
-      
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage += 'Please enable location services and try again.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage += 'Location services are unavailable.';
-          break;
-        case error.TIMEOUT:
-          errorMessage += 'Location request timed out. Please try again.';
-          break;
-        default:
-          errorMessage += 'Please check your GPS settings and try again.';
-          break;
-      }
-      throw new Error(errorMessage);
-    }
-  }
-
-  // Provide feedback about GPS accuracy but don't block capture
-  if (accuracy > 20) {
-    if (window.showNotification) {
-      window.showNotification(
-        `Capturing with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`, 
-        'warning'
-      );
-    }
-  }
-
-  // Always attempt the capture - let the server validate distance
-  try {
-    await captureBase(baseId, latitude, longitude);
-    
-    // Show success with GPS info
-    if (window.showNotification) {
-      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
-      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
-    }
-    
-  } catch (err) {
-    throw err; // Let capture errors (like "too far from base") bubble up
   }
 }
 
@@ -1042,6 +965,58 @@ async function endGame() {
   }
 }
 
+// Delete game
+async function deleteGame() {
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded to delete.');
+  }
+
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Only the game host can delete the game.');
+    }
+
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to delete game');
+
+    // Clear game data from local storage and app state
+    clearGameState();
+
+    // Show success message with details - UI will handle this
+    if (window.showNotification) {
+      const deleted = result.deleted;
+      const message = `Game deleted successfully!\n\nRemoved: ${deleted.teams} teams, ${deleted.bases} bases, ${deleted.players} players, ${deleted.captures} captures\n\nAll QR codes have been released for reuse.`;
+      window.showNotification(message, 'success');
+    }
+
+    // Navigate to landing page - UI will handle this
+    if (window.navigateTo) {
+      window.navigateTo('landing');
+    }
+  } catch (err) {
+    console.error('Error deleting game:', err);
+    const userMessage = err.message || 'Unable to delete game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
 // =============================================================================
 // PLAYER ACTIONS
 // =============================================================================
@@ -1163,6 +1138,87 @@ async function captureBase(baseId, latitude, longitude) {
     throw err;
   } finally {
     setLoading(false);
+  }
+}
+
+// Capture base with GPS location verification
+async function captureBaseWithLocation(baseId) {
+  let latitude, longitude, accuracy;
+  let usingFreshGPS = false;
+
+  // Try to use continuous GPS first
+  if (appState.gps.currentPosition && 
+      appState.gps.lastUpdate && 
+      (Date.now() - appState.gps.lastUpdate) <= 30000) {
+    
+    latitude = appState.gps.currentPosition.latitude;
+    longitude = appState.gps.currentPosition.longitude;
+    accuracy = appState.gps.accuracy;
+    
+  } else {
+    // Fall back to fresh GPS request
+    if (window.showNotification) {
+      window.showNotification('Getting location for capture...', 'info');
+    }
+    
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000
+        });
+      });
+      
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+      accuracy = position.coords.accuracy;
+      usingFreshGPS = true;
+      
+    } catch (error) {
+      // Only throw error if we truly can't get any GPS
+      let errorMessage = 'Unable to verify your location for base capture. ';
+      
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage += 'Please enable location services and try again.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage += 'Location services are unavailable.';
+          break;
+        case error.TIMEOUT:
+          errorMessage += 'Location request timed out. Please try again.';
+          break;
+        default:
+          errorMessage += 'Please check your GPS settings and try again.';
+          break;
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Provide feedback about GPS accuracy but don't block capture
+  if (accuracy > 20) {
+    if (window.showNotification) {
+      window.showNotification(
+        `Capturing with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`, 
+        'warning'
+      );
+    }
+  }
+
+  // Always attempt the capture - let the server validate distance
+  try {
+    await captureBase(baseId, latitude, longitude);
+    
+    // Show success with GPS info
+    if (window.showNotification) {
+      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
+      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
+    }
+    
+  } catch (err) {
+    throw err; // Let capture errors (like "too far from base") bubble up
   }
 }
 
@@ -1318,58 +1374,29 @@ async function createBase(qrId, name, latitude, longitude) {
   }
 }
 
-// Delete game (host can delete their own games)
-async function deleteGame() {
-  if (!appState.gameData.id) {
-    throw new Error('No game loaded to delete.');
+// Fetch games for a specific host
+async function fetchHostGames(hostId) {
+  if (!hostId) {
+    throw new Error('Host ID is required to fetch games.');
   }
 
   try {
-    setLoading(true);
+    console.log('Fetching games for host:', hostId);
 
-    const authState = getAuthState();
-    if (!authState.isHost) {
-      throw new Error('Only the game host can delete the game.');
-    }
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
+    const data = await handleApiResponse(response, 'Failed to fetch host games');
 
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        host_id: authState.hostId
-      })
-    });
-
-    const result = await handleApiResponse(response, 'Failed to delete game');
-
-    // Clear game data from local storage and app state
-    clearGameState();
-
-    // Show success message with details - UI will handle this
-    if (window.showNotification) {
-      const deleted = result.deleted;
-      const message = `Game deleted successfully!\n\nRemoved: ${deleted.teams} teams, ${deleted.bases} bases, ${deleted.players} players, ${deleted.captures} captures\n\nAll QR codes have been released for reuse.`;
-      window.showNotification(message, 'success');
-    }
-
-    // Navigate to landing page - UI will handle this
-    if (window.navigateTo) {
-      window.navigateTo('landing');
-    }
+    console.log('Host games received:', data);
+    return data;
   } catch (err) {
-    console.error('Error deleting game:', err);
-    const userMessage = err.message || 'Unable to delete game. Please try again.';
+    console.error('Error fetching host games:', err);
+    const userMessage = err.message || 'Unable to load your games. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }
     throw err;
-  } finally {
-    setLoading(false);
   }
 }
-
 
 // =============================================================================
 // SITE ADMIN FUNCTIONS
@@ -1424,29 +1451,6 @@ async function authenticateSiteAdmin(password) {
   }
 }
 
-// Fetch games for a specific host
-async function fetchHostGames(hostId) {
-  if (!hostId) {
-    throw new Error('Host ID is required to fetch games.');
-  }
-
-  try {
-    console.log('Fetching games for host:', hostId);
-
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
-    const data = await handleApiResponse(response, 'Failed to fetch host games');
-
-    console.log('Host games received:', data);
-    return data;
-  } catch (err) {
-    console.error('Error fetching host games:', err);
-    const userMessage = err.message || 'Unable to load your games. Please try again.';
-    if (window.showNotification) {
-      window.showNotification(userMessage, 'error');
-    }
-    throw err;
-  }
-}
 
 // Site admin host management functions
 async function fetchHosts() {
