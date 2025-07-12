@@ -204,6 +204,47 @@ async function handleQRCode(qrCode, context = 'scan') {
   // Extract ID from URL if needed
   qrCode = extractIdFromUrl(qrCode);
 
+  // Check if we're in base restoration mode
+  const restoringBaseId = sessionStorage.getItem('restoringBaseId');
+  if (restoringBaseId && context === 'scan') {
+    console.log('Base restoration mode detected for base:', restoringBaseId);
+    sessionStorage.removeItem('restoringBaseId');
+    
+    try {
+      setLoading(true);
+      
+      // Check if this QR code is already assigned
+      const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
+      
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        
+        if (statusData.status !== 'unassigned') {
+          throw new Error('This QR code is already assigned. Please use an unassigned QR code.');
+        }
+      }
+      
+      // Proceed with restoration
+      await restoreBase(restoringBaseId, qrCode);
+      return;
+      
+    } catch (err) {
+      console.error('Error during base restoration:', err);
+      const userMessage = err.message || 'Unable to restore base. Please try again.';
+      if (window.showNotification) {
+        window.showNotification(userMessage, 'error');
+      }
+      
+      // Navigate back to host panel
+      if (window.navigateTo) {
+        window.navigateTo('hostPanel');
+      }
+      return;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // If we're in admin QR assignment flow, handle differently
   if (context === 'assignment' && getAuthState().isHost) {
     sessionStorage.setItem('pendingQRCode', qrCode);
@@ -1306,6 +1347,10 @@ async function updateTeam(teamId, name, color) {
   }
 }
 
+// =============================================================================
+// BASE MANAGEMENT FUNCTIONS
+// =============================================================================
+
 // Create base with QR code
 async function createBase(qrId, name, latitude, longitude) {
   try {
@@ -1350,6 +1395,146 @@ async function createBase(qrId, name, latitude, longitude) {
   } catch (err) {
     console.error('Error creating base:', err);
     const userMessage = err.message || 'Unable to create base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Update base name and/or location
+async function updateBase(baseId, name, latitude, longitude) {
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Host authentication required to update bases.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/bases/${baseId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId,
+        name: name,
+        latitude: latitude,
+        longitude: longitude
+      })
+    });
+
+    await handleApiResponse(response, 'Failed to update base');
+
+    // Show success message
+    if (window.showNotification) {
+      window.showNotification('Base updated successfully!', 'success');
+    }
+
+    // Refresh game data
+    await fetchGameData(appState.gameData.id);
+
+  } catch (err) {
+    console.error('Error updating base:', err);
+    const userMessage = err.message || 'Unable to update base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Delete base (soft delete)
+async function deleteBase(baseId, deletedAt) {
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Host authentication required to delete bases.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/bases/${baseId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId,
+        deleted_at: deletedAt
+      })
+    });
+
+    const result = await handleApiResponse(response, 'Failed to delete base');
+
+    // Show success message with details
+    if (window.showNotification) {
+      let message = 'Base deleted successfully!';
+      if (result.affected_captures > 0) {
+        message += ` (${result.affected_captures} captures affected)`;
+      }
+      window.showNotification(message, 'success');
+    }
+
+    // Refresh game data
+    await fetchGameData(appState.gameData.id);
+
+  } catch (err) {
+    console.error('Error deleting base:', err);
+    const userMessage = err.message || 'Unable to delete base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Restore deleted base
+async function restoreBase(baseId, qrCode) {
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Host authentication required to restore bases.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/bases/${baseId}/restore`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId,
+        qr_code: qrCode
+      })
+    });
+
+    await handleApiResponse(response, 'Failed to restore base');
+
+    // Show success message
+    if (window.showNotification) {
+      window.showNotification('Base restored successfully!', 'success');
+    }
+
+    // Refresh game data
+    await fetchGameData(appState.gameData.id);
+
+    // Navigate back to host panel
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
+
+  } catch (err) {
+    console.error('Error restoring base:', err);
+    const userMessage = err.message || 'Unable to restore base. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }
