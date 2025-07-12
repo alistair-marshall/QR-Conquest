@@ -1043,7 +1043,7 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({requestBody})
+      body: JSON.stringify(requestBody)
     });
 
     const data = await handleApiResponse(response, 'Failed to join team');
