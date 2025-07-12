@@ -161,6 +161,7 @@ def init_db():
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
         qr_code TEXT UNIQUE,
+        deleted_at INTEGER DEFAULT NULL,
         FOREIGN KEY (game_id) REFERENCES games (id)
     )
     ''')
@@ -700,8 +701,8 @@ def get_game(game_id):
 def calculate_team_score(cursor, team_id, game):
     total_score = 0
 
-    # Get all bases for this game
-    cursor.execute('SELECT id FROM bases WHERE game_id = ?', (game['id'],))
+    # Get all bases for this game (including deleted ones)
+    cursor.execute('SELECT id, deleted_at FROM bases WHERE game_id = ?', (game['id'],))
     bases = cursor.fetchall()
 
     # Calculate current time or end time if game is over
@@ -713,6 +714,14 @@ def calculate_team_score(cursor, team_id, game):
     # For each base, calculate points earned by this team
     for base in bases:
         base_id = base['id']
+        deleted_at = base['deleted_at']
+        
+        # Skip if deleted from game start (deleted_at = 0)
+        if deleted_at == 0:
+            continue
+        
+        # Determine effective end time for this base
+        base_end_time = deleted_at if (deleted_at and deleted_at > game['start_time']) else current_time
 
         # Get all captures for this base in chronological order
         cursor.execute('''
@@ -732,7 +741,10 @@ def calculate_team_score(cursor, team_id, game):
                 if i < len(captures) - 1:
                     end_time = captures[i + 1]['capture_time']
                 else:
-                    end_time = current_time
+                    end_time = base_end_time
+
+                # Ensure we don't count beyond the base deletion time
+                end_time = min(end_time, base_end_time)
 
                 # Calculate points using configurable interval
                 duration = end_time - start_time
@@ -1048,6 +1060,218 @@ def add_base(game_id):
     conn.close()
 
     return jsonify({'base_id': base_id}), 201
+
+# Update base endpoint
+@app.route('/api/bases/<base_id>', methods=['PUT'])
+def update_base(base_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get base and verify it exists and host owns the game
+    cursor.execute('''
+    SELECT b.*, g.host_id FROM bases b
+    JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    
+    base = cursor.fetchone()
+    
+    if not base:
+        conn.close()
+        return jsonify({'error': 'Base not found'}), 404
+    
+    if base['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+    
+    # Check if base is deleted
+    if base['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'Cannot update a deleted base. Restore it first.'}), 400
+    
+    # Validate inputs
+    name = data.get('name', base['name'])
+    latitude = data.get('latitude', base['latitude'])
+    longitude = data.get('longitude', base['longitude'])
+    
+    if not name or name.strip() == '':
+        conn.close()
+        return jsonify({'error': 'Base name cannot be empty'}), 400
+    
+    # Validate coordinates are numbers
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        conn.close()
+        return jsonify({'error': 'Invalid coordinates provided'}), 400
+    
+    # Validate coordinate ranges
+    if not (-90 <= latitude <= 90):
+        conn.close()
+        return jsonify({'error': 'Latitude must be between -90 and 90'}), 400
+    
+    if not (-180 <= longitude <= 180):
+        conn.close()
+        return jsonify({'error': 'Longitude must be between -180 and 180'}), 400
+    
+    # Update the base
+    cursor.execute('''
+    UPDATE bases
+    SET name = ?, latitude = ?, longitude = ?
+    WHERE id = ?
+    ''', (name.strip(), latitude, longitude, base_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+# Delete base endpoint (soft delete)
+@app.route('/api/bases/<base_id>', methods=['DELETE'])
+def delete_base(base_id):
+    data = request.json
+    if not data or 'host_id' not in data or 'deleted_at' not in data:
+        return jsonify({'error': 'Host ID and deleted_at timestamp required'}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get base and verify it exists and host owns the game
+    cursor.execute('''
+    SELECT b.*, g.host_id, g.status FROM bases b
+    JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    
+    base = cursor.fetchone()
+    
+    if not base:
+        conn.close()
+        return jsonify({'error': 'Base not found'}), 404
+    
+    if base['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+    
+    # Check if already deleted
+    if base['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'Base is already deleted'}), 400
+    
+    # Validate deleted_at timestamp
+    try:
+        deleted_at = int(data['deleted_at'])
+        if deleted_at < 0:
+            raise ValueError('deleted_at cannot be negative')
+    except (TypeError, ValueError):
+        conn.close()
+        return jsonify({'error': 'Invalid deleted_at timestamp'}), 400
+    
+    # If deleting the last base in an active game, prevent it
+    if base['status'] == 'active':
+        cursor.execute('''
+        SELECT COUNT(*) FROM bases 
+        WHERE game_id = ? AND deleted_at IS NULL
+        ''', (base['game_id'],))
+        
+        active_base_count = cursor.fetchone()[0]
+        
+        if active_base_count <= 1:
+            conn.close()
+            return jsonify({'error': 'Cannot delete the last active base in a running game'}), 400
+    
+    # Soft delete the base
+    cursor.execute('''
+    UPDATE bases
+    SET deleted_at = ?, qr_code = NULL
+    WHERE id = ?
+    ''', (deleted_at, base_id))
+    
+    # Count affected captures for response
+    cursor.execute('''
+    SELECT COUNT(*) FROM captures
+    WHERE base_id = ?
+    ''', (base_id,))
+    
+    capture_count = cursor.fetchone()[0]
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'affected_captures': capture_count
+    })
+
+# Restore base endpoint
+@app.route('/api/bases/<base_id>/restore', methods=['POST'])
+def restore_base(base_id):
+    data = request.json
+    if not data or 'host_id' not in data or 'qr_code' not in data:
+        return jsonify({'error': 'Host ID and QR code required'}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get base and verify it exists and host owns the game
+    cursor.execute('''
+    SELECT b.*, g.host_id FROM bases b
+    JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    
+    base = cursor.fetchone()
+    
+    if not base:
+        conn.close()
+        return jsonify({'error': 'Base not found'}), 404
+    
+    if base['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+    
+    # Check if base is actually deleted
+    if base['deleted_at'] is None:
+        conn.close()
+        return jsonify({'error': 'Base is not deleted'}), 400
+    
+    # Validate QR code is not already in use
+    qr_code = data['qr_code']
+    
+    # Check if QR code is assigned to a team
+    cursor.execute('SELECT id FROM teams WHERE qr_code = ?', (qr_code,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'QR code already assigned to a team'}), 400
+    
+    # Check if QR code is assigned to another base
+    cursor.execute('SELECT id FROM bases WHERE qr_code = ? AND id != ?', (qr_code, base_id))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'QR code already assigned to another base'}), 400
+    
+    # Check if QR code is assigned to a host
+    cursor.execute('SELECT id FROM hosts WHERE qr_code = ?', (qr_code,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'QR code already assigned to a host'}), 400
+    
+    # Restore the base
+    cursor.execute('''
+    UPDATE bases
+    SET deleted_at = NULL, qr_code = ?
+    WHERE id = ?
+    ''', (qr_code, base_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 # Add a new team to a game with QR code
 @app.route('/api/games/<game_id>/teams', methods=['POST'])
