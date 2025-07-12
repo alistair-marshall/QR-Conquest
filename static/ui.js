@@ -1314,12 +1314,24 @@ function updateMapMarkers() {
   }
 
   const captureRadius = appState.gameData.settings?.capture_radius_meters || 15;
+  
+  // Check if we should show deleted bases (host only)
+  const authState = getAuthState();
+  const showDeleted = authState.isHost && localStorage.getItem('showDeletedBases') === 'true';
 
   // Track which bases we've processed
   const processedBaseIds = new Set();
 
+  // Determine if we should hide deleted bases
+  const hideDeletedBases = !authState.isHost || !showDeleted;
+
   // Update or create markers for current bases
   appState.gameData.bases.forEach(base => {
+    // Skip deleted bases
+    if (base.deleted_at && hideDeletedBases) {
+      return;
+    }
+
     if (typeof base.lat !== 'number' || typeof base.lng !== 'number') {
       console.warn('Base has invalid coordinates:', base.name, base.lat, base.lng);
       return;
@@ -1332,17 +1344,27 @@ function updateMapMarkers() {
     let existingMarker = gameMapInstance.baseMarkers.find(m => m.baseId === base.id);
 
     // Determine marker colour and popup content
-    let markerColor = getHexColorForTailwind('bg-gray-400'); // Default for uncaptured
-    let popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
-
-    if (base.ownedBy) {
+    let markerColor;
+    let popupContent;
+    
+    if (base.deleted_at) {
+      // Deleted base (only shown for hosts with toggle on)
+      markerColor = '#6b7280'; // Gray
+      popupContent = `<strong><s>${base.name}</s></strong><br><span style="color: red;">DELETED</span>`;
+    } else if (base.ownedBy) {
+      // Active base with owner
       const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
       if (owningTeam) {
         markerColor = getHexColorForTailwind(owningTeam.color);
         popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
       } else {
+        markerColor = getHexColorForTailwind('bg-gray-400');
         popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
       }
+    } else {
+      // Active base without owner
+      markerColor = getHexColorForTailwind('bg-gray-400');
+      popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
     }
 
     if (existingMarker) {
@@ -1351,10 +1373,10 @@ function updateMapMarkers() {
       existingMarker.setRadius(captureRadius); // This works for L.circle
       existingMarker.setStyle({
         fillColor: markerColor,
-        color: '#000000',
+        color: base.deleted_at ? '#6b7280' : '#000000',
         weight: 2,
-        opacity: 1,
-        fillOpacity: 0.6
+        opacity: base.deleted_at ? 0.5 : 1,
+        fillOpacity: base.deleted_at ? 0.3 : 0.6
       });
       existingMarker.getPopup().setContent(popupContent);
     } else {
@@ -1362,10 +1384,10 @@ function updateMapMarkers() {
       const circleMarker = L.circle(latLng, {
         radius: captureRadius, // radius in metres
         fillColor: markerColor,
-        color: '#000000',
+        color: base.deleted_at ? '#6b7280' : '#000000',
         weight: 2,
-        opacity: 1,
-        fillOpacity: 0.6
+        opacity: base.deleted_at ? 0.5 : 1,
+        fillOpacity: base.deleted_at ? 0.3 : 0.6
       }).addTo(gameMapInstance);
 
       circleMarker.bindPopup(popupContent);
@@ -1374,10 +1396,10 @@ function updateMapMarkers() {
     }
   });
 
-  // Remove markers for bases that no longer exist
+  // Remove markers for bases that no longer exist or shouldn't be shown
   gameMapInstance.baseMarkers = gameMapInstance.baseMarkers.filter(marker => {
     if (!processedBaseIds.has(marker.baseId)) {
-      // Base no longer exists, remove marker
+      // Base no longer exists or shouldn't be shown, remove marker
       gameMapInstance.removeLayer(marker);
       return false;
     }
