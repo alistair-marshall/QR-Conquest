@@ -20,7 +20,7 @@
 
 /* Map instructions styling */
 #map-instructions {
-    z-index: 1000;
+    z-index: 800;
     pointer-events: none;
 }
 

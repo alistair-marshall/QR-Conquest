@@ -6,7 +6,7 @@ function createNotificationContainer() {
   if (!container) {
     container = document.createElement('div');
     container.id = 'notification-container';
-    container.className = 'fixed top-0 right-0 p-4 z-50 space-y-2 max-w-md';
+    container.className = 'fixed top-0 right-0 p-4 z-[1050] space-y-2 max-w-md';
     document.body.appendChild(container);
   }
   return container;
@@ -33,11 +33,11 @@ function showToast(message, type = 'info', customDuration = null) {
   const duration = customDuration !== null ? customDuration : NOTIFICATION_DURATIONS[type];
 
   const container = createNotificationContainer();
-  
+
   // Create toast element
   const toast = document.createElement('div');
   toast.className = `transform transition-all duration-300 ease-out translate-x-full opacity-0 flex items-center p-4 rounded-lg shadow-lg max-w-sm`;
-  
+
   // Set background color based on type
   switch (type) {
     case 'success':
@@ -54,10 +54,10 @@ function showToast(message, type = 'info', customDuration = null) {
       toast.classList.add('bg-blue-600', 'text-white');
       break;
   }
-  
+
   // Add icon based on type
   const icon = document.createElement('i');
-  
+
   switch (type) {
     case 'success':
       icon.setAttribute('data-lucide', 'check-circle');
@@ -73,10 +73,10 @@ function showToast(message, type = 'info', customDuration = null) {
       icon.setAttribute('data-lucide', 'info');
       break;
   }
-  
+
   icon.className = 'mr-3 flex-shrink-0';
   toast.appendChild(icon);
-  
+
   // Add message
   const messageElem = document.createElement('div');
   messageElem.className = 'flex-grow text-sm';
@@ -88,38 +88,38 @@ function showToast(message, type = 'info', customDuration = null) {
     messageElem.textContent = message;
   }
   toast.appendChild(messageElem);
-  
+
   // Add close button
   const closeButton = document.createElement('button');
   closeButton.className = 'ml-3 flex-shrink-0 text-white focus:outline-none hover:opacity-70 transition-opacity';
   closeButton.setAttribute('aria-label', 'Close notification');
   closeButton.addEventListener('click', () => removeToast(toast));
-  
+
   const closeIcon = document.createElement('i');
   closeIcon.setAttribute('data-lucide', 'x');
   closeIcon.className = 'h-4 w-4';
   closeButton.appendChild(closeIcon);
-  
+
   toast.appendChild(closeButton);
-  
+
   // Add toast to container
   container.appendChild(toast);
-  
+
   // Initialize Lucide icons if available
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
     window.lucide.createIcons();
   }
-  
+
   // Trigger entrance animation (after a small delay to ensure DOM update)
   setTimeout(() => {
     toast.classList.remove('translate-x-full', 'opacity-0');
   }, 10);
-  
+
   // Auto-dismiss after duration (if duration > 0)
   if (duration > 0) {
     setTimeout(() => removeToast(toast), duration);
   }
-  
+
   return toast;
 }
 
@@ -130,9 +130,9 @@ function removeToast(toast) {
     return;
   }
   toast.dataset.removing = 'true';
-  
+
   toast.classList.add('opacity-0', 'translate-x-full');
-  
+
   // Clean up after transition completes
   const handleTransitionEnd = () => {
     if (toast.parentNode) {
@@ -140,9 +140,9 @@ function removeToast(toast) {
     }
     toast.removeEventListener('transitionend', handleTransitionEnd);
   };
-  
+
   toast.addEventListener('transitionend', handleTransitionEnd);
-  
+
   // Fallback cleanup in case transition event doesn't fire
   setTimeout(() => {
     if (toast.parentNode && toast.dataset.removing === 'true') {
@@ -158,15 +158,15 @@ function showNotification(message, type = 'info', duration = null) {
     console.warn('showNotification requires a valid message string');
     return null;
   }
-  
+
   // Clean up the message - remove excessive whitespace
   const cleanMessage = message.trim().replace(/\s+/g, ' ');
-  
+
   // Log notification for debugging (except in production)
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     console.log(`Notification [${type.toUpperCase()}]: ${cleanMessage}`);
   }
-  
+
   return showToast(cleanMessage, type, duration);
 }
 
@@ -194,7 +194,7 @@ function showPersistentNotification(message, type = 'info') {
 function logAndNotifyError(error, userMessage = null) {
   // Log the full error for debugging
   console.error('Application error:', error);
-  
+
   // Show user-friendly message
   const displayMessage = userMessage || 'An unexpected error occurred. Please try again.';
   showNotification(displayMessage, 'error');

@@ -84,7 +84,7 @@ const UIBuilder = {
 
     // Create modal backdrop
     const modalBackdrop = this.createElement('div', {
-      className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
+      className: 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000]'
     });
 
     // Create modal container
@@ -1718,13 +1718,13 @@ function updateGPSStatusDisplay() {
   if (!statusElement) return;
 
   const { status, accuracy } = appState.gps;
-  
+
   // Clear existing classes
   statusElement.className = 'text-xs px-2 py-1 rounded-full flex items-center';
-  
+
   let statusText = '';
   let statusIcon = '';
-  
+
   switch (status) {
     case 'getting':
       statusElement.className += ' bg-blue-100 text-blue-700';
@@ -1751,13 +1751,13 @@ function updateGPSStatusDisplay() {
       statusElement.style.display = 'none';
       return;
   }
-  
+
   statusElement.style.display = 'flex';
   statusElement.innerHTML = `
     <i data-lucide="${statusIcon}" class="w-3 h-3 mr-1 ${status === 'getting' ? 'animate-spin' : ''}"></i>
     <span>${statusText}</span>
   `;
-  
+
   // Re-initialize Lucide icons for the new icon
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
     window.lucide.createIcons();
