@@ -47,18 +47,21 @@ async function handleApiResponse(response, errorMessage) {
     // Read the response body once
     const responseText = await response.text();
 
+    // Try to parse as JSON to extract the server's error message
+    let errorData = null;
     try {
-      // Try to parse as JSON
-      const errorData = JSON.parse(responseText);
-      throw new Error(errorData.error || errorMessage);
+      errorData = JSON.parse(responseText);
     } catch (jsonError) {
-      // Not valid JSON or other parsing error
-      if (responseText && responseText.trim()) {
-        throw new Error(`${errorMessage}: ${responseText.trim()}`);
-      } else {
-        // No useful text, use status info
-        throw new Error(`${errorMessage}: ${response.status} ${response.statusText}`);
-      }
+      // Not valid JSON - fall through to the text/status fallbacks below
+    }
+
+    if (errorData && errorData.error) {
+      throw new Error(errorData.error);
+    } else if (responseText && responseText.trim()) {
+      throw new Error(`${errorMessage}: ${responseText.trim()}`);
+    } else {
+      // No useful text, use status info
+      throw new Error(`${errorMessage}: ${response.status} ${response.statusText}`);
     }
   }
 
@@ -1577,10 +1580,6 @@ async function authenticateSiteAdmin(password) {
   try {
     setLoading(true);
 
-    // Store the admin token in memory only (not in localStorage for security)
-    appState.siteAdmin.token = password;
-    appState.siteAdmin.isAuthenticated = true;
-
     // Test authentication with a request to the hosts endpoint
     const response = await fetch(`${API_BASE_URL}/hosts`, {
       headers: {
@@ -1589,16 +1588,16 @@ async function authenticateSiteAdmin(password) {
     });
 
     if (!response.ok) {
-      // Reset auth state
-      appState.siteAdmin.token = null;
-      appState.siteAdmin.isAuthenticated = false;
-
       if (response.status === 401) {
         throw new Error('Invalid admin password. Please check your credentials.');
       } else {
         throw new Error('Authentication failed. Please try again.');
       }
     }
+
+    // Only store the verified token in memory (not in localStorage for security)
+    appState.siteAdmin.token = password;
+    appState.siteAdmin.isAuthenticated = true;
 
     // Show success message - UI will handle this
     if (window.showNotification) {
@@ -1611,6 +1610,8 @@ async function authenticateSiteAdmin(password) {
     return true;
   } catch (err) {
     console.error('Site admin authentication error:', err);
+    appState.siteAdmin.token = null;
+    appState.siteAdmin.isAuthenticated = false;
     const userMessage = err.message || 'Authentication failed. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
@@ -1794,11 +1795,9 @@ async function deleteHost(hostId) {
   } catch (err) {
     console.error('Error deleting host:', err);
 
-    // Provide more helpful error message for the common case
+    // The backend message is shown directly; fall back to a generic message
     let userMessage = err.message;
-    if (userMessage && userMessage.includes('Cannot delete host with active games')) {
-      userMessage = 'Cannot delete host with active games. Please delete all games for this host first, then try again.';
-    } else if (!userMessage || userMessage === 'Unable to delete host') {
+    if (!userMessage || userMessage === 'Unable to delete host') {
       userMessage = 'Unable to delete host. Please try again.';
     }
 

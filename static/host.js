@@ -1,3 +1,9 @@
+// Convert a Date to the value format used by <input type="datetime-local">.
+// datetime-local expects local time, so we can't use toISOString() (UTC) directly.
+function toDatetimeLocalValue(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 // Host Panel - UI components only, API calls handled by core.js
 function renderHostPanel() {
   const container = UIBuilder.createElement('div');
@@ -1043,7 +1049,7 @@ function buildGameSettingsForm(options = {}) {
     // Set current value for editing
     if (isEditing && currentSettings.auto_start_time) {
       const startTime = new Date(currentSettings.auto_start_time * 1000);
-      autoStartInput.value = startTime.toISOString().slice(0, 16);
+      autoStartInput.value = toDatetimeLocalValue(startTime);
     }
 
     // Set minimum to current time
@@ -1051,7 +1057,7 @@ function buildGameSettingsForm(options = {}) {
     if (!isEditing) {
       now.setMinutes(now.getMinutes() + 5); // Default to 5 minutes from now for creation
     }
-    autoStartInput.min = now.toISOString().slice(0, 16);
+    autoStartInput.min = toDatetimeLocalValue(now);
 
     autoStartGroup.appendChild(autoStartInput);
 
@@ -1125,7 +1131,7 @@ function buildGameSettingsForm(options = {}) {
 
   const customDurationInput = UIBuilder.createElement('input', {
     type: 'number',
-    min: '1',
+    min: '5',
     max: '43200',
     value: (!foundStandardDuration && isEditing && currentDuration) ? currentDuration : '',
     placeholder: '60',
@@ -1407,8 +1413,8 @@ function validateGameSettings() {
   const durationSelect = document.getElementById('duration-select');
   if (durationSelect.value === 'custom') {
     gameDuration = parseInt(document.getElementById('custom-duration-input').value);
-    if (isNaN(gameDuration) || gameDuration < 1 || gameDuration > 43200) {
-      showNotification('Game duration must be between 1 and 43200 minutes', 'error');
+    if (isNaN(gameDuration) || gameDuration < 5 || gameDuration > 43200) {
+      showNotification('Game duration must be between 5 and 43200 minutes', 'error');
       return null;
     }
   } else if (durationSelect.value) {
@@ -1961,9 +1967,6 @@ function renderBaseDeleteModal(base) {
   });
 
   // Set min/max for custom time (datetime-local expects local time, not UTC)
-  const toDatetimeLocalValue = (date) =>
-    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-
   if (appState.gameData.settings?.start_time) {
     customTimeInput.min = toDatetimeLocalValue(new Date(appState.gameData.settings.start_time * 1000));
   }

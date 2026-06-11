@@ -184,6 +184,40 @@ const UIBuilder = {
     return loadingDiv;
   },
 
+  createErrorDisplay(message = 'Something went wrong', onRetry = null) {
+    const errorDiv = this.createElement('div', {
+      className: 'text-center py-8 bg-red-50 rounded-lg border border-red-200'
+    });
+
+    const errorIcon = this.createElement('i', {
+      'data-lucide': 'alert-circle',
+      className: 'w-12 h-12 text-red-400 mx-auto mb-3'
+    });
+    errorDiv.appendChild(errorIcon);
+
+    const errorText = this.createElement('p', {
+      className: 'text-red-700 mb-4',
+      textContent: message
+    });
+    errorDiv.appendChild(errorText);
+
+    if (onRetry) {
+      const retryButton = this.createButton(
+        'Retry',
+        onRetry,
+        'bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors inline-flex items-center',
+        'refresh-cw'
+      );
+      errorDiv.appendChild(retryButton);
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      setTimeout(() => window.lucide.createIcons(), 0);
+    }
+
+    return errorDiv;
+  },
+
   createEmptyState(config) {
     const {
       icon = 'inbox',
