@@ -450,9 +450,11 @@ function renderHostPanel() {
   const toggleCheckbox = UIBuilder.createElement('input', {
     type: 'checkbox',
     id: 'show-deleted-bases',
-    className: 'mr-2',
-    checked: localStorage.getItem('showDeletedBases') === 'true'
+    className: 'mr-2'
   });
+  // Set as a property: UIBuilder uses setAttribute, and a present checked
+  // attribute renders the box ticked even when the value is "false"
+  toggleCheckbox.checked = localStorage.getItem('showDeletedBases') === 'true';
 
   toggleCheckbox.addEventListener('change', function() {
     localStorage.setItem('showDeletedBases', this.checked);
@@ -2556,9 +2558,11 @@ function renderTeamEditModal(team) {
   colors.forEach(color => {
     const option = UIBuilder.createElement('option', {
       value: color.value,
-      textContent: color.label,
-      selected: color.value === team.color
+      textContent: color.label
     });
+    // Set as a property: UIBuilder uses setAttribute, and a present selected
+    // attribute marks the option selected even when the value is "false"
+    option.selected = color.value === team.color;
     colorSelect.appendChild(option);
   });
 

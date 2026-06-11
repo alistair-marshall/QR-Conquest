@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "qr-conquest",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-Command", "$env:SITE_ADMIN_PASSWORD='devtest123'; python flask_app.py"],
+      "port": 5000
+    }
+  ]
+}
