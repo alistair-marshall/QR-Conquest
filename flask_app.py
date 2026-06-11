@@ -177,6 +177,12 @@ def init_db():
     )
     ''')
 
+    # Migrate databases created before the deleted_at column existed
+    cursor.execute('PRAGMA table_info(bases)')
+    base_columns = [row['name'] for row in cursor.fetchall()]
+    if 'deleted_at' not in base_columns:
+        cursor.execute('ALTER TABLE bases ADD COLUMN deleted_at INTEGER DEFAULT NULL')
+
     conn.commit()
     conn.close()
 
@@ -612,7 +618,8 @@ def get_game(game_id):
             'lat': base['latitude'],
             'lng': base['longitude'],
             'ownedBy': owner,
-            'qrCode': base['qr_code']
+            'qrCode': base['qr_code'],
+            'deleted_at': base['deleted_at']
         })
 
 # Check for auto-start
@@ -659,8 +666,7 @@ def get_game(game_id):
             ''', (game_id,))
 
             cursor.execute('''
-            DELETE FROM team_qr_codes
-            WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+            UPDATE teams SET qr_code = NULL WHERE game_id = ?
             ''', (game_id,))
 
             conn.commit()
@@ -690,6 +696,7 @@ def get_game(game_id):
             'capture_radius_meters': game['capture_radius_meters'],
             'points_interval_seconds': game['points_interval_seconds'],
             'auto_start_time': game['auto_start_time'],
+            'start_time': game['start_time'],
             'game_duration_minutes': game['game_duration_minutes'],
             'calculated_end_time': calculated_end_time
         },
@@ -715,13 +722,13 @@ def calculate_team_score(cursor, team_id, game):
     for base in bases:
         base_id = base['id']
         deleted_at = base['deleted_at']
-        
-        # Skip if deleted from game start (deleted_at = 0)
-        if deleted_at == 0:
+
+        # Skip bases deleted at or before game start - they score no points at all
+        if deleted_at is not None and (game['start_time'] is None or deleted_at <= game['start_time']):
             continue
-        
-        # Determine effective end time for this base
-        base_end_time = deleted_at if (deleted_at and deleted_at > game['start_time']) else current_time
+
+        # Scoring stops at the deletion time, otherwise at current/end time
+        base_end_time = min(deleted_at, current_time) if deleted_at is not None else current_time
 
         # Get all captures for this base in chronological order
         cursor.execute('''
@@ -743,11 +750,12 @@ def calculate_team_score(cursor, team_id, game):
                 else:
                     end_time = base_end_time
 
-                # Ensure we don't count beyond the base deletion time
+                # Ensure we don't count beyond the base deletion time;
+                # captures after the cutoff contribute nothing rather than negative points
                 end_time = min(end_time, base_end_time)
 
                 # Calculate points using configurable interval
-                duration = end_time - start_time
+                duration = max(0, end_time - start_time)
                 points = duration // points_interval
                 total_score += points
 
@@ -945,6 +953,10 @@ def capture_base(base_id):
     if not base_data:
         conn.close()
         return jsonify({'error': 'Base not found'}), 404
+
+    if base_data['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'This base has been removed from the game'}), 410
 
     # Get player's team
     cursor.execute('SELECT team_id FROM players WHERE id = ?', (player_id,))
@@ -1171,6 +1183,9 @@ def delete_base(base_id):
     except (TypeError, ValueError):
         conn.close()
         return jsonify({'error': 'Invalid deleted_at timestamp'}), 400
+
+    # Scoring can't continue past the actual deletion, so cap future timestamps
+    deleted_at = min(deleted_at, int(time.time()))
     
     # If deleting the last base in an active game, prevent it
     if base['status'] == 'active':
