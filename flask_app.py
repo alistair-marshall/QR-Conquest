@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory
+import hmac
 import sqlite3
 import uuid
 import time
@@ -33,7 +34,7 @@ def require_site_admin(f):
             return jsonify({'error': 'Unauthorized'}), 401
 
         token = auth_header.split(' ')[1]
-        if token != SITE_ADMIN_PASSWORD:
+        if not hmac.compare_digest(token, SITE_ADMIN_PASSWORD):
             return jsonify({'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
@@ -323,7 +324,7 @@ def delete_host(host_id):
 
     if game_count > 0:
         conn.close()
-        return jsonify({'error': 'Cannot delete host with active games'}), 400
+        return jsonify({'error': 'Cannot delete host with existing games. Delete the host\'s games first.'}), 400
 
     try:
         cursor.execute('DELETE FROM hosts WHERE id = ?', (host_id,))
@@ -376,9 +377,9 @@ def verify_host(qr_code):
 def validate_game_settings(capture_radius, points_interval, game_duration, game_status=None, start_time=None):
     """Validate game settings and return error message if invalid"""
 
-    # Validate capture radius (5m to 100m)
-    if not (5 <= capture_radius <= 100):
-        return 'Capture radius must be between 5 and 100 metres'
+    # Validate capture radius (5m to 500m, matching the host form)
+    if not (5 <= capture_radius <= 500):
+        return 'Capture radius must be between 5 and 500 metres'
 
     # Validate points interval (5 seconds to 1 hour)
     if not (5 <= points_interval <= 3600):
@@ -563,6 +564,49 @@ def get_game(game_id):
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
+    # Apply auto-start/auto-end transitions before gathering teams, scores and
+    # bases, so the response reflects the game's true current state
+    current_time = int(time.time())
+    game_state_changed = False
+
+    if (game['status'] == 'setup' and
+        game['auto_start_time'] and
+        current_time >= game['auto_start_time']):
+
+        cursor.execute('''
+        UPDATE games
+        SET status = 'active', start_time = ?
+        WHERE id = ?
+        ''', (current_time, game_id))
+        game_state_changed = True
+
+    elif (game['status'] == 'active' and
+          game['start_time'] and
+          game['game_duration_minutes']):
+
+        scheduled_end = game['start_time'] + (game['game_duration_minutes'] * 60)
+        if current_time >= scheduled_end:
+            cursor.execute('''
+            UPDATE games
+            SET status = 'ended', end_time = ?
+            WHERE id = ?
+            ''', (scheduled_end, game_id))
+
+            # Release QR codes for reuse, matching the manual end-game flow
+            cursor.execute('UPDATE bases SET qr_code = NULL WHERE game_id = ?', (game_id,))
+            cursor.execute('UPDATE teams SET qr_code = NULL WHERE game_id = ?', (game_id,))
+            game_state_changed = True
+
+    if game_state_changed:
+        conn.commit()
+        cursor.execute('''
+        SELECT g.*, h.name as host_name
+        FROM games g
+        JOIN hosts h ON g.host_id = h.id
+        WHERE g.id = ?
+        ''', (game_id,))
+        game = cursor.fetchone()
+
     # Get teams
     cursor.execute('SELECT * FROM teams WHERE game_id = ?', (game_id,))
     teams_data = cursor.fetchall()
@@ -622,64 +666,6 @@ def get_game(game_id):
             'deleted_at': base['deleted_at']
         })
 
-# Check for auto-start
-    current_time = int(time.time())
-    if (game['status'] == 'setup' and
-        game['auto_start_time'] and
-        current_time >= game['auto_start_time']):
-
-        # Auto-start the game
-        cursor.execute('''
-        UPDATE games
-        SET status = 'active', start_time = ?
-        WHERE id = ?
-        ''', (current_time, game_id))
-        conn.commit()
-
-        # Refresh game data
-        cursor.execute('''
-        SELECT g.*, h.name as host_name
-        FROM games g
-        JOIN hosts h ON g.host_id = h.id
-        WHERE g.id = ?
-        ''', (game_id,))
-        game = cursor.fetchone()
-
-    # Check for auto-end
-    if (game['status'] == 'active' and
-        game['start_time'] and
-        game['game_duration_minutes']):
-
-        end_time = game['start_time'] + (game['game_duration_minutes'] * 60)
-        if current_time >= end_time:
-            # Auto-end the game
-            cursor.execute('''
-            UPDATE games
-            SET status = 'ended', end_time = ?
-            WHERE id = ?
-            ''', (end_time, game_id))
-            conn.commit()
-
-            # Clear QR code assignments
-            cursor.execute('''
-            UPDATE bases SET qr_code = NULL WHERE game_id = ?
-            ''', (game_id,))
-
-            cursor.execute('''
-            UPDATE teams SET qr_code = NULL WHERE game_id = ?
-            ''', (game_id,))
-
-            conn.commit()
-
-            # Refresh game data
-            cursor.execute('''
-            SELECT g.*, h.name as host_name
-            FROM games g
-            JOIN hosts h ON g.host_id = h.id
-            WHERE g.id = ?
-            ''', (game_id,))
-            game = cursor.fetchone()
-
     conn.close()
 
     # Calculate end time if duration is set
@@ -714,6 +700,13 @@ def calculate_team_score(cursor, team_id, game):
 
     # Calculate current time or end time if game is over
     current_time = game['end_time'] if game['status'] == 'ended' else int(time.time())
+
+    # If the game has a scheduled end that has not been processed yet
+    # (status still 'active'), don't award points beyond it
+    if (game['status'] == 'active' and game['start_time'] and
+            game['game_duration_minutes']):
+        scheduled_end = game['start_time'] + (game['game_duration_minutes'] * 60)
+        current_time = min(current_time, scheduled_end)
 
     # Get the points interval from game settings
     points_interval = game['points_interval_seconds']
@@ -884,6 +877,10 @@ def join_team(team_id):
         conn.close()
         return jsonify({'error': 'Team not found'}), 404
 
+    if team['status'] == 'ended':
+        conn.close()
+        return jsonify({'error': 'This game has already ended'}), 400
+
     # If player_id is provided, check if they're already in a team for this game
     if player_id:
         cursor.execute('''
@@ -944,7 +941,7 @@ def capture_base(base_id):
 
     # Get base location and game settings
     cursor.execute('''
-    SELECT b.*, g.capture_radius_meters FROM bases b
+    SELECT b.*, g.capture_radius_meters, g.status AS game_status FROM bases b
     JOIN games g ON b.game_id = g.id
     WHERE b.id = ?
     ''', (base_id,))
@@ -958,13 +955,25 @@ def capture_base(base_id):
         conn.close()
         return jsonify({'error': 'This base has been removed from the game'}), 410
 
-    # Get player's team
-    cursor.execute('SELECT team_id FROM players WHERE id = ?', (player_id,))
+    if base_data['game_status'] != 'active':
+        conn.close()
+        return jsonify({'error': 'Bases can only be captured while the game is active'}), 403
+
+    # Get player's team and confirm they belong to this base's game
+    cursor.execute('''
+    SELECT p.team_id, t.game_id FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE p.id = ?
+    ''', (player_id,))
     player = cursor.fetchone()
 
     if not player:
         conn.close()
         return jsonify({'error': 'Player not found'}), 404
+
+    if player['game_id'] != base_data['game_id']:
+        conn.close()
+        return jsonify({'error': 'Player is not part of this game'}), 403
 
     team_id = player['team_id']
 
@@ -1033,6 +1042,26 @@ def get_scores(game_id):
 
     return jsonify(scores)
 
+# Check whether a QR code is already assigned to a team, base or host.
+# Returns an error message string, or None if the code is free.
+def qr_code_conflict(cursor, qr_code, exclude_base_id=None):
+    cursor.execute('SELECT id FROM teams WHERE qr_code = ?', (qr_code,))
+    if cursor.fetchone():
+        return 'QR code already assigned to a team'
+
+    if exclude_base_id:
+        cursor.execute('SELECT id FROM bases WHERE qr_code = ? AND id != ?', (qr_code, exclude_base_id))
+    else:
+        cursor.execute('SELECT id FROM bases WHERE qr_code = ?', (qr_code,))
+    if cursor.fetchone():
+        return 'QR code already assigned to a base'
+
+    cursor.execute('SELECT id FROM hosts WHERE qr_code = ?', (qr_code,))
+    if cursor.fetchone():
+        return 'QR code already assigned to a host'
+
+    return None
+
 # Add a new base to a game
 @app.route('/api/games/<game_id>/bases', methods=['POST'])
 def add_base(game_id):
@@ -1054,6 +1083,12 @@ def add_base(game_id):
     if game['host_id'] != data['host_id']:
         conn.close()
         return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    # Make sure the QR code is not already assigned to a team, base or host
+    conflict = qr_code_conflict(cursor, data['qr_code'])
+    if conflict:
+        conn.close()
+        return jsonify({'error': conflict}), 400
 
     # Add new base
     base_id = str(uuid.uuid4())
@@ -1184,8 +1219,10 @@ def delete_base(base_id):
         conn.close()
         return jsonify({'error': 'Invalid deleted_at timestamp'}), 400
 
-    # Scoring can't continue past the actual deletion, so cap future timestamps
-    deleted_at = min(deleted_at, int(time.time()))
+    # Scoring can't continue past the actual deletion, so cap future timestamps.
+    # Also keep the value >= 1: a stored 0 ("delete from game start") is falsy in
+    # the frontend JavaScript, which would make the base look active again.
+    deleted_at = max(1, min(deleted_at, int(time.time())))
     
     # If deleting the last base in an active game, prevent it
     if base['status'] == 'active':
@@ -1257,25 +1294,11 @@ def restore_base(base_id):
     
     # Validate QR code is not already in use
     qr_code = data['qr_code']
-    
-    # Check if QR code is assigned to a team
-    cursor.execute('SELECT id FROM teams WHERE qr_code = ?', (qr_code,))
-    if cursor.fetchone():
+    conflict = qr_code_conflict(cursor, qr_code, exclude_base_id=base_id)
+    if conflict:
         conn.close()
-        return jsonify({'error': 'QR code already assigned to a team'}), 400
-    
-    # Check if QR code is assigned to another base
-    cursor.execute('SELECT id FROM bases WHERE qr_code = ? AND id != ?', (qr_code, base_id))
-    if cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'QR code already assigned to another base'}), 400
-    
-    # Check if QR code is assigned to a host
-    cursor.execute('SELECT id FROM hosts WHERE qr_code = ?', (qr_code,))
-    if cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'QR code already assigned to a host'}), 400
-    
+        return jsonify({'error': conflict}), 400
+
     # Restore the base
     cursor.execute('''
     UPDATE bases
@@ -1310,21 +1333,11 @@ def add_team(game_id):
         conn.close()
         return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
 
-    # Check if QR code is already assigned to a base
-    cursor.execute('SELECT id FROM bases WHERE qr_code = ?', (data['qr_code'],))
-    existing_base = cursor.fetchone()
-
-    if existing_base:
+    # Make sure the QR code is not already assigned to a team, base or host
+    conflict = qr_code_conflict(cursor, data['qr_code'])
+    if conflict:
         conn.close()
-        return jsonify({'error': 'QR code already assigned to a base'}), 400
-
-    # Check if QR code is already assigned to a team
-    cursor.execute('SELECT qr_code FROM teams WHERE qr_code = ?', (data['qr_code'],))
-    existing_team = cursor.fetchone()
-
-    if existing_team:
-        conn.close()
-        return jsonify({'error': 'QR code already assigned to a team'}), 400
+        return jsonify({'error': conflict}), 400
 
     # Generate a secure UUID for the team ID
     team_id = str(uuid.uuid4())

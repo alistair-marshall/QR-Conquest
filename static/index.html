@@ -57,7 +57,8 @@
 </head>
 <body class="bg-gray-100">
   <div id="error-container" style="display: none;" class="max-w-md mx-auto mt-4"></div>
-	<div id="notification-container" class="fixed top-0 right-0 p-4 z-50 space-y-2 max-w-md"></div>
+  <!-- The notification container is created on demand by notification.js so it
+       stacks above modal backdrops -->
   <div id="root">
     <!-- Loading indicator that will be replaced by JavaScript -->
     <div class="flex items-center justify-center h-screen">
