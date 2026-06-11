@@ -1315,20 +1315,16 @@ function updateMapMarkers() {
 
   const captureRadius = appState.gameData.settings?.capture_radius_meters || 15;
   
-  // Check if we should show deleted bases (host only)
+  // Deleted bases are only shown to hosts who have the toggle enabled
   const authState = getAuthState();
   const showDeleted = authState.isHost && localStorage.getItem('showDeletedBases') === 'true';
 
   // Track which bases we've processed
   const processedBaseIds = new Set();
 
-  // Determine if we should hide deleted bases
-  const hideDeletedBases = !authState.isHost || !showDeleted;
-
   // Update or create markers for current bases
   appState.gameData.bases.forEach(base => {
-    // Skip deleted bases
-    if (base.deleted_at && hideDeletedBases) {
+    if (base.deleted_at && !showDeleted) {
       return;
     }
 

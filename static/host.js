@@ -428,182 +428,177 @@ function renderHostPanel() {
   grid.appendChild(teamSection);
 
   // Base Management Section - Mobile Optimized with Map
-const baseSection = UIBuilder.createElement('div', {
-  className: 'bg-white rounded-lg shadow-md p-4'
-});
-
-const baseHeader = UIBuilder.createElement('div', {
-  className: 'flex justify-between items-center mb-4'
-});
-
-const baseTitle = UIBuilder.createElement('h3', {
-  className: 'text-xl font-semibold',
-  textContent: 'Base Management'
-});
-baseHeader.appendChild(baseTitle);
-
-// Show deleted bases toggle (only for hosts)
-const showDeletedToggle = UIBuilder.createElement('label', {
-  className: 'flex items-center text-sm cursor-pointer'
-});
-
-const toggleCheckbox = UIBuilder.createElement('input', {
-  type: 'checkbox',
-  id: 'show-deleted-bases',
-  className: 'mr-2',
-  checked: localStorage.getItem('showDeletedBases') === 'true'
-});
-
-toggleCheckbox.addEventListener('change', function() {
-  localStorage.setItem('showDeletedBases', this.checked);
-  renderApp(); // Re-render to show/hide deleted bases
-});
-
-const toggleText = UIBuilder.createElement('span', {
-  textContent: 'Show deleted'
-});
-
-showDeletedToggle.appendChild(toggleCheckbox);
-showDeletedToggle.appendChild(toggleText);
-baseHeader.appendChild(showDeletedToggle);
-baseSection.appendChild(baseHeader);
-
-if (appState.gameData.bases && appState.gameData.bases.length > 0) {
-  // Filter bases based on toggle setting
-  const showDeleted = localStorage.getItem('showDeletedBases') === 'true';
-  const basesToShow = appState.gameData.bases.filter(base => {
-    if (base.deleted_at && !showDeleted) {
-      return false; // Hide deleted bases if toggle is off
-    }
-    return true;
+  const baseSection = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-4'
   });
 
-  if (basesToShow.length > 0) {
-    // Map container
-    const mapContainer = UIBuilder.createElement('div', {
-      id: 'map-container',
-      className: 'bg-gray-200 rounded-lg shadow-sm h-64 mb-4 relative'
-    });
-    baseSection.appendChild(mapContainer);
+  const baseSectionHeader = UIBuilder.createElement('div', {
+    className: 'flex justify-between items-center mb-4'
+  });
 
-    // Bases list
-    const basesContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
+  const baseTitle = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold',
+    textContent: 'Base Management'
+  });
+  baseSectionHeader.appendChild(baseTitle);
 
-    basesToShow.forEach(function(base) {
-      const baseCard = UIBuilder.createElement('div', {
-        className: base.deleted_at ? 
-          'border border-gray-200 rounded-lg p-4 bg-gray-100 opacity-75' : 
-          'border border-gray-200 rounded-lg p-4 bg-gray-50'
+  // Show deleted bases toggle (only for hosts)
+  const showDeletedToggle = UIBuilder.createElement('label', {
+    className: 'flex items-center text-sm cursor-pointer'
+  });
+
+  const toggleCheckbox = UIBuilder.createElement('input', {
+    type: 'checkbox',
+    id: 'show-deleted-bases',
+    className: 'mr-2',
+    checked: localStorage.getItem('showDeletedBases') === 'true'
+  });
+
+  toggleCheckbox.addEventListener('change', function() {
+    localStorage.setItem('showDeletedBases', this.checked);
+    renderApp(); // Re-render to show/hide deleted bases
+  });
+
+  const toggleText = UIBuilder.createElement('span', {
+    textContent: 'Show deleted'
+  });
+
+  showDeletedToggle.appendChild(toggleCheckbox);
+  showDeletedToggle.appendChild(toggleText);
+  baseSectionHeader.appendChild(showDeletedToggle);
+  baseSection.appendChild(baseSectionHeader);
+
+  if (appState.gameData.bases && appState.gameData.bases.length > 0) {
+    // Filter bases based on toggle setting
+    const showDeleted = localStorage.getItem('showDeletedBases') === 'true';
+    const basesToShow = appState.gameData.bases.filter(base => !base.deleted_at || showDeleted);
+
+    if (basesToShow.length > 0) {
+      // Map container
+      const mapContainer = UIBuilder.createElement('div', {
+        id: 'map-container',
+        className: 'bg-gray-200 rounded-lg shadow-sm h-64 mb-4 relative'
       });
+      baseSection.appendChild(mapContainer);
 
-      // Base header
-      const baseHeader = UIBuilder.createElement('div', {
-        className: 'flex items-center justify-between mb-3'
-      });
+      // Bases list
+      const basesContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
 
-      const baseNameContainer = UIBuilder.createElement('div', {
-        className: 'flex items-center'
-      });
-
-      const baseName = UIBuilder.createElement('h4', {
-        className: base.deleted_at ? 
-          'text-lg font-semibold text-gray-500 line-through' : 
-          'text-lg font-semibold text-gray-900',
-        textContent: base.name
-      });
-      baseNameContainer.appendChild(baseName);
-
-      // Deleted badge
-      if (base.deleted_at) {
-        const deletedBadge = UIBuilder.createElement('span', {
-          className: 'ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded',
-          textContent: 'DELETED'
+      basesToShow.forEach(function(base) {
+        const baseCard = UIBuilder.createElement('div', {
+          className: base.deleted_at ? 
+            'border border-gray-200 rounded-lg p-4 bg-gray-100 opacity-75' : 
+            'border border-gray-200 rounded-lg p-4 bg-gray-50'
         });
-        baseNameContainer.appendChild(deletedBadge);
-      }
 
-      baseHeader.appendChild(baseNameContainer);
+        // Base header
+        const baseHeader = UIBuilder.createElement('div', {
+          className: 'flex items-center justify-between mb-3'
+        });
 
-      // Action buttons container
-      const actionsContainer = UIBuilder.createElement('div', {
-        className: 'flex items-center space-x-2'
-      });
+        const baseNameContainer = UIBuilder.createElement('div', {
+          className: 'flex items-center'
+        });
 
-      if (base.deleted_at) {
-        // Restore button for deleted bases
-        const restoreButton = UIBuilder.createButton('Restore', function() {
-          renderBaseRestoreModal(base);
-        }, 'bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors');
-        actionsContainer.appendChild(restoreButton);
-      } else {
-        // Edit and Delete buttons for active bases
-        const editButton = UIBuilder.createButton('Edit', function() {
-          renderBaseEditModal(base);
-        }, 'bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors', 'edit-2');
-        actionsContainer.appendChild(editButton);
+        const baseName = UIBuilder.createElement('h4', {
+          className: base.deleted_at ? 
+            'text-lg font-semibold text-gray-500 line-through' : 
+            'text-lg font-semibold text-gray-900',
+          textContent: base.name
+        });
+        baseNameContainer.appendChild(baseName);
 
-        const deleteButton = UIBuilder.createButton('Delete', function() {
-          renderBaseDeleteModal(base);
-        }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors', 'trash-2');
-        actionsContainer.appendChild(deleteButton);
-      }
-
-      baseHeader.appendChild(actionsContainer);
-      baseCard.appendChild(baseHeader);
-
-      // Owner indicator (same as before)
-      const ownerContainer = UIBuilder.createElement('div', {
-        className: 'flex items-center text-sm'
-      });
-
-      if (base.ownedBy && !base.deleted_at) {
-        const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
-        if (owningTeam) {
-          const ownerDot = UIBuilder.createElement('div', {
-            className: 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2'
+        // Deleted badge
+        if (base.deleted_at) {
+          const deletedBadge = UIBuilder.createElement('span', {
+            className: 'ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded',
+            textContent: 'DELETED'
           });
-          ownerContainer.appendChild(ownerDot);
-
-          const ownerName = UIBuilder.createElement('span', {
-            className: 'font-medium text-gray-700',
-            textContent: owningTeam.name
-          });
-          ownerContainer.appendChild(ownerName);
+          baseNameContainer.appendChild(deletedBadge);
         }
-      } else if (!base.deleted_at) {
-        const uncaptured = UIBuilder.createElement('span', {
-          className: 'text-gray-500 italic',
-          textContent: 'Uncaptured'
+
+        baseHeader.appendChild(baseNameContainer);
+
+        // Action buttons container
+        const actionsContainer = UIBuilder.createElement('div', {
+          className: 'flex items-center space-x-2'
         });
-        ownerContainer.appendChild(uncaptured);
-      }
 
-      baseCard.appendChild(ownerContainer);
+        if (base.deleted_at) {
+          // Restore button for deleted bases
+          const restoreButton = UIBuilder.createButton('Restore', function() {
+            renderBaseRestoreModal(base);
+          }, 'bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors');
+          actionsContainer.appendChild(restoreButton);
+        } else {
+          // Edit and Delete buttons for active bases
+          const editButton = UIBuilder.createButton('Edit', function() {
+            renderBaseEditModal(base);
+          }, 'bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors', 'edit-2');
+          actionsContainer.appendChild(editButton);
 
-      // Base coordinates (smaller, less prominent)
-      const coordinates = UIBuilder.createElement('div', {
-        className: 'text-xs text-gray-500 font-mono bg-white px-2 py-1 rounded mt-2',
-        textContent: `${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}`
+          const deleteButton = UIBuilder.createButton('Delete', function() {
+            renderBaseDeleteModal(base);
+          }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors', 'trash-2');
+          actionsContainer.appendChild(deleteButton);
+        }
+
+        baseHeader.appendChild(actionsContainer);
+        baseCard.appendChild(baseHeader);
+
+        // Owner indicator (same as before)
+        const ownerContainer = UIBuilder.createElement('div', {
+          className: 'flex items-center text-sm'
+        });
+
+        if (base.ownedBy && !base.deleted_at) {
+          const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
+          if (owningTeam) {
+            const ownerDot = UIBuilder.createElement('div', {
+              className: 'w-3 h-3 rounded-full ' + owningTeam.color + ' mr-2'
+            });
+            ownerContainer.appendChild(ownerDot);
+
+            const ownerName = UIBuilder.createElement('span', {
+              className: 'font-medium text-gray-700',
+              textContent: owningTeam.name
+            });
+            ownerContainer.appendChild(ownerName);
+          }
+        } else if (!base.deleted_at) {
+          const uncaptured = UIBuilder.createElement('span', {
+            className: 'text-gray-500 italic',
+            textContent: 'Uncaptured'
+          });
+          ownerContainer.appendChild(uncaptured);
+        }
+
+        baseCard.appendChild(ownerContainer);
+
+        // Base coordinates (smaller, less prominent)
+        const coordinates = UIBuilder.createElement('div', {
+          className: 'text-xs text-gray-500 font-mono bg-white px-2 py-1 rounded mt-2',
+          textContent: `${base.lat.toFixed(4)}, ${base.lng.toFixed(4)}`
+        });
+        baseCard.appendChild(coordinates);
+
+        basesContainer.appendChild(baseCard);
       });
-      baseCard.appendChild(coordinates);
 
-      basesContainer.appendChild(baseCard);
-    });
+      baseSection.appendChild(basesContainer);
 
-    baseSection.appendChild(basesContainer);
-
-    // Initialize game map after section is added to DOM
-    setTimeout(() => initGameMap(), 100);
+      // Initialize game map after section is added to DOM
+      setTimeout(() => initGameMap(), 100);
+    } else {
+      // Show message when all bases are hidden
+      const hiddenMessage = UIBuilder.createElement('div', {
+        className: 'text-center py-8 text-gray-500',
+        textContent: 'All bases are deleted. Enable "Show deleted" to see them.'
+      });
+      baseSection.appendChild(hiddenMessage);
+    }
   } else {
-    // Show message when all bases are hidden
-    const hiddenMessage = UIBuilder.createElement('div', {
-      className: 'text-center py-8 text-gray-500',
-      textContent: 'All bases are deleted. Enable "Show deleted" to see them.'
-    });
-    baseSection.appendChild(hiddenMessage);
-  }
-  } else {
-    // Show prompt to add bases when there are none (same as before)
+    // Show prompt to add bases when there are none
     baseSection.appendChild(UIBuilder.createEmptyState({
       icon: 'map-pin',
       title: 'No Bases Yet',
@@ -1750,37 +1745,38 @@ function renderBaseCreationForm(qrId, container) {
   const defaultBaseName = `Base ${nextBaseNumber.toString().padStart(2, '0')}`;
 
   // Form
-  // Replace the form creation section with:
-const form = buildBaseLocationForm({
-  isEditing: false,
-  onSubmit: function(e) {
-    e.preventDefault();
+  const form = buildBaseLocationForm({
+    isEditing: false,
+    initialName: defaultBaseName,
+    onSubmit: function(e) {
+      e.preventDefault();
 
-    const lat = parseFloat(document.getElementById('latitude').value);
-    const lng = parseFloat(document.getElementById('longitude').value);
+      const lat = parseFloat(document.getElementById('latitude').value);
+      const lng = parseFloat(document.getElementById('longitude').value);
 
-    if (isNaN(lat) || isNaN(lng)) {
-      showNotification('Please set the location for this base first.', 'error');
-      return;
-    }
-
-    // Get accuracy for validation (only relevant for GPS coordinates)
-    const accuracy = parseFloat(document.getElementById('accuracy').value);
-    if (currentLocationSource === 'gps' && accuracy > 20) {
-      const confirmPoor = confirm(`Warning: GPS accuracy is poor (±${accuracy.toFixed(1)}m). Consider adjusting the marker position or do you want to proceed anyway?`);
-      if (!confirmPoor) {
+      if (isNaN(lat) || isNaN(lng)) {
+        showNotification('Please set the location for this base first.', 'error');
         return;
       }
-    }
 
-    // Call the API function from core.js
-    const baseName = document.getElementById('base-name').value;
-    createBase(qrId, baseName, lat, lng);
-  },
-  submitButtonText: 'Create Base'
-});
+      // Get accuracy for validation (only relevant for GPS coordinates)
+      const locationSource = document.getElementById('location-source').value;
+      const accuracy = parseFloat(document.getElementById('accuracy').value);
+      if (locationSource === 'gps' && accuracy > 20) {
+        const confirmPoor = confirm(`Warning: GPS accuracy is poor (±${accuracy.toFixed(1)}m). Consider adjusting the marker position or do you want to proceed anyway?`);
+        if (!confirmPoor) {
+          return;
+        }
+      }
 
-container.appendChild(form);
+      // Call the API function from core.js
+      const baseName = document.getElementById('base-name').value;
+      createBase(qrId, baseName, lat, lng);
+    },
+    submitButtonText: 'Create Base'
+  });
+
+  container.appendChild(form);
 
   // Cancel button
   const cancelButton = UIBuilder.createButton('Cancel', function() {
@@ -1788,16 +1784,6 @@ container.appendChild(form);
     navigateTo('hostPanel');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
-
-  // Initialize with current GPS if available
-  setTimeout(() => {
-    updateGPSStatusDisplay();
-
-    // Auto-populate with current GPS if available
-    if (appState.gps.currentPosition && appState.gps.status === 'ready') {
-      useCurrentGPSLocation();
-    }
-  }, 100);
 
   return container;
 }
@@ -1972,13 +1958,14 @@ function renderBaseDeleteModal(base) {
     disabled: true
   });
 
-  // Set min/max for custom time
+  // Set min/max for custom time (datetime-local expects local time, not UTC)
+  const toDatetimeLocalValue = (date) =>
+    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
   if (appState.gameData.settings?.start_time) {
-    const startTime = new Date(appState.gameData.settings.start_time * 1000);
-    customTimeInput.min = startTime.toISOString().slice(0, 16);
+    customTimeInput.min = toDatetimeLocalValue(new Date(appState.gameData.settings.start_time * 1000));
   }
-  const now = new Date();
-  customTimeInput.max = now.toISOString().slice(0, 16);
+  customTimeInput.max = toDatetimeLocalValue(new Date());
 
   customLabel.appendChild(customTitle);
   customLabel.appendChild(customDesc);
@@ -2118,8 +2105,11 @@ function buildBaseLocationForm(options = {}) {
     isEditing = false,
     currentBase = null,
     onSubmit = null,
-    submitButtonText = isEditing ? 'Update Base' : 'Create Base'
+    submitButtonText = isEditing ? 'Update Base' : 'Create Base',
+    initialName = isEditing && currentBase ? currentBase.name : ''
   } = options;
+
+  const mapContainerId = isEditing ? 'edit-base-location-map' : 'base-location-map';
 
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
@@ -2138,7 +2128,7 @@ function buildBaseLocationForm(options = {}) {
     id: 'base-name',
     type: 'text',
     placeholder: 'Enter base name',
-    value: isEditing ? currentBase.name : '',
+    value: initialName,
     required: true
   });
   nameGroup.appendChild(nameInput);
@@ -2156,7 +2146,7 @@ function buildBaseLocationForm(options = {}) {
 
   // Map container for location preview
   const mapPreviewContainer = UIBuilder.createElement('div', {
-    id: isEditing ? 'edit-base-location-map' : 'base-location-map',
+    id: mapContainerId,
     className: 'h-64 bg-gray-200 rounded mb-4 relative'
   });
 
@@ -2195,14 +2185,14 @@ function buildBaseLocationForm(options = {}) {
     type: 'hidden',
     id: 'latitude',
     name: 'latitude',
-    value: isEditing ? currentBase.lat : ''
+    value: isEditing && currentBase ? currentBase.lat : ''
   });
 
   const lngInput = UIBuilder.createElement('input', {
     type: 'hidden',
     id: 'longitude',
     name: 'longitude',
-    value: isEditing ? currentBase.lng : ''
+    value: isEditing && currentBase ? currentBase.lng : ''
   });
 
   const accuracyInput = UIBuilder.createElement('input', {
@@ -2211,9 +2201,19 @@ function buildBaseLocationForm(options = {}) {
     name: 'accuracy'
   });
 
+  // Records whether the coordinates came from GPS or manual placement, so
+  // submit handlers can decide whether the GPS accuracy warning applies
+  const locationSourceInput = UIBuilder.createElement('input', {
+    type: 'hidden',
+    id: 'location-source',
+    name: 'location-source',
+    value: 'none'
+  });
+
   locationGroup.appendChild(latInput);
   locationGroup.appendChild(lngInput);
   locationGroup.appendChild(accuracyInput);
+  locationGroup.appendChild(locationSourceInput);
 
   form.appendChild(locationGroup);
 
@@ -2227,36 +2227,280 @@ function buildBaseLocationForm(options = {}) {
     form.addEventListener('submit', onSubmit);
   }
 
-  // Initialize map functionality (reuse existing logic from renderBaseCreationForm)
+  // Location source state: 'none', 'gps', 'manual'
+  let currentLocationSource = 'none';
+
+  // Map instance and markers
+  let baseLocationMap = null;
+  let gpsMarker = null;
+  let manualMarker = null;
+  let accuracyCircle = null;
+
+  function setLocationSource(source) {
+    currentLocationSource = source;
+    locationSourceInput.value = source;
+  }
+
+  // Create the Leaflet map (once) without placing any markers
+  function ensureMapInitialized(lat, lng) {
+    if (baseLocationMap) {
+      return;
+    }
+
+    baseLocationMap = L.map(mapContainerId).setView([lat, lng], 18);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(baseLocationMap);
+
+    // Add click handler to map for placing manual marker
+    baseLocationMap.on('click', function(e) {
+      const clickLat = e.latlng.lat;
+      const clickLng = e.latlng.lng;
+
+      // Update manual marker position
+      if (manualMarker) {
+        manualMarker.setLatLng([clickLat, clickLng]);
+      } else {
+        createManualMarker(clickLat, clickLng);
+      }
+
+      // Update coordinates and switch to manual mode
+      latInput.value = clickLat;
+      lngInput.value = clickLng;
+      setLocationSource('manual');
+      updateLocationDisplay();
+    });
+  }
+
+  // Use current GPS location from continuous tracking
+  function useCurrentGPSLocation() {
+    if (appState.gps.currentPosition && appState.gps.accuracy) {
+      // Use the continuously tracked position
+      applyGPSLocation(
+        appState.gps.currentPosition.latitude,
+        appState.gps.currentPosition.longitude,
+        appState.gps.accuracy,
+        `Using current GPS location (±${appState.gps.accuracy.toFixed(1)}m)`
+      );
+    } else {
+      // Fall back to fresh GPS request if continuous tracking not available
+      if (window.showNotification) {
+        window.showNotification('Getting fresh GPS location...', 'info');
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          applyGPSLocation(
+            position.coords.latitude,
+            position.coords.longitude,
+            position.coords.accuracy,
+            `GPS location acquired (±${position.coords.accuracy.toFixed(1)}m)`
+          );
+        },
+        function(error) {
+          let errorMessage = 'Unable to get GPS location: ';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Location access denied';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location unavailable';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location timeout';
+              break;
+            default:
+              errorMessage += 'Unknown error';
+              break;
+          }
+
+          if (window.showNotification) {
+            window.showNotification(errorMessage, 'error');
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+  }
+
+  function applyGPSLocation(lat, lng, accuracy, message) {
+    // Update form fields
+    latInput.value = lat;
+    lngInput.value = lng;
+    accuracyInput.value = accuracy;
+
+    // Initialize or update map
+    initBaseLocationMap(lat, lng);
+
+    setLocationSource('gps');
+    updateLocationDisplay();
+
+    if (window.showNotification) {
+      window.showNotification(message, 'success');
+    }
+  }
+
+  // Reset to current GPS button handler
+  function resetToCurrentGPS() {
+    if (appState.gps.currentPosition) {
+      const gpsLat = appState.gps.currentPosition.latitude;
+      const gpsLng = appState.gps.currentPosition.longitude;
+
+      // Reset manual marker to GPS position
+      if (manualMarker) {
+        manualMarker.setLatLng([gpsLat, gpsLng]);
+      }
+
+      // Update coordinates
+      latInput.value = gpsLat;
+      lngInput.value = gpsLng;
+      accuracyInput.value = appState.gps.accuracy;
+
+      // Switch to GPS source
+      setLocationSource('gps');
+      updateLocationDisplay();
+
+      if (window.showNotification) {
+        window.showNotification('Location reset to current GPS position', 'info');
+      }
+    }
+  }
+
+  // Centre the map on a GPS position and show GPS marker plus accuracy circle
+  function initBaseLocationMap(lat, lng) {
+    ensureMapInitialized(lat, lng);
+
+    // Center map on the provided coordinates
+    baseLocationMap.setView([lat, lng], 18);
+
+    // Create or update GPS marker
+    if (gpsMarker) {
+      gpsMarker.setLatLng([lat, lng]);
+    } else {
+      gpsMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'gps-marker',
+          html: '<div style="background-color: #3b82f6; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        })
+      }).addTo(baseLocationMap);
+
+      gpsMarker.bindTooltip('GPS Location', { permanent: false });
+    }
+
+    // Create manual marker if it doesn't exist (initially at GPS location)
+    if (!manualMarker) {
+      createManualMarker(lat, lng);
+    }
+
+    // Update accuracy circle if we have accuracy data
+    if (appState.gps.accuracy || accuracyInput.value) {
+      const accuracy = appState.gps.accuracy || parseFloat(accuracyInput.value);
+
+      if (accuracyCircle) {
+        baseLocationMap.removeLayer(accuracyCircle);
+      }
+
+      accuracyCircle = L.circle([lat, lng], {
+        radius: accuracy,
+        color: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+        fillColor: accuracy <= 10 ? '#22c55e' : accuracy <= 20 ? '#eab308' : '#ef4444',
+        fillOpacity: 0.1,
+        weight: 1
+      }).addTo(baseLocationMap);
+    }
+
+    updateLocationDisplay();
+  }
+
+  function createManualMarker(lat, lng) {
+    manualMarker = L.marker([lat, lng], {
+      draggable: true,
+      icon: L.divIcon({
+        className: 'manual-marker',
+        html: '<div style="background-color: #ef4444; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.4); cursor: move;"></div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      })
+    }).addTo(baseLocationMap);
+
+    manualMarker.bindTooltip('Drag to adjust location', { permanent: false });
+
+    // Handle marker drag
+    manualMarker.on('dragend', function(e) {
+      const newPos = e.target.getLatLng();
+
+      // Update coordinates
+      latInput.value = newPos.lat;
+      lngInput.value = newPos.lng;
+
+      // Switch to manual mode
+      setLocationSource('manual');
+      updateLocationDisplay();
+    });
+  }
+
+  function updateLocationDisplay() {
+    const currentLat = parseFloat(latInput.value);
+    const currentLng = parseFloat(lngInput.value);
+    const accuracy = parseFloat(accuracyInput.value);
+
+    if (isNaN(currentLat) || isNaN(currentLng)) {
+      return;
+    }
+
+    // Show/hide elements based on state
+    const hasGpsData = appState.gps.currentPosition;
+
+    if (hasGpsData) {
+      resetToGpsBtn.style.display = currentLocationSource === 'manual' ? 'block' : 'none';
+
+      // Show instructions when GPS accuracy is poor
+      if (currentLocationSource === 'gps' && accuracy > 15) {
+        mapInstructions.style.display = 'block';
+      } else {
+        mapInstructions.style.display = 'none';
+      }
+    }
+
+    // Update marker visibility and styling
+    if (gpsMarker && manualMarker) {
+      if (currentLocationSource === 'gps') {
+        gpsMarker.setOpacity(1);
+        manualMarker.setOpacity(0.5);
+      } else {
+        gpsMarker.setOpacity(0.5);
+        manualMarker.setOpacity(1);
+      }
+    }
+  }
+
+  // Initialize the map once the form is in the DOM
   setTimeout(() => {
-    initBaseLocationFormMap(isEditing, currentBase);
+    if (isEditing && currentBase) {
+      // Show the base's current location with a draggable marker
+      ensureMapInitialized(currentBase.lat, currentBase.lng);
+      createManualMarker(currentBase.lat, currentBase.lng);
+      setLocationSource('manual');
+      updateLocationDisplay();
+    } else {
+      updateGPSStatusDisplay();
+
+      // Auto-populate with current GPS if available
+      if (appState.gps.currentPosition && appState.gps.status === 'ready') {
+        useCurrentGPSLocation();
+      }
+    }
   }, 100);
 
   return form;
-}
-
-// Helper function to initialize map for base location form
-function initBaseLocationFormMap(isEditing, currentBase) {
-  // Reuse the existing GPS and map logic from renderBaseCreationForm
-  // but adapt it for the reusable form
-  
-  // Set initial coordinates if editing
-  if (isEditing && currentBase) {
-    document.getElementById('latitude').value = currentBase.lat;
-    document.getElementById('longitude').value = currentBase.lng;
-    
-    // Initialize map with existing coordinates
-    if (typeof initBaseLocationMap === 'function') {
-      initBaseLocationMap(currentBase.lat, currentBase.lng);
-    }
-  } else {
-    // For new bases, try to use current GPS
-    updateGPSStatusDisplay();
-    
-    if (appState.gps.currentPosition && appState.gps.status === 'ready') {
-      useCurrentGPSLocation();
-    }
-  }
 }
 
 // Function to display a modal for editing team details
