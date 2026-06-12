@@ -128,6 +128,7 @@ def init_db():
             points_interval_seconds INTEGER DEFAULT 15,
             auto_start_time INTEGER,
             game_duration_minutes INTEGER,
+            join_method TEXT DEFAULT 'team_qr',
             created_time INTEGER NOT NULL,
             FOREIGN KEY (host_id) REFERENCES hosts (id)
         )
@@ -183,6 +184,12 @@ def init_db():
     base_columns = [row['name'] for row in cursor.fetchall()]
     if 'deleted_at' not in base_columns:
         cursor.execute('ALTER TABLE bases ADD COLUMN deleted_at INTEGER DEFAULT NULL')
+
+    # Migrate databases created before the join_method column existed
+    cursor.execute('PRAGMA table_info(games)')
+    game_columns = [row['name'] for row in cursor.fetchall()]
+    if 'join_method' not in game_columns:
+        cursor.execute("ALTER TABLE games ADD COLUMN join_method TEXT DEFAULT 'team_qr'")
 
     conn.commit()
     conn.close()
@@ -373,6 +380,13 @@ def verify_host(qr_code):
 # API Routes - Game Management
 # ==========================================================
 
+# How new players (without a team) can join a game when scanning a base:
+#   team_qr        - must scan a team QR code (default)
+#   choose_team    - pick a team themselves
+#   fewest_players - auto-assigned to the team with the fewest members
+#   lowest_points  - auto-assigned to the team with the lowest score
+VALID_JOIN_METHODS = ('team_qr', 'choose_team', 'fewest_players', 'lowest_points')
+
 # Helper function to validate game settings
 def validate_game_settings(capture_radius, points_interval, game_duration, game_status=None, start_time=None):
     """Validate game settings and return error message if invalid"""
@@ -437,12 +451,17 @@ def create_game():
     points_interval = data.get('points_interval_seconds', 15)
     auto_start_time = data.get('auto_start_time')  # Can be None
     game_duration = data.get('game_duration_minutes')  # Can be None
+    join_method = data.get('join_method', 'team_qr')
 
     # Validate settings
     validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
     if validation_error:
         conn.close()
         return jsonify({'error': validation_error}), 400
+
+    if join_method not in VALID_JOIN_METHODS:
+        conn.close()
+        return jsonify({'error': 'Invalid join method'}), 400
 
     if auto_start_time is not None and auto_start_time <= int(time.time()):
         conn.close()
@@ -452,10 +471,10 @@ def create_game():
 
     cursor.execute('''
     INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds,
-                      auto_start_time, game_duration_minutes, created_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      auto_start_time, game_duration_minutes, join_method, created_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval,
-          auto_start_time, game_duration, current_time))
+          auto_start_time, game_duration, join_method, current_time))
 
     conn.commit()
     conn.close()
@@ -528,6 +547,13 @@ def update_game_settings(game_id):
     if 'game_duration_minutes' in data:
         update_fields.append('game_duration_minutes = ?')
         params.append(data['game_duration_minutes'])
+
+    if 'join_method' in data:
+        if data['join_method'] not in VALID_JOIN_METHODS:
+            conn.close()
+            return jsonify({'error': 'Invalid join method'}), 400
+        update_fields.append('join_method = ?')
+        params.append(data['join_method'])
 
     if not update_fields:
         conn.close()
@@ -684,6 +710,7 @@ def get_game(game_id):
             'auto_start_time': game['auto_start_time'],
             'start_time': game['start_time'],
             'game_duration_minutes': game['game_duration_minutes'],
+            'join_method': game['join_method'] or 'team_qr',
             'calculated_end_time': calculated_end_time
         },
         'teams': teams,
@@ -924,6 +951,87 @@ def join_team(team_id):
     conn.close()
 
     return jsonify({'player_id': player_id})
+
+# Join a game with automatic team assignment (fewest_players / lowest_points)
+@app.route('/api/games/<game_id>/join', methods=['POST'])
+def join_game(game_id):
+    data = request.json or {}
+    player_id = data.get('player_id')
+    player_name = data.get('player_name', 'Anonymous Player')
+    current_time = int(time.time())
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['status'] == 'ended':
+        conn.close()
+        return jsonify({'error': 'This game has already ended'}), 400
+
+    join_method = game['join_method'] or 'team_qr'
+    if join_method not in ('fewest_players', 'lowest_points'):
+        conn.close()
+        return jsonify({'error': 'This game does not allow automatic team assignment'}), 403
+
+    # If the player is already in a team for this game, keep them there
+    if player_id:
+        cursor.execute('''
+        SELECT p.team_id, t.name FROM players p
+        JOIN teams t ON p.team_id = t.id
+        WHERE p.id = ? AND t.game_id = ?
+        ''', (player_id, game_id))
+        existing_player = cursor.fetchone()
+
+        if existing_player:
+            conn.close()
+            return jsonify({
+                'player_id': player_id,
+                'team_id': existing_player['team_id'],
+                'team_name': existing_player['name']
+            })
+
+    cursor.execute('SELECT * FROM teams WHERE game_id = ?', (game_id,))
+    teams = cursor.fetchall()
+
+    if not teams:
+        conn.close()
+        return jsonify({'error': 'No teams available to join yet'}), 400
+
+    # Rank teams by the configured metric, breaking ties randomly
+    ranked = []
+    for team in teams:
+        if join_method == 'fewest_players':
+            cursor.execute('SELECT COUNT(*) FROM players WHERE team_id = ?', (team['id'],))
+            metric = cursor.fetchone()[0]
+        else:  # lowest_points
+            metric = calculate_team_score(cursor, team['id'], game)
+        ranked.append((metric, team))
+
+    lowest = min(metric for metric, _ in ranked)
+    chosen_team = random.choice([team for metric, team in ranked if metric == lowest])
+
+    if not player_id:
+        player_id = str(uuid.uuid4())
+
+    cursor.execute('''
+    INSERT INTO players (id, team_id, name, join_time)
+    VALUES (?, ?, ?, ?)
+    ''', (player_id, chosen_team['id'], player_name, current_time))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'player_id': player_id,
+        'team_id': chosen_team['id'],
+        'team_name': chosen_team['name']
+    })
 
 # Capture a base
 @app.route('/api/bases/<base_id>/capture', methods=['POST'])

@@ -244,6 +244,26 @@ function renderHostPanel() {
   durationCard.appendChild(durationValue);
   settingsGrid.appendChild(durationCard);
 
+  // Join Method
+  const joinMethodLabels = {
+    team_qr: 'Team QR only',
+    choose_team: 'Player choice',
+    fewest_players: 'Fewest players',
+    lowest_points: 'Lowest score'
+  };
+  const joinMethodCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const joinMethodCardLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Join Method'
+  });
+  joinMethodCard.appendChild(joinMethodCardLabel);
+  const joinMethodCardValue = UIBuilder.createElement('div', {
+    className: 'text-lg font-bold text-teal-600',
+    textContent: joinMethodLabels[settings.join_method] || joinMethodLabels.team_qr
+  });
+  joinMethodCard.appendChild(joinMethodCardValue);
+  settingsGrid.appendChild(joinMethodCard);
+
   settingsSection.appendChild(settingsGrid);
 
   // Settings actions (only show for games in setup or active state)
@@ -1157,6 +1177,48 @@ function buildGameSettingsForm(options = {}) {
 
   settingsGrid.appendChild(durationGroup);
 
+  // Player join method
+  const joinMethodGroup = UIBuilder.createElement('div');
+  const joinMethodLabel = UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Player Join Method'
+  });
+  joinMethodGroup.appendChild(joinMethodLabel);
+
+  const joinMethodSelect = UIBuilder.createElement('select', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'join-method-select'
+  });
+
+  const joinMethodOptions = [
+    { value: 'team_qr', label: 'Team QR code only' },
+    { value: 'choose_team', label: 'Players choose their own team' },
+    { value: 'fewest_players', label: 'Auto-assign to team with fewest players' },
+    { value: 'lowest_points', label: 'Auto-assign to team with lowest score' }
+  ];
+
+  const currentJoinMethod = currentSettings.join_method || 'team_qr';
+  joinMethodOptions.forEach(option => {
+    const optionElement = UIBuilder.createElement('option', {
+      value: option.value,
+      textContent: option.label
+    });
+    if (option.value === currentJoinMethod) {
+      optionElement.selected = true;
+    }
+    joinMethodSelect.appendChild(optionElement);
+  });
+
+  joinMethodGroup.appendChild(joinMethodSelect);
+
+  const joinMethodHelp = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'How new players join when they scan a base QR code'
+  });
+  joinMethodGroup.appendChild(joinMethodHelp);
+
+  settingsGrid.appendChild(joinMethodGroup);
+
   settingsSection.appendChild(settingsGrid);
   form.appendChild(settingsSection);
 
@@ -1446,11 +1508,16 @@ function validateGameSettings() {
     }
   }
 
+  // Get join method
+  const joinMethodSelect = document.getElementById('join-method-select');
+  const joinMethod = joinMethodSelect ? joinMethodSelect.value : 'team_qr';
+
   const settings = {
     name: gameName,
     capture_radius_meters: captureRadius,
     points_interval_seconds: pointsInterval,
-    game_duration_minutes: gameDuration
+    game_duration_minutes: gameDuration,
+    join_method: joinMethod
   };
 
   // Only include auto_start_time if the field exists and has a value
@@ -2730,8 +2797,24 @@ function renderPlayerRegistrationPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
   const teamId = sessionStorage.getItem('pendingTeamId');
-  if (!teamId) {
-    // No pending team, show error
+  const pendingJoinGameId = sessionStorage.getItem('pendingJoinGameId');
+  const joinMethod = (appState.gameData.settings && appState.gameData.settings.join_method) || 'team_qr';
+
+  // Determine how this player is joining:
+  // 'team' - scanned a team QR code (always allowed)
+  // 'choose' - scanned a base and the game lets players pick a team
+  // 'auto' - scanned a base and the game auto-assigns a team
+  let mode = null;
+  if (teamId) {
+    mode = 'team';
+  } else if (pendingJoinGameId && joinMethod === 'choose_team') {
+    mode = 'choose';
+  } else if (pendingJoinGameId && (joinMethod === 'fewest_players' || joinMethod === 'lowest_points')) {
+    mode = 'auto';
+  }
+
+  if (!mode) {
+    // No pending team or join request, show error
     const errorDiv = UIBuilder.createElement('div', {
       className: 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded',
       textContent: 'No team selected. Please scan a team QR code.'
@@ -2746,31 +2829,40 @@ function renderPlayerRegistrationPage() {
     return container;
   }
 
-  // Find team info
-  let teamName = 'Unknown Team';
-  let teamColor = 'bg-gray-500';
-
-  if (appState.gameData.teams) {
-    const team = appState.gameData.teams.find(t => t.id === teamId);
-    if (team) {
-      teamName = team.name;
-      teamColor = team.color;
-    }
-  }
-
   // Title
   const title = UIBuilder.createElement('h2', {
     className: 'text-2xl font-bold mb-6 text-center',
-    textContent: 'Join Team'
+    textContent: mode === 'team' ? 'Join Team' : 'Join the Game'
   });
   container.appendChild(title);
 
-  // Team info
-  const teamInfo = UIBuilder.createElement('div', {
-    className: `${teamColor} text-white px-6 py-4 rounded-lg text-center mb-6`,
-    textContent: `You are joining: ${teamName}`
-  });
-  container.appendChild(teamInfo);
+  if (mode === 'team') {
+    // Find team info
+    let teamName = 'Unknown Team';
+    let teamColor = 'bg-gray-500';
+
+    if (appState.gameData.teams) {
+      const team = appState.gameData.teams.find(t => t.id === teamId);
+      if (team) {
+        teamName = team.name;
+        teamColor = team.color;
+      }
+    }
+
+    const teamInfo = UIBuilder.createElement('div', {
+      className: `${teamColor} text-white px-6 py-4 rounded-lg text-center mb-6`,
+      textContent: `You are joining: ${teamName}`
+    });
+    container.appendChild(teamInfo);
+  } else if (mode === 'auto') {
+    const autoInfo = UIBuilder.createElement('div', {
+      className: 'bg-purple-100 border border-purple-400 text-purple-700 px-6 py-4 rounded-lg text-center mb-6',
+      textContent: joinMethod === 'fewest_players'
+        ? 'You will be assigned to the team with the fewest players.'
+        : 'You will be assigned to the team with the lowest score.'
+    });
+    container.appendChild(autoInfo);
+  }
 
   // Player name form
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
@@ -2795,13 +2887,63 @@ function renderPlayerRegistrationPage() {
 
   form.appendChild(nameGroup);
 
+  // Team picker for games where players choose their own team
+  let selectedTeamId = null;
+  if (mode === 'choose') {
+    const teamGroup = UIBuilder.createElement('div');
+
+    const teamLabel = UIBuilder.createElement('label', {
+      className: 'block text-gray-700 text-sm font-bold mb-2',
+      textContent: 'Choose Your Team'
+    });
+    teamGroup.appendChild(teamLabel);
+
+    const teamList = UIBuilder.createElement('div', { className: 'space-y-2' });
+    const teamButtons = [];
+
+    (appState.gameData.teams || []).forEach(team => {
+      const teamButton = UIBuilder.createElement('button', {
+        type: 'button',
+        className: `${team.color} text-white w-full px-4 py-3 rounded-lg flex justify-between items-center opacity-70 transition-all`
+      });
+
+      const teamNameSpan = UIBuilder.createElement('span', {
+        className: 'font-bold',
+        textContent: team.name
+      });
+      teamButton.appendChild(teamNameSpan);
+
+      const playerCountSpan = UIBuilder.createElement('span', {
+        className: 'text-sm',
+        textContent: `${team.playerCount || 0} player${(team.playerCount || 0) === 1 ? '' : 's'}`
+      });
+      teamButton.appendChild(playerCountSpan);
+
+      teamButton.addEventListener('click', function() {
+        selectedTeamId = team.id;
+        teamButtons.forEach(btn => {
+          btn.classList.add('opacity-70');
+          btn.classList.remove('ring-4', 'ring-purple-400');
+        });
+        teamButton.classList.remove('opacity-70');
+        teamButton.classList.add('ring-4', 'ring-purple-400');
+      });
+
+      teamButtons.push(teamButton);
+      teamList.appendChild(teamButton);
+    });
+
+    teamGroup.appendChild(teamList);
+    form.appendChild(teamGroup);
+  }
+
   // Submit button
-  const submitButton = UIBuilder.createButton('Join Team', null, 'bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full');
+  const submitButton = UIBuilder.createButton(mode === 'team' ? 'Join Team' : 'Join Game', null, 'bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full');
   submitButton.type = 'submit';
   form.appendChild(submitButton);
 
   // Handle form submission
-  form.addEventListener('submit', function(e) {
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
 
     const playerName = nameInput.value.trim();
@@ -2810,10 +2952,30 @@ function renderPlayerRegistrationPage() {
       return;
     }
 
-    joinTeam(teamId, playerName);
+    if (mode === 'team') {
+      joinTeam(teamId, playerName);
+      sessionStorage.removeItem('pendingTeamId');
+      return;
+    }
 
-    // Clear pending team
-    sessionStorage.removeItem('pendingTeamId');
+    if (mode === 'choose' && !selectedTeamId) {
+      showNotification('Please choose a team', 'warning');
+      return;
+    }
+
+    try {
+      if (mode === 'choose') {
+        await joinTeam(selectedTeamId, playerName);
+      } else {
+        await joinGameAuto(pendingJoinGameId, playerName);
+      }
+
+      // If they got here by scanning a base, try to capture it now
+      await attemptPendingCapture();
+    } catch (err) {
+      // joinTeam / joinGameAuto already notify the user
+      console.error('Error joining game:', err);
+    }
   });
 
   container.appendChild(form);
@@ -2821,6 +2983,8 @@ function renderPlayerRegistrationPage() {
   // Cancel button
   const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingTeamId');
+    sessionStorage.removeItem('pendingJoinGameId');
+    sessionStorage.removeItem('pendingCaptureBaseId');
     navigateTo('landing');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
