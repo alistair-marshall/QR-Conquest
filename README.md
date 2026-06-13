@@ -353,6 +353,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
+| `DEBUG_FEATURES` | No | Expose debug tools (mobile console viewer & manual GPS coordinate entry) in the client. Hidden by default. | `true` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
 | `FLASK_DEBUG` | No | Enable debug mode | `False` |
 

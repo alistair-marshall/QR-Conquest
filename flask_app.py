@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 import hmac
 import sqlite3
 import uuid
@@ -24,6 +24,10 @@ if not SITE_ADMIN_PASSWORD:
     print("ERROR: SITE_ADMIN_PASSWORD environment variable must be set")
     print("Run: export SITE_ADMIN_PASSWORD=your_secure_password")
     exit(1)
+
+# Debug features (mobile console viewer, manual GPS coordinate entry) are
+# hidden unless explicitly enabled on the server via this environment variable.
+DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
 # Admin authentication decorator
 def require_site_admin(f):
@@ -1821,14 +1825,27 @@ def regenerate_host_qr(host_id):
         'qr_code': new_qr
     })
 
+# Serve the SPA shell, injecting the debug-features flag so the client can
+# decide whether to expose the mobile console and manual GPS entry tools.
+def render_index():
+    index_path = os.path.join(app.static_folder, 'index.html')
+    with open(index_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+    if DEBUG_FEATURES:
+        html = html.replace(
+            'window.QRC_DEBUG_FEATURES = false;',
+            'window.QRC_DEBUG_FEATURES = true;'
+        )
+    return Response(html, mimetype='text/html')
+
 # Serve static files
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path != "" and os.path.exists(app.static_folder + '/' + path):
+    if path not in ("", "index.html") and os.path.exists(app.static_folder + '/' + path):
         return send_from_directory(app.static_folder, path)
     else:
-        return send_from_directory(app.static_folder, 'index.html')
+        return render_index()
 
 if __name__ == '__main__':
     app.run(debug=True)

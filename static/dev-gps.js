@@ -1,13 +1,13 @@
-// Dev-only GPS simulator. Only activates on localhost — in production this
-// file is inert. Replaces navigator.geolocation with a fake position that can
-// be moved via an on-screen panel, arrow buttons, or right-clicking the map.
-// Also provides a "simulate QR scan" box (a real scan is equivalent to
-// handleQRCode(text), which is what the camera path calls after decoding).
+// Dev-only GPS simulator. Only activates when debug features are enabled on the
+// server (the DEBUG_FEATURES environment variable); otherwise this file is inert.
+// Replaces navigator.geolocation with a fake position that can be moved via an
+// on-screen panel, arrow buttons, or right-clicking the map. Also provides a
+// "simulate QR scan" box (a real scan is equivalent to handleQRCode(text),
+// which is what the camera path calls after decoding).
 (function () {
   'use strict';
 
-  const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
-  if (!isLocal) return;
+  if (!window.QRC_DEBUG_FEATURES) return;
 
   const STORAGE_KEY = 'devgps-position';
 

@@ -72,12 +72,14 @@ function renderSiteAdminLogin() {
 
   container.appendChild(form);
 
-  // Debug console button
-  const debugButton = UIBuilder.createButton('Load Debug Console', function() {
-    loadErudaDebugConsole();
-  }, 'w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors mt-2');
+  // Debug console button - only when debug features are enabled on the server
+  if (window.QRC_DEBUG_FEATURES) {
+    const debugButton = UIBuilder.createButton('Load Debug Console', function() {
+      loadErudaDebugConsole();
+    }, 'w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors mt-2');
 
-  form.appendChild(debugButton);
+    form.appendChild(debugButton);
+  }
 
   // Security notice
   const securityNotice = UIBuilder.createElement('div', {

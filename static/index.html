@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+<!-- Debug-features flag. Defaults to false; the server rewrites this to true
+     when the DEBUG_FEATURES environment variable is enabled. Gates the mobile
+     console viewer and the manual GPS coordinate tools. -->
+<script>window.QRC_DEBUG_FEATURES = false;</script>
 <script src="dev-gps.js"></script>
 <script src="indexedDB.js"></script>
 <script>
