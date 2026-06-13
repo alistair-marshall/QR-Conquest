@@ -156,6 +156,8 @@ function clearGameState() {
   // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
   sessionStorage.removeItem('pendingTeamId');
+  sessionStorage.removeItem('pendingJoinGameId');
+  sessionStorage.removeItem('pendingCaptureBaseId');
 
   // Stop any active polling
   stopScorePolling();
@@ -486,7 +488,8 @@ async function handleBaseQR(qrCode, statusData) {
 
     // Check if user is on a team
     if (!authState.hasTeam) {
-      throw new Error('You need to join a team before capturing bases. Please scan a team QR code first.');
+      await handleBaseScanWithoutTeam(baseId, gameId);
+      return;
     }
 
     // If we have a game loaded but QR is for different game
@@ -509,6 +512,51 @@ async function handleBaseQR(qrCode, statusData) {
       window.navigateTo('gameView');
     }
     throw err;
+  }
+}
+
+// Handle a base scan by a player who is not yet on a team.
+// What happens depends on the game's join method setting.
+async function handleBaseScanWithoutTeam(baseId, gameId) {
+  const response = await fetch(`${API_BASE_URL}/games/${gameId}`);
+  if (!response.ok) {
+    throw new Error('Unable to load game information. Please try again.');
+  }
+  const gameData = await response.json();
+  const joinMethod = (gameData.settings && gameData.settings.join_method) || 'team_qr';
+
+  if (joinMethod === 'team_qr') {
+    throw new Error('You need to join a team before capturing bases. Please scan a team QR code first.');
+  }
+
+  if (gameData.status === 'ended') {
+    throw new Error('This game has already ended.');
+  }
+
+  // Load the game and send the player to registration; the registration page
+  // shows a team picker (choose_team) or auto-assigns (fewest_players/lowest_points)
+  updateAuthState({ gameId: gameId });
+  await fetchGameData(gameId);
+  sessionStorage.setItem('pendingJoinGameId', gameId);
+  sessionStorage.setItem('pendingCaptureBaseId', baseId);
+  if (window.navigateTo) {
+    window.navigateTo('playerRegistration');
+  }
+}
+
+// After joining via a base scan, try to capture the base that was scanned
+async function attemptPendingCapture() {
+  const baseId = sessionStorage.getItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingJoinGameId');
+
+  if (baseId && appState.gameData.status === 'active') {
+    try {
+      await captureBase(baseId);
+    } catch (err) {
+      // captureBase already notifies the user; joining still succeeded
+      console.warn('Pending base capture failed after joining:', err);
+    }
   }
 }
 
@@ -855,6 +903,9 @@ async function createGame(gameSettings) {
     if (gameSettings.game_duration_minutes !== undefined) {
       requestBody.game_duration_minutes = gameSettings.game_duration_minutes;
     }
+    if (gameSettings.join_method !== undefined) {
+      requestBody.join_method = gameSettings.join_method;
+    }
 
     const response = await fetch(API_BASE_URL + '/games', {
       method: 'POST',
@@ -1112,6 +1163,59 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
   } catch (err) {
     console.error('Error joining team:', err);
     const userMessage = err.message || 'Unable to join team. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Join a game that auto-assigns teams (fewest_players / lowest_points)
+async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
+  try {
+    setLoading(true);
+    console.log('Joining game with auto team assignment:', gameId, 'name:', playerName);
+
+    const authState = getAuthState();
+    const requestBody = {
+      player_name: playerName
+    };
+
+    if (authState.playerId) {
+      requestBody.player_id = authState.playerId;
+    }
+
+    const response = await fetch(API_BASE_URL + '/games/' + gameId + '/join', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await handleApiResponse(response, 'Failed to join game');
+    console.log('Auto-assigned to team:', data.team_id, data.team_name);
+
+    // Update authentication state
+    updateAuthState({
+      teamId: data.team_id,
+      playerId: data.player_id
+    });
+
+    // Refresh so team player counts and membership are up to date
+    await fetchGameData(gameId);
+
+    if (window.showNotification) {
+      window.showNotification(`You have been assigned to ${data.team_name}!`, 'success');
+    }
+    if (window.navigateTo) {
+      window.navigateTo('gameView');
+    }
+  } catch (err) {
+    console.error('Error joining game:', err);
+    const userMessage = err.message || 'Unable to join game. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }

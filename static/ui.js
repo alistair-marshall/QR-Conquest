@@ -266,9 +266,12 @@ const UIBuilder = {
 // INITIALIZATION
 // =============================================================================
 
-// Initialize app immediately when script is loaded
-(function initializeApp() {
-  console.log('UI system loaded, initializing app immediately');
+// Called from index.html once every app script has loaded. Initialization
+// must not start earlier: the QR flow triggered here can finish (and try to
+// render pages such as the host panel) before host.js/site-admin.js have
+// loaded, which crashes the render and leaves the page blank.
+function initializeApp() {
+  console.log('All scripts loaded, initializing app');
 
   // Cache main elements
   elements.root = document.getElementById('root');
@@ -335,7 +338,7 @@ const UIBuilder = {
     appState.gameData.currentPlayer = authState.playerId;
     console.log('Found team ID in localStorage:', authState.teamId);
   }
-})();
+}
 
 
 function loadQRCodeLibrary() {
@@ -1493,16 +1496,20 @@ function updateScoreboard() {
 function renderApp() {
   console.log('Rendering app, current page:', appState.page);
 
-  // Render loop protection
+  // Render loop protection. A render requested while one is in progress is
+  // not dropped — it runs again once the current render finishes, so the
+  // final app state always ends up on screen.
   if (window.renderingInProgress) {
-      console.warn('Render already in progress, preventing loop');
+      console.warn('Render already in progress, queuing a follow-up render');
+      window.renderQueued = true;
       return;
   }
   window.renderingInProgress = true;
 
   try{
-    // Clear the root element
-    elements.root.innerHTML = '';
+    // Build the new UI off-DOM and only swap it in once complete, so an
+    // exception partway through can't leave the page blank
+    const newContent = document.createDocumentFragment();
 
     // Add header
     const header = document.createElement('header');
@@ -1572,7 +1579,7 @@ function renderApp() {
     headerContent.appendChild(rightSection);
     header.appendChild(headerContent);
 
-    elements.root.appendChild(header);
+    newContent.appendChild(header);
 
     // Main content container
     const main = document.createElement('main');
@@ -1621,7 +1628,7 @@ function renderApp() {
       }
     }
 
-    elements.root.appendChild(main);
+    newContent.appendChild(main);
 
     // Add footer
     const footer = document.createElement('footer');
@@ -1645,10 +1652,22 @@ function renderApp() {
     footerContent.appendChild(adminLink);
 
     footer.appendChild(footerContent);
-    elements.root.appendChild(footer);
+    newContent.appendChild(footer);
+
+    // Swap in the fully built UI
+    elements.root.innerHTML = '';
+    elements.root.appendChild(newContent);
   } finally {
     // Always clear the render lock
     window.renderingInProgress = false;
+
+    // Run any render that was requested while this one was in progress.
+    // Scheduled as a task (not run synchronously) to preserve the loop
+    // protection this lock exists for.
+    if (window.renderQueued) {
+      window.renderQueued = false;
+      setTimeout(renderApp, 0);
+    }
   }
 }
 
