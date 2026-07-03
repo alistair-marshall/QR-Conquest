@@ -22,6 +22,12 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - Your location is automatically verified to prevent remote captures
 - Successfully captured bases change to your team's color and start earning points
 
+**Quiz Capture (if enabled by your host):**
+- Instead of capturing instantly, scanning a base opens a quiz - answer correctly to reduce, capture, neutralise or reinforce it
+- Each base has a shield: reduce an enemy base's shield to 0 to neutralise it, then capture it; reinforce your own base to make it harder to take
+- A wrong answer ends your turn and locks you out of answering anywhere in the game for a short cooldown - the app shows a countdown
+- The map and base list show each base's current shield so your team can plan attacks and defence
+
 **Winning the Game:**
 - Teams earn points for every moment they control a base
 - The longer you hold bases, the more points you accumulate
@@ -58,6 +64,12 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Your GPS location is automatically recorded
 - Give each base a descriptive name (e.g., "Library Steps", "Main Entrance")
 - Bases appear immediately on the game map
+
+**Quiz Capture (optional):**
+- Build a reusable Question Bank from your host panel (multiple-choice or true/false, with categories) - it's shared across all of your games
+- In Game Settings, enable quiz-based capture, choose which categories are in play, and set the max shield and wrong-answer cooldown
+- The game can't start with quiz capture enabled unless at least one category is selected and has active questions
+- Bulk-import an existing question set as JSON or CSV from the Question Bank page
 
 **Managing the Game:**
 - Start the game when teams are ready
@@ -259,9 +271,10 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ## 🏗️ Technical Architecture
 
 ### Backend (Python Flask)
-- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures
+- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, and answer_sessions
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
-- **WebSockets**: Live base-capture notifications pushed to all connected players (via flask-sock)
+- **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
+- **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 
 ### Frontend (Vanilla JavaScript)
 - **PWA**: Installable Progressive Web App
