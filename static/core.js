@@ -698,62 +698,41 @@ function updateGPSStatusUI() {
 // GAME DATA MANAGEMENT
 // =============================================================================
 
-// Fetch game data with offline support
+// Fetch game data
 async function fetchGameData(gameId) {
   try {
     setLoading(true);
     console.log('Fetching game data for ID:', gameId);
 
     let data = null;
-    let fromCache = false;
 
     try {
-      // Try to fetch from the network first
       const response = await fetch(API_BASE_URL + '/games/' + gameId);
 
       if (response.ok) {
         data = await response.json();
         console.log('Game data received from server:', data);
-
-        // Cache the fresh data
-        if (window.dbHelpers) {
-          window.dbHelpers.cacheGameData(data).catch(cacheErr => {
-            console.warn('Failed to cache game data:', cacheErr);
-          });
-        }
       } else if (response.status === 404) {
         // Game has been deleted - clear state and handle gracefully
         console.log('Game not found (404) - game may have been deleted');
         clearGameState();
-        
+
         if (window.showNotification) {
           window.showNotification('This game no longer exists. It may have been deleted by the host.', 'warning');
         }
-        
+
         // Navigate to landing page
         if (window.navigateTo) {
           window.navigateTo('landing');
         }
-        
-        return; // Exit early, don't try cache fallback
+
+        return; // Exit early
       } else {
         throw new Error('Failed to load game data from server');
       }
     } catch (networkError) {
-      console.warn('Network fetch failed, trying cache:', networkError);
-
-      // Try to load from cache if network fetch failed
-      if (window.dbHelpers) {
-        try {
-          data = await window.dbHelpers.loadCachedGameData(gameId);
-          fromCache = true;
-          console.log('Game data loaded from cache:', data);
-        } catch (cacheError) {
-          throw new Error('Unable to load game data. Please check your connection and try again.');
-        }
-      } else {
-        throw new Error('Unable to load game data. Please check your connection and try again.');
-      }
+      console.warn('Network fetch failed:', networkError);
+      throw new Error('Unable to load game data. Please check your connection and try again.');
     }
 
     // Update game data
@@ -764,11 +743,6 @@ async function fetchGameData(gameId) {
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
     appState.gameData.settings = data.settings || {};
-
-    // Show offline notification if data came from cache
-    if (fromCache && window.showNotification) {
-      window.showNotification('Using cached game data (offline mode)', 'warning');
-    }
 
     // Re-render with new data - UI will handle this
     if (window.renderApp) {
@@ -859,6 +833,9 @@ function startScorePolling() {
     // Set up polling every 5 seconds
     scorePollingInterval = setInterval(fetchGameUpdates, 5000);
     console.log('Game updates polling started');
+
+    // Open the live event socket alongside polling
+    connectGameSocket(appState.gameData.id);
   }
 }
 
@@ -867,6 +844,104 @@ function stopScorePolling() {
     clearInterval(scorePollingInterval);
     scorePollingInterval = null;
     console.log('Game update polling stopped');
+  }
+
+  disconnectGameSocket();
+}
+
+// =============================================================================
+// WEBSOCKET - LIVE GAME EVENTS
+// =============================================================================
+
+let gameSocket = null;
+let gameSocketGameId = null;
+let gameSocketReconnectTimer = null;
+let gameSocketReconnectDelay = 1000;
+
+function connectGameSocket(gameId) {
+  if (!gameId || !('WebSocket' in window)) return;
+
+  // Already connected (or connecting) to this game
+  if (gameSocket && gameSocketGameId === gameId &&
+      (gameSocket.readyState === WebSocket.OPEN || gameSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  disconnectGameSocket();
+  gameSocketGameId = gameId;
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws/games/${gameId}`);
+  gameSocket = socket;
+
+  socket.onopen = function () {
+    console.log('Game event socket connected for game:', gameId);
+    gameSocketReconnectDelay = 1000;
+  };
+
+  socket.onmessage = function (event) {
+    try {
+      handleGameSocketMessage(JSON.parse(event.data));
+    } catch (err) {
+      console.warn('Ignoring malformed game event:', err);
+    }
+  };
+
+  socket.onclose = function () {
+    if (gameSocket !== socket) return; // Superseded by a newer connection
+
+    gameSocket = null;
+
+    // Reconnect with backoff while this game is still being watched
+    if (gameSocketGameId === gameId) {
+      console.log(`Game event socket closed, reconnecting in ${gameSocketReconnectDelay}ms`);
+      gameSocketReconnectTimer = setTimeout(function () {
+        gameSocketReconnectTimer = null;
+        if (gameSocketGameId === gameId) {
+          connectGameSocket(gameId);
+        }
+      }, gameSocketReconnectDelay);
+      gameSocketReconnectDelay = Math.min(gameSocketReconnectDelay * 2, 30000);
+    }
+  };
+}
+
+function disconnectGameSocket() {
+  gameSocketGameId = null;
+
+  if (gameSocketReconnectTimer) {
+    clearTimeout(gameSocketReconnectTimer);
+    gameSocketReconnectTimer = null;
+  }
+
+  if (gameSocket) {
+    const socket = gameSocket;
+    gameSocket = null;
+    socket.close();
+  }
+}
+
+// Base the current player just captured themselves; their own capture already
+// shows a success message, so the matching broadcast is not shown again
+let lastOwnCapture = { baseId: null, time: 0 };
+
+function handleGameSocketMessage(message) {
+  if (message.type === 'base_captured') {
+    console.log('Base captured event:', message);
+
+    const isOwnCapture = message.base_id === lastOwnCapture.baseId &&
+      (Date.now() - lastOwnCapture.time) < 10000;
+
+    if (!isOwnCapture && window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      window.showNotification(
+        `${message.base_name} captured by ${message.team_name}!`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
+    // Refresh scores and base ownership straight away
+    fetchGameUpdates();
   }
 }
 
@@ -1225,7 +1300,7 @@ async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
   }
 }
 
-// Handle base capture with GPS location verification and offline support
+// Handle base capture with GPS location verification
 async function captureBase(baseId) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
@@ -1300,48 +1375,31 @@ async function captureBase(baseId) {
   try {
     setLoading(true);
 
-    // Check if we're online
-    if (navigator.onLine) {
-      // Try online capture
-      const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          player_id: authState.playerId,
-          latitude: latitude,
-          longitude: longitude
-        })
-      });
+    // Mark before the request: the WebSocket broadcast of our own capture can
+    // arrive before the HTTP response does
+    lastOwnCapture = { baseId: baseId, time: Date.now() };
 
-      await handleApiResponse(response, 'Failed to capture base');
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        player_id: authState.playerId,
+        latitude: latitude,
+        longitude: longitude
+      })
+    });
 
-      // Update scores
-      await fetchGameUpdates();
+    await handleApiResponse(response, 'Failed to capture base');
 
-      // Show success message with GPS info
-      if (window.showNotification) {
-        const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
-        window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
-      }
-    } else {
-      // We're offline, store for later sync
-      if (window.dbHelpers && window.dbHelpers.addPendingCapture) {
-        await window.dbHelpers.addPendingCapture(
-          baseId,
-          authState.playerId,
-          latitude,
-          longitude
-        );
+    // Update scores
+    await fetchGameUpdates();
 
-        // Show offline message
-        if (window.showNotification) {
-          window.showNotification('Base capture queued (offline mode). Will sync when online.', 'warning');
-        }
-      } else {
-        throw new Error('You are offline and offline capture is not available. Please try again when online.');
-      }
+    // Show success message with GPS info
+    if (window.showNotification) {
+      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
+      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
     }
   } catch (err) {
     console.error('Error capturing base:', err);

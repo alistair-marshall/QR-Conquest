@@ -1844,7 +1844,7 @@ function createGPSStatusIndicator() {
 }
 
 // =============================================================================
-// PWA INSTALLATION AND OFFLINE SUPPORT
+// PWA INSTALLATION AND CONNECTIVITY STATUS
 // =============================================================================
 
 // PWA installation prompt functionality
@@ -1915,13 +1915,6 @@ function setupOnlineStatusMonitoring() {
     console.log('App is now online');
     showNotification('You are back online', 'success');
     updateOnlineStatus(true);
-
-    // Attempt to sync any pending captures
-    if ('serviceWorker' in navigator && 'SyncManager' in window) {
-      navigator.serviceWorker.ready
-        .then(registration => registration.sync.register('sync-captures'))
-        .catch(err => console.error('Background sync registration failed:', err));
-    }
   });
 
   // Handle offline event

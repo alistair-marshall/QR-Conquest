@@ -14,17 +14,17 @@
      console viewer and the manual GPS coordinate tools. -->
 <script>window.QRC_DEBUG_FEATURES = false;</script>
 <script src="dev-gps.js"></script>
-<script src="indexedDB.js"></script>
 <script>
-  // Register service worker
+  // The offline-capture service worker has been removed; unregister any
+  // copies still installed from previous versions of the app
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(registration => {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      navigator.serviceWorker.getRegistrations()
+        .then(registrations => {
+          registrations.forEach(registration => registration.unregister());
         })
         .catch(error => {
-          console.error('ServiceWorker registration failed: ', error);
+          console.error('ServiceWorker cleanup failed: ', error);
         });
     });
   }

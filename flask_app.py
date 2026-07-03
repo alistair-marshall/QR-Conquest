@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, send_from_directory, Response
+from flask_sock import Sock
 import hmac
 import sqlite3
+import threading
 import uuid
 import time
 import json
@@ -11,6 +13,7 @@ import random
 from functools import wraps
 
 app = Flask(__name__, static_folder='static')
+sock = Sock(app)
 
 # ==========================================================
 # Site Admin Authentication Setup
@@ -199,6 +202,46 @@ def init_db():
     conn.close()
 
 init_db()
+
+
+# ==========================================================
+# WebSocket Support - Live Game Notifications
+# ==========================================================
+
+# Connected WebSocket clients, keyed by game ID. Broadcasts happen from HTTP
+# request threads while connections live on their own threads, so all access
+# to the registry goes through the lock.
+ws_clients = {}
+ws_clients_lock = threading.Lock()
+
+@sock.route('/ws/games/<game_id>')
+def game_events_socket(ws, game_id):
+    with ws_clients_lock:
+        ws_clients.setdefault(game_id, set()).add(ws)
+    try:
+        # Clients only listen; keep receiving so we notice the disconnect
+        while True:
+            if ws.receive() is None:
+                break
+    finally:
+        with ws_clients_lock:
+            clients = ws_clients.get(game_id)
+            if clients:
+                clients.discard(ws)
+                if not clients:
+                    del ws_clients[game_id]
+
+def broadcast_game_event(game_id, payload):
+    """Send a JSON event to every client subscribed to a game."""
+    message = json.dumps(payload)
+    with ws_clients_lock:
+        clients = list(ws_clients.get(game_id, ()))
+    for client in clients:
+        try:
+            client.send(message)
+        except Exception:
+            # Dead connection; its handler thread will clean it up
+            pass
 
 
 # API Routes
@@ -1073,7 +1116,7 @@ def capture_base(base_id):
 
     # Get player's team and confirm they belong to this base's game
     cursor.execute('''
-    SELECT p.team_id, t.game_id FROM players p
+    SELECT p.team_id, t.game_id, t.name AS team_name, t.color AS team_color FROM players p
     JOIN teams t ON p.team_id = t.id
     WHERE p.id = ?
     ''', (player_id,))
@@ -1108,6 +1151,17 @@ def capture_base(base_id):
 
     conn.commit()
     conn.close()
+
+    # Notify everyone watching this game about the capture
+    broadcast_game_event(base_data['game_id'], {
+        'type': 'base_captured',
+        'base_id': base_id,
+        'base_name': base_data['name'],
+        'team_id': team_id,
+        'team_name': player['team_name'],
+        'team_color': player['team_color'],
+        'capture_time': current_time
+    })
 
     return jsonify({'success': True})
 

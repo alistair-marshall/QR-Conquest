@@ -31,7 +31,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
 - **Live Scoreboard**: Track team rankings as they change throughout the game
-- **Offline Support**: Game continues even with poor mobile signal - captures sync automatically when connection returns
+- **Capture Notifications**: Instant WebSocket notifications whenever any team captures a base
 - **Team Coordination**: Work together to develop capture and defense strategies
 
 ### For Hosts - Managing Games
@@ -261,13 +261,13 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ### Backend (Python Flask)
 - **Database**: SQLite with tables for hosts, games, teams, players, bases, captures
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
-- **Offline Support**: Background sync for captures when connectivity is poor
+- **WebSockets**: Live base-capture notifications pushed to all connected players (via flask-sock)
 
 ### Frontend (Vanilla JavaScript)
-- **PWA**: Progressive Web App with offline capabilities
+- **PWA**: Installable Progressive Web App
 - **QR Scanning**: Camera-based QR code detection
 - **Maps**: Interactive Leaflet maps showing base locations and ownership
-- **Real-time Updates**: Automatic polling for live scoreboard updates
+- **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
 - **Responsive Design**: Works on mobile phones and tablets
 
 **File Responsibility Matrix**:
@@ -297,6 +297,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
    ```bash
    git clone <repository-url>
    cd qr-conquest
+   pip install -r requirements.txt
    ```
 
 2. **Set environment variables**:
@@ -329,6 +330,11 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
            proxy_pass http://localhost:5000;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
+           # Required for the live-notification WebSocket (/ws/...)
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_read_timeout 3600s;
        }
    }
    ```
@@ -341,9 +347,11 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 
 3. **Run with production server**:
    ```bash
-   # Using Gunicorn
+   # Using Gunicorn. Each WebSocket connection holds a thread for its
+   # lifetime, so run with a generous thread pool. A single worker keeps
+   # all connections in one process so capture broadcasts reach everyone.
    pip install gunicorn
-   gunicorn -w 4 -b 0.0.0.0:5000 flask_app:app
+   gunicorn -w 1 --threads 100 -b 0.0.0.0:5000 flask_app:app
    ```
 
 ## 🔧 Configuration Options
@@ -365,11 +373,11 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Scoring Rate**: Teams earn points continuously while controlling bases
 - **Game Duration**: No time limit, manually ended by host
 
-### Offline Support
+### Live Notifications
 
-- Base captures are queued when offline
-- Automatic sync when connection restored
-- Cached game data for continued play
+- Base captures are broadcast over WebSockets to everyone in the game
+- Scoreboard and map refresh immediately when a capture happens
+- Automatic reconnection with backoff if the connection drops
 - Visual indicators for online/offline status
 
 ## 🔒 Security Features
