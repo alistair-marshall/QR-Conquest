@@ -154,9 +154,10 @@ function renderHostPanel() {
   const statusValue = UIBuilder.createElement('div', {
     className: 'text-lg font-bold capitalize' + (
       appState.gameData.status === 'active' ? ' text-green-600' :
-      appState.gameData.status === 'setup' ? ' text-orange-600' : ' text-gray-600'
+      appState.gameData.status === 'setup' ? ' text-orange-600' :
+      appState.gameData.status === 'bonus' ? ' text-yellow-600' : ' text-gray-600'
     ),
-    textContent: appState.gameData.status
+    textContent: appState.gameData.status === 'bonus' ? 'Bonus round' : appState.gameData.status
   });
   statusCard.appendChild(statusValue);
   gameInfoGrid.appendChild(statusCard);
@@ -300,6 +301,27 @@ function renderHostPanel() {
   });
   quizCard.appendChild(quizCardValue);
   settingsGrid.appendChild(quizCard);
+
+  // Bonus Round
+  const bonusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const bonusCardLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Bonus Round'
+  });
+  bonusCard.appendChild(bonusCardLabel);
+  let bonusText = 'Off';
+  if (settings.bonus_round_enabled || settings.bonus_start_time) {
+    bonusText = settings.bonus_points_per_base
+      ? `On (${settings.bonus_points_per_base} pts/base)`
+      : 'On (auto points)';
+  }
+  const bonusCardValue = UIBuilder.createElement('div', {
+    className: (settings.bonus_round_enabled || settings.bonus_start_time)
+      ? 'text-lg font-bold text-yellow-600' : 'text-lg font-bold text-gray-500',
+    textContent: bonusText
+  });
+  bonusCard.appendChild(bonusCardValue);
+  settingsGrid.appendChild(bonusCard);
 
   settingsSection.appendChild(settingsGrid);
 
@@ -708,10 +730,105 @@ function renderHostPanel() {
 
   // Show different buttons based on game status
   if (appState.gameData.status === 'active') {
-    // Game is running - show only End Game button
+    const bonusEnabled = !!(appState.gameData.settings && appState.gameData.settings.bonus_round_enabled);
+
+    // Bonus round: end normal scoring and send players out to collect bases
+    if (bonusEnabled) {
+      const bonusButton = UIBuilder.createButton('Start Bonus Round', function() {
+        if (confirm('Start the bonus round? Bases will stop scoring points and players will be sent out to collect the base QR codes for bonus points.')) {
+          // Call the API function from core.js
+          startBonusRound();
+        }
+      }, 'w-full bg-yellow-500 text-white py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg font-medium flex items-center justify-center', 'flag');
+      controlButtons.appendChild(bonusButton);
+    }
+
+    // Game is running - show End Game button
+    const endConfirmText = bonusEnabled
+      ? 'Are you sure you want to end the game now? This will skip the bonus round and release all QR codes for reuse.'
+      : 'Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.';
     const endButton = UIBuilder.createButton('End Game', function() {
       // Confirm before ending
-      if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
+      if (confirm(endConfirmText)) {
+        // Call the API function from core.js
+        endGame();
+      }
+    }, 'w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-lg font-medium flex items-center justify-center', 'stop-circle');
+    controlButtons.appendChild(endButton);
+
+  } else if (appState.gameData.status === 'bonus') {
+    // Bonus round in progress - host checks collected bases back in
+    const bonusInfo = UIBuilder.createElement('div', {
+      className: 'bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4'
+    });
+    bonusInfo.appendChild(UIBuilder.createElement('p', {
+      className: 'font-semibold text-yellow-800 mb-1',
+      textContent: '🏁 Bonus round in progress'
+    }));
+    const perBase = appState.gameData.settings?.bonus_points_per_base;
+    bonusInfo.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm text-yellow-800',
+      textContent: `Players are collecting bases${perBase ? ` for ${perBase} points each` : ''}. ` +
+        `Scan each base QR code as it is brought back to you to check it in and award the points.`
+    }));
+    controlSection.appendChild(bonusInfo);
+
+    // Collection checklist so the host can see what is still out there
+    const bases = (appState.gameData.bases || []).filter(base => !base.deleted_at);
+    if (bases.length > 0) {
+      const checklist = UIBuilder.createElement('div', {
+        className: 'border border-gray-200 rounded-lg divide-y mb-4'
+      });
+
+      bases.forEach(function(base) {
+        const row = UIBuilder.createElement('div', {
+          className: 'flex justify-between items-center px-3 py-2 text-sm'
+        });
+
+        row.appendChild(UIBuilder.createElement('span', {
+          className: 'font-medium text-gray-800',
+          textContent: base.name
+        }));
+
+        let statusBadge;
+        if (base.returnedAt) {
+          const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full',
+            textContent: `✓ Returned${team ? ' - ' + team.name : ''}`
+          });
+        } else if (base.collectedBy) {
+          const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full',
+            textContent: `Collected${team ? ' - ' + team.name : ''}`
+          });
+        } else {
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full',
+            textContent: 'Out there'
+          });
+        }
+        row.appendChild(statusBadge);
+
+        checklist.appendChild(row);
+      });
+
+      controlSection.appendChild(checklist);
+    }
+
+    const checkInButton = UIBuilder.createButton('Scan Base to Check In', function() {
+      navigateTo('scanQR');
+    }, 'w-full bg-yellow-500 text-white py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg font-medium flex items-center justify-center', 'qr-code');
+    controlButtons.appendChild(checkInButton);
+
+    const endButton = UIBuilder.createButton('End Game', function() {
+      const unreturned = (appState.gameData.bases || [])
+        .filter(base => !base.deleted_at && base.collectedBy && !base.returnedAt).length;
+      const warning = unreturned > 0
+        ? `Are you sure you want to end the game? ${unreturned} collected base${unreturned === 1 ? ' has' : 's have'} not been checked in and will score no bonus points. All QR codes will be released for reuse.`
+        : 'Are you sure you want to end the game? This will finish the bonus round and release all QR codes for reuse.';
+      if (confirm(warning)) {
         // Call the API function from core.js
         endGame();
       }
@@ -1377,6 +1494,67 @@ function buildGameSettingsForm(options = {}) {
     quizFieldsContainer.style.display = this.checked ? 'block' : 'none';
   });
 
+  // Bonus Round Section
+  const bonusSection = UIBuilder.createElement('div');
+  bonusSection.appendChild(UIBuilder.createElement('h4', {
+    className: 'text-lg font-medium mb-3 text-gray-800',
+    textContent: 'Bonus Round'
+  }));
+
+  // Once the bonus round has started its points are locked in, so the
+  // fields become read-only information
+  const bonusLocked = !!currentSettings.bonus_start_time;
+
+  const bonusEnabledGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+  const bonusEnabledLabel = UIBuilder.createElement('label', { className: 'flex items-center gap-2 font-medium text-gray-700 cursor-pointer' });
+  const bonusEnabledCheckbox = UIBuilder.createElement('input', { type: 'checkbox', id: 'bonus-enabled-checkbox' });
+  bonusEnabledCheckbox.checked = !!currentSettings.bonus_round_enabled;
+  bonusEnabledCheckbox.disabled = bonusLocked;
+  bonusEnabledLabel.appendChild(bonusEnabledCheckbox);
+  bonusEnabledLabel.appendChild(document.createTextNode('Enable bonus round when the main game ends'));
+  bonusEnabledGroup.appendChild(bonusEnabledLabel);
+  bonusEnabledGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'After the main game, players collect base QR codes and return them to you for bonus points.'
+  }));
+  bonusSection.appendChild(bonusEnabledGroup);
+
+  const bonusFieldsContainer = UIBuilder.createElement('div', {
+    id: 'bonus-fields-container',
+    style: { display: currentSettings.bonus_round_enabled ? 'block' : 'none' }
+  });
+
+  const bonusPointsGroup = UIBuilder.createElement('div');
+  bonusPointsGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Points per Collected Base'
+  }));
+  const bonusPointsInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '1',
+    max: '1000000',
+    value: currentSettings.bonus_points_per_base || '',
+    placeholder: 'Automatic',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'bonus-points-input'
+  });
+  bonusPointsInput.disabled = bonusLocked;
+  bonusPointsGroup.appendChild(bonusPointsInput);
+  bonusPointsGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: bonusLocked
+      ? 'The bonus round has started - its points value is locked in.'
+      : 'Leave blank for automatic: chosen when the bonus round starts so that the last-placed team would win by collecting every base.'
+  }));
+  bonusFieldsContainer.appendChild(bonusPointsGroup);
+
+  bonusSection.appendChild(bonusFieldsContainer);
+  form.appendChild(bonusSection);
+
+  bonusEnabledCheckbox.addEventListener('change', function() {
+    bonusFieldsContainer.style.display = this.checked ? 'block' : 'none';
+  });
+
   // Populate the category picker asynchronously from the host's bank
   const quizAuthState = getAuthState();
   if (quizAuthState.hostId) {
@@ -1731,6 +1909,20 @@ function validateGameSettings() {
     }
   }
 
+  // Get bonus round settings
+  const bonusEnabledCheckbox = document.getElementById('bonus-enabled-checkbox');
+  const bonusEnabled = bonusEnabledCheckbox ? bonusEnabledCheckbox.checked : false;
+
+  const bonusPointsInput = document.getElementById('bonus-points-input');
+  let bonusPointsPerBase = null; // null means automatic
+  if (bonusPointsInput && bonusPointsInput.value.trim() !== '') {
+    bonusPointsPerBase = parseInt(bonusPointsInput.value);
+    if (isNaN(bonusPointsPerBase) || bonusPointsPerBase < 1 || bonusPointsPerBase > 1000000) {
+      showNotification('Bonus points per base must be between 1 and 1,000,000, or blank for automatic', 'error');
+      return null;
+    }
+  }
+
   const settings = {
     name: gameName,
     capture_radius_meters: captureRadius,
@@ -1740,8 +1932,15 @@ function validateGameSettings() {
     quiz_enabled: quizEnabled,
     active_categories: activeCategories,
     max_shield: isNaN(maxShield) ? 5 : maxShield,
-    cooldown_seconds: isNaN(cooldownSeconds) ? 30 : cooldownSeconds
+    cooldown_seconds: isNaN(cooldownSeconds) ? 30 : cooldownSeconds,
+    bonus_round_enabled: bonusEnabled
   };
+
+  // The points value is locked once the bonus round has started, so only
+  // send it while the field is still editable
+  if (!bonusPointsInput || !bonusPointsInput.disabled) {
+    settings.bonus_points_per_base = bonusPointsPerBase;
+  }
 
   // Only include auto_start_time if the field exists and has a value
   if (autoStartTime !== null) {

@@ -489,6 +489,14 @@ async function handleBaseQR(qrCode, statusData) {
 
     console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
 
+    // Bonus round: the game's host scanning a base QR checks it in as
+    // returned, awarding the collecting team its bonus points
+    if (authState.isHost && authState.hasGame && authState.gameId === gameId &&
+        appState.gameData.status === 'bonus') {
+      await returnBaseAsHost(baseId);
+      return;
+    }
+
     // Check if user is on a team
     if (!authState.hasTeam) {
       await handleBaseScanWithoutTeam(baseId, gameId);
@@ -498,6 +506,15 @@ async function handleBaseQR(qrCode, statusData) {
     // If we have a game loaded but QR is for different game
     if (authState.hasGame && authState.gameId !== gameId) {
       throw new Error('This base belongs to a different game.');
+    }
+
+    // Bonus round: players scan a base (at its location) to collect it
+    if (appState.gameData.status === 'bonus') {
+      if (!navigator.onLine) {
+        throw new Error('A connection is needed to collect this base.');
+      }
+      await collectBase(baseId);
+      return;
     }
 
     // Check game status
@@ -572,13 +589,18 @@ async function attemptPendingCapture() {
   sessionStorage.removeItem('pendingCaptureBaseId');
   sessionStorage.removeItem('pendingJoinGameId');
 
-  if (!baseId || appState.gameData.status !== 'active') {
+  if (!baseId || (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
     return;
   }
 
   try {
     if (!navigator.onLine) {
       throw new Error('A connection is needed to capture this base.');
+    }
+
+    if (appState.gameData.status === 'bonus') {
+      await collectBase(baseId);
+      return;
     }
 
     const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
@@ -814,6 +836,8 @@ async function fetchGameUpdates() {
 
     const gameData = await response.json();
 
+    const previousStatus = appState.gameData.status;
+
     // Update teams with scores
     appState.gameData.teams = gameData.teams;
 
@@ -825,6 +849,23 @@ async function fetchGameUpdates() {
 
     // Keep quiz/capture settings current (the host may change them mid-game)
     appState.gameData.settings = gameData.settings || appState.gameData.settings;
+
+    // Tell the player the main game just rolled into the bonus round
+    if (gameData.status === 'bonus' && previousStatus !== 'bonus') {
+      const perBase = gameData.settings && gameData.settings.bonus_points_per_base;
+      if (window.showNotification) {
+        window.showNotification(
+          `The main game has ended - bases no longer score points! ` +
+          `Bonus round: scan bases where they stand to collect them, then bring the QR codes back ` +
+          `to the host for ${perBase || 'bonus'} points each.`,
+          'info'
+        );
+      }
+      // Full re-render so the header status and map reflect the bonus round
+      if (window.renderApp) {
+        window.renderApp();
+      }
+    }
 
     if (gameData.status === 'ended') {
       // If the game has ended, stop polling
@@ -842,6 +883,11 @@ async function fetchGameUpdates() {
       // Update map markers
       if (window.updateMapMarkers) {
         window.updateMapMarkers();
+      }
+
+      // Update bonus round banner (remaining base count)
+      if (window.updateBonusBanner) {
+        window.updateBonusBanner();
       }
 
       // Update header status if it exists
@@ -973,6 +1019,10 @@ let lastOwnCapture = { baseId: null, time: 0 };
 // feedback in the quiz modal, so the matching broadcast is not shown again
 let lastOwnQuizAction = { baseId: null, time: 0 };
 
+// Base the current player just collected in the bonus round; their own
+// collection already shows a success message, so the broadcast is skipped
+let lastOwnCollect = { baseId: null, time: 0 };
+
 const QUIZ_OUTCOME_VERBS = {
   captured: 'captured',
   neutralised: 'neutralised',
@@ -1008,6 +1058,38 @@ function handleGameSocketMessage(message) {
       const verb = QUIZ_OUTCOME_VERBS[message.outcome] || message.outcome;
       window.showNotification(
         `${message.base_name} ${verb} by ${message.team_name}! (shield ${message.shield})`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
+    fetchGameUpdates();
+  } else if (message.type === 'bonus_round_started') {
+    console.log('Bonus round started event:', message);
+
+    // fetchGameUpdates detects the status change and shows the announcement
+    fetchGameUpdates();
+  } else if (message.type === 'base_collected') {
+    console.log('Base collected event:', message);
+
+    const isOwnCollect = message.base_id === lastOwnCollect.baseId &&
+      (Date.now() - lastOwnCollect.time) < 10000;
+
+    if (!isOwnCollect && window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      window.showNotification(
+        `${message.base_name} collected by ${message.team_name}!`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
+    fetchGameUpdates();
+  } else if (message.type === 'base_returned') {
+    console.log('Base returned event:', message);
+
+    if (window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      window.showNotification(
+        `${message.base_name} returned by ${message.team_name}! +${message.points} points`,
         isOwnTeam ? 'success' : 'info'
       );
     }
@@ -1051,6 +1133,12 @@ async function createGame(gameSettings) {
     }
     if (gameSettings.join_method !== undefined) {
       requestBody.join_method = gameSettings.join_method;
+    }
+    if (gameSettings.bonus_round_enabled !== undefined) {
+      requestBody.bonus_round_enabled = gameSettings.bonus_round_enabled;
+    }
+    if (gameSettings.bonus_points_per_base !== undefined) {
+      requestBody.bonus_points_per_base = gameSettings.bonus_points_per_base;
     }
 
     const response = await fetch(API_BASE_URL + '/games', {
@@ -1476,6 +1564,165 @@ async function captureBase(baseId) {
   } catch (err) {
     console.error('Error capturing base:', err);
     const userMessage = err.message || 'Unable to capture base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// =============================================================================
+// BONUS ROUND - COLLECTING BASES IN
+// =============================================================================
+
+// Player collects a base during the bonus round. GPS-verified server-side so
+// the base is marked collected at its map location, not wherever it ends up.
+async function collectBase(baseId) {
+  const authState = getAuthState();
+  if (!authState.hasTeam) {
+    throw new Error('You must be on a team to collect bases.');
+  }
+
+  const { latitude, longitude, accuracy } = await getCurrentGPSCoordinates();
+
+  if (accuracy > 20 && window.showNotification) {
+    window.showNotification(
+      `Collecting with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`,
+      'warning'
+    );
+  }
+
+  try {
+    setLoading(true);
+
+    // Mark before the request: the WebSocket broadcast of our own collection
+    // can arrive before the HTTP response does
+    lastOwnCollect = { baseId: baseId, time: Date.now() };
+
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/collect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        player_id: authState.playerId,
+        latitude: latitude,
+        longitude: longitude
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to collect base');
+
+    // Refresh so the collected base disappears from the map
+    await fetchGameUpdates();
+
+    if (window.showNotification) {
+      const points = data.bonus_points_per_base;
+      window.showNotification(
+        `Base collected! Bring the QR code back to the host to score ${points ? points + ' bonus points' : 'the bonus points'}.`,
+        'success'
+      );
+    }
+  } catch (err) {
+    console.error('Error collecting base:', err);
+    const userMessage = err.message || 'Unable to collect base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Host checks a collected base back in, confirming the QR code was returned
+// and awarding the collecting team its bonus points
+async function returnBaseAsHost(baseId) {
+  const authState = getAuthState();
+  if (!authState.isHost) {
+    throw new Error('Host authentication required to check bases in.');
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/return', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to check base in');
+
+    await fetchGameUpdates();
+
+    if (window.showNotification) {
+      window.showNotification(
+        `Base checked in! ${data.team_name} scores ${data.points} bonus points.`,
+        'success'
+      );
+    }
+
+    // Send the host back to their panel so they can keep scanning bases in
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
+  } catch (err) {
+    console.error('Error checking base in:', err);
+    const userMessage = err.message || 'Unable to check base in. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Host ends the main game and starts the bonus round
+async function startBonusRound() {
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded.');
+  }
+
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Only the game host can start the bonus round.');
+    }
+
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/bonus/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to start bonus round');
+
+    await fetchGameData(appState.gameData.id);
+
+    if (window.showNotification) {
+      window.showNotification(
+        `Bonus round started! Each base collected in is worth ${data.bonus_points_per_base} points. ` +
+        `Scan base QR codes as players bring them back to check them in.`,
+        'success'
+      );
+    }
+  } catch (err) {
+    console.error('Error starting bonus round:', err);
+    const userMessage = err.message || 'Unable to start bonus round. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }

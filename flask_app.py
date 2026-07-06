@@ -146,6 +146,9 @@ def init_db():
             active_categories TEXT DEFAULT '[]',
             max_shield INTEGER DEFAULT 5,
             cooldown_seconds INTEGER DEFAULT 30,
+            bonus_round_enabled INTEGER DEFAULT 0,
+            bonus_points_per_base INTEGER,
+            bonus_start_time INTEGER,
             FOREIGN KEY (host_id) REFERENCES hosts (id)
         )
         ''')
@@ -183,8 +186,12 @@ def init_db():
         deleted_at INTEGER DEFAULT NULL,
         shield INTEGER DEFAULT 0,
         owner_team_id TEXT,
+        collected_by_team_id TEXT,
+        collected_at INTEGER,
+        returned_at INTEGER,
         FOREIGN KEY (game_id) REFERENCES games (id),
-        FOREIGN KEY (owner_team_id) REFERENCES teams (id)
+        FOREIGN KEY (owner_team_id) REFERENCES teams (id),
+        FOREIGN KEY (collected_by_team_id) REFERENCES teams (id)
     )
     ''')
 
@@ -239,6 +246,12 @@ def init_db():
         cursor.execute('ALTER TABLE bases ADD COLUMN deleted_at INTEGER DEFAULT NULL')
     if 'shield' not in base_columns:
         cursor.execute('ALTER TABLE bases ADD COLUMN shield INTEGER DEFAULT 0')
+    if 'collected_by_team_id' not in base_columns:
+        cursor.execute('ALTER TABLE bases ADD COLUMN collected_by_team_id TEXT')
+    if 'collected_at' not in base_columns:
+        cursor.execute('ALTER TABLE bases ADD COLUMN collected_at INTEGER')
+    if 'returned_at' not in base_columns:
+        cursor.execute('ALTER TABLE bases ADD COLUMN returned_at INTEGER')
     if 'owner_team_id' not in base_columns:
         cursor.execute('ALTER TABLE bases ADD COLUMN owner_team_id TEXT')
         # Backfill from existing capture history so ownership doesn't
@@ -264,6 +277,12 @@ def init_db():
         cursor.execute('ALTER TABLE games ADD COLUMN max_shield INTEGER DEFAULT 5')
     if 'cooldown_seconds' not in game_columns:
         cursor.execute('ALTER TABLE games ADD COLUMN cooldown_seconds INTEGER DEFAULT 30')
+    if 'bonus_round_enabled' not in game_columns:
+        cursor.execute('ALTER TABLE games ADD COLUMN bonus_round_enabled INTEGER DEFAULT 0')
+    if 'bonus_points_per_base' not in game_columns:
+        cursor.execute('ALTER TABLE games ADD COLUMN bonus_points_per_base INTEGER')
+    if 'bonus_start_time' not in game_columns:
+        cursor.execute('ALTER TABLE games ADD COLUMN bonus_start_time INTEGER')
 
     # Migrate databases created before players.cooldown_until existed
     cursor.execute('PRAGMA table_info(players)')
@@ -573,6 +592,19 @@ def validate_quiz_settings(max_shield, cooldown_seconds):
 
     return None
 
+# Helper function to validate bonus-round settings
+def validate_bonus_settings(bonus_points_per_base):
+    """Validate bonus round settings and return error message if invalid.
+    None means 'auto': the value is computed when the bonus round starts."""
+    if bonus_points_per_base is None:
+        return None
+
+    if (not isinstance(bonus_points_per_base, int) or isinstance(bonus_points_per_base, bool)
+            or not (1 <= bonus_points_per_base <= 1000000)):
+        return 'Bonus points per base must be an integer between 1 and 1,000,000, or blank for automatic'
+
+    return None
+
 # Helper function to count the active questions available to a game's quiz
 # pool (its host's active questions in the game's active categories)
 def count_active_pool(cursor, host_id, categories):
@@ -621,12 +653,19 @@ def create_game():
     active_categories = data.get('active_categories', [])
     max_shield = data.get('max_shield', 5)
     cooldown_seconds = data.get('cooldown_seconds', 30)
+    bonus_round_enabled = bool(data.get('bonus_round_enabled', False))
+    bonus_points_per_base = data.get('bonus_points_per_base')  # None means auto
 
     # Validate settings
     validation_error = validate_game_settings(capture_radius, points_interval, game_duration)
     if validation_error:
         conn.close()
         return jsonify({'error': validation_error}), 400
+
+    bonus_validation_error = validate_bonus_settings(bonus_points_per_base)
+    if bonus_validation_error:
+        conn.close()
+        return jsonify({'error': bonus_validation_error}), 400
 
     if join_method not in VALID_JOIN_METHODS:
         conn.close()
@@ -650,11 +689,13 @@ def create_game():
     cursor.execute('''
     INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds,
                       auto_start_time, game_duration_minutes, join_method, created_time,
-                      quiz_enabled, active_categories, max_shield, cooldown_seconds)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      quiz_enabled, active_categories, max_shield, cooldown_seconds,
+                      bonus_round_enabled, bonus_points_per_base)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval,
           auto_start_time, game_duration, join_method, current_time,
-          int(quiz_enabled), json.dumps(active_categories), max_shield, cooldown_seconds))
+          int(quiz_enabled), json.dumps(active_categories), max_shield, cooldown_seconds,
+          int(bonus_round_enabled), bonus_points_per_base))
 
     conn.commit()
     conn.close()
@@ -759,6 +800,23 @@ def update_game_settings(game_id):
         update_fields.append('cooldown_seconds = ?')
         params.append(cooldown_seconds)
 
+    if 'bonus_points_per_base' in data:
+        # The bonus round has started (or finished): its points value is
+        # locked in so already-earned bonuses can't be re-priced
+        if game['bonus_start_time']:
+            conn.close()
+            return jsonify({'error': 'Bonus points cannot be changed after the bonus round has started'}), 400
+        bonus_validation_error = validate_bonus_settings(data['bonus_points_per_base'])
+        if bonus_validation_error:
+            conn.close()
+            return jsonify({'error': bonus_validation_error}), 400
+        update_fields.append('bonus_points_per_base = ?')
+        params.append(data['bonus_points_per_base'])
+
+    if 'bonus_round_enabled' in data:
+        update_fields.append('bonus_round_enabled = ?')
+        params.append(int(bool(data['bonus_round_enabled'])))
+
     if 'quiz_enabled' in data:
         quiz_enabled = bool(data['quiz_enabled'])
         if quiz_enabled:
@@ -831,15 +889,20 @@ def get_game(game_id):
 
         scheduled_end = game['start_time'] + (game['game_duration_minutes'] * 60)
         if current_time >= scheduled_end:
-            cursor.execute('''
-            UPDATE games
-            SET status = 'ended', end_time = ?
-            WHERE id = ?
-            ''', (scheduled_end, game_id))
+            if game['bonus_round_enabled']:
+                # The main game rolls into the bonus round instead of ending;
+                # QR codes stay assigned as players still need to scan them
+                begin_bonus_round(cursor, game, scheduled_end)
+            else:
+                cursor.execute('''
+                UPDATE games
+                SET status = 'ended', end_time = ?
+                WHERE id = ?
+                ''', (scheduled_end, game_id))
 
-            # Release QR codes for reuse, matching the manual end-game flow
-            cursor.execute('UPDATE bases SET qr_code = NULL WHERE game_id = ?', (game_id,))
-            cursor.execute('UPDATE teams SET qr_code = NULL WHERE game_id = ?', (game_id,))
+                # Release QR codes for reuse, matching the manual end-game flow
+                cursor.execute('UPDATE bases SET qr_code = NULL WHERE game_id = ?', (game_id,))
+                cursor.execute('UPDATE teams SET qr_code = NULL WHERE game_id = ?', (game_id,))
             game_state_changed = True
 
     if game_state_changed:
@@ -905,7 +968,10 @@ def get_game(game_id):
             'shield': shield,
             'neutral': owner is None,
             'qrCode': base['qr_code'],
-            'deleted_at': base['deleted_at']
+            'deleted_at': base['deleted_at'],
+            'collectedBy': base['collected_by_team_id'],
+            'collectedAt': base['collected_at'],
+            'returnedAt': base['returned_at']
         })
 
     conn.close()
@@ -931,7 +997,10 @@ def get_game(game_id):
             'quiz_enabled': bool(game['quiz_enabled']),
             'active_categories': json.loads(game['active_categories'] or '[]'),
             'max_shield': game['max_shield'] or 5,
-            'cooldown_seconds': game['cooldown_seconds'] or 30
+            'cooldown_seconds': game['cooldown_seconds'] or 30,
+            'bonus_round_enabled': bool(game['bonus_round_enabled']),
+            'bonus_points_per_base': game['bonus_points_per_base'],
+            'bonus_start_time': game['bonus_start_time']
         },
         'teams': teams,
         'bases': bases
@@ -954,6 +1023,10 @@ def calculate_team_score(cursor, team_id, game):
             game['game_duration_minutes']):
         scheduled_end = game['start_time'] + (game['game_duration_minutes'] * 60)
         current_time = min(current_time, scheduled_end)
+
+    # Holding bases stops scoring once the bonus round begins
+    if game['bonus_start_time']:
+        current_time = min(current_time, game['bonus_start_time'])
 
     # Get the points interval from game settings
     points_interval = game['points_interval_seconds']
@@ -998,6 +1071,16 @@ def calculate_team_score(cursor, team_id, game):
                 duration = max(0, end_time - start_time)
                 points = duration // points_interval
                 total_score += points
+
+    # Bonus round: points for each collected base the host has confirmed
+    # returned. returned_at can only be set during a bonus round, so this is
+    # safe to count unconditionally.
+    if game['bonus_points_per_base']:
+        cursor.execute('''
+        SELECT COUNT(*) FROM bases
+        WHERE game_id = ? AND collected_by_team_id = ? AND returned_at IS NOT NULL
+        ''', (game['id'], team_id))
+        total_score += cursor.fetchone()[0] * game['bonus_points_per_base']
 
     return total_score
 
@@ -1110,6 +1193,233 @@ def end_game(game_id):
         'success': True,
         'released_bases': base_count,
         'released_teams': team_count
+    })
+
+# ==========================================================
+# Bonus Round - collect the bases in after the main game
+# ==========================================================
+
+def begin_bonus_round(cursor, game, start_time):
+    """Move an active game into its bonus round: base-holding scoring freezes
+    at start_time and players collect base QR codes for bonus points. If no
+    per-base value was configured, pick one such that the last-placed team
+    would (just) win by collecting every base. Returns the per-base value."""
+    per_base = game['bonus_points_per_base']
+
+    if not per_base:
+        cursor.execute('SELECT id FROM teams WHERE game_id = ?', (game['id'],))
+        team_ids = [row['id'] for row in cursor.fetchall()]
+        scores = [calculate_team_score(cursor, team_id, game) for team_id in team_ids]
+
+        cursor.execute('''
+        SELECT COUNT(*) FROM bases WHERE game_id = ? AND deleted_at IS NULL
+        ''', (game['id'],))
+        base_count = cursor.fetchone()[0]
+
+        score_gap = (max(scores) - min(scores)) if scores else 0
+        per_base = (score_gap // base_count) + 1 if base_count else 1
+
+    cursor.execute('''
+    UPDATE games
+    SET status = 'bonus', bonus_start_time = ?, bonus_points_per_base = ?
+    WHERE id = ?
+    ''', (start_time, per_base, game['id']))
+
+    return per_base
+
+# Start the bonus round (host only, game must be active)
+@app.route('/api/games/<game_id>/bonus/start', methods=['POST'])
+def start_bonus_round(game_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    if game['status'] != 'active':
+        conn.close()
+        return jsonify({'error': 'The bonus round can only be started while the game is active'}), 400
+
+    current_time = int(time.time())
+    per_base = begin_bonus_round(cursor, game, current_time)
+
+    conn.commit()
+    conn.close()
+
+    broadcast_game_event(game_id, {
+        'type': 'bonus_round_started',
+        'bonus_points_per_base': per_base,
+        'bonus_start_time': current_time
+    })
+
+    return jsonify({'success': True, 'bonus_points_per_base': per_base})
+
+# Player collects a base during the bonus round (must be at the base)
+@app.route('/api/bases/<base_id>/collect', methods=['POST'])
+def collect_base(base_id):
+    data = request.json
+    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    player_id = data['player_id']
+    player_lat = data['latitude']
+    player_lng = data['longitude']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT b.*, g.capture_radius_meters, g.status AS game_status, g.bonus_points_per_base
+    FROM bases b JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    base_data = cursor.fetchone()
+
+    if not base_data:
+        conn.close()
+        return jsonify({'error': 'Base not found'}), 404
+
+    if base_data['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'This base has been removed from the game'}), 410
+
+    if base_data['game_status'] != 'bonus':
+        conn.close()
+        return jsonify({'error': 'Bases can only be collected during the bonus round'}), 403
+
+    cursor.execute('''
+    SELECT p.team_id, t.game_id, t.name AS team_name, t.color AS team_color FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE p.id = ?
+    ''', (player_id,))
+    player = cursor.fetchone()
+
+    if not player:
+        conn.close()
+        return jsonify({'error': 'Player not found'}), 404
+
+    if player['game_id'] != base_data['game_id']:
+        conn.close()
+        return jsonify({'error': 'Player is not part of this game'}), 403
+
+    # The scan must happen at the base so the map reflects where the QR code
+    # really is - players can't walk off with a base and mark it later
+    capture_radius = base_data['capture_radius_meters']
+    distance = calculate_distance(player_lat, player_lng, base_data['latitude'], base_data['longitude'])
+
+    if distance > capture_radius:
+        conn.close()
+        return jsonify({'error': f'You must be within {capture_radius}m of the base to collect it'}), 403
+
+    current_time = int(time.time())
+
+    # Guard the read-modify-write against two players collecting at once:
+    # only the first update matches collected_by_team_id IS NULL
+    cursor.execute('''
+    UPDATE bases
+    SET collected_by_team_id = ?, collected_at = ?
+    WHERE id = ? AND collected_by_team_id IS NULL
+    ''', (player['team_id'], current_time, base_id))
+
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({'error': 'This base has already been collected'}), 409
+
+    conn.commit()
+    conn.close()
+
+    broadcast_game_event(base_data['game_id'], {
+        'type': 'base_collected',
+        'base_id': base_id,
+        'base_name': base_data['name'],
+        'team_id': player['team_id'],
+        'team_name': player['team_name'],
+        'team_color': player['team_color'],
+        'collected_at': current_time
+    })
+
+    return jsonify({
+        'success': True,
+        'bonus_points_per_base': base_data['bonus_points_per_base']
+    })
+
+# Host confirms a collected base has been brought back, awarding the points.
+# No location check: the host scans the physical QR code wherever they are.
+@app.route('/api/bases/<base_id>/return', methods=['POST'])
+def return_base(base_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT b.*, g.host_id AS game_host_id, g.status AS game_status, g.bonus_points_per_base
+    FROM bases b JOIN games g ON b.game_id = g.id
+    WHERE b.id = ?
+    ''', (base_id,))
+    base_data = cursor.fetchone()
+
+    if not base_data:
+        conn.close()
+        return jsonify({'error': 'Base not found'}), 404
+
+    if base_data['game_host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    if base_data['game_status'] != 'bonus':
+        conn.close()
+        return jsonify({'error': 'Bases can only be checked in during the bonus round'}), 403
+
+    if base_data['collected_by_team_id'] is None:
+        conn.close()
+        return jsonify({'error': 'This base has not been collected by a team yet'}), 400
+
+    if base_data['returned_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'This base has already been checked in'}), 400
+
+    current_time = int(time.time())
+    cursor.execute('UPDATE bases SET returned_at = ? WHERE id = ?', (current_time, base_id))
+
+    cursor.execute('SELECT name, color FROM teams WHERE id = ?', (base_data['collected_by_team_id'],))
+    team = cursor.fetchone()
+
+    conn.commit()
+    conn.close()
+
+    points = base_data['bonus_points_per_base'] or 0
+
+    broadcast_game_event(base_data['game_id'], {
+        'type': 'base_returned',
+        'base_id': base_id,
+        'base_name': base_data['name'],
+        'team_id': base_data['collected_by_team_id'],
+        'team_name': team['name'] if team else 'Unknown Team',
+        'team_color': team['color'] if team else None,
+        'points': points,
+        'returned_at': current_time
+    })
+
+    return jsonify({
+        'success': True,
+        'team_id': base_data['collected_by_team_id'],
+        'team_name': team['name'] if team else 'Unknown Team',
+        'points': points
     })
 
 # Join team
@@ -1296,6 +1606,8 @@ def capture_base(base_id):
 
     if base_data['game_status'] != 'active':
         conn.close()
+        if base_data['game_status'] == 'bonus':
+            return jsonify({'error': 'The main game has ended. Bases can no longer be captured - collect them in for bonus points instead.'}), 403
         return jsonify({'error': 'Bases can only be captured while the game is active'}), 403
 
     if base_data['quiz_enabled']:
@@ -2159,6 +2471,8 @@ def start_session(base_id):
 
     if base_data['game_status'] != 'active':
         conn.close()
+        if base_data['game_status'] == 'bonus':
+            return jsonify({'error': 'The main game has ended. Bases can no longer be captured - collect them in for bonus points instead.'}), 403
         return jsonify({'error': 'Bases can only be captured while the game is active'}), 403
 
     cursor.execute('''

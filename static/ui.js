@@ -550,6 +550,37 @@ function renderLandingPage() {
 function renderGameView() {
   const container = document.createElement('div');
 
+  // Bonus round banner - explains the collection phase to players
+  if (appState.gameData.status === 'bonus') {
+    const perBase = appState.gameData.settings?.bonus_points_per_base;
+    const remaining = (appState.gameData.bases || [])
+      .filter(base => !base.deleted_at && !base.collectedBy).length;
+
+    const bonusBanner = UIBuilder.createElement('div', {
+      className: 'bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg p-4 mb-6'
+    });
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'font-bold mb-1',
+      textContent: '🏁 Bonus Round - collect the bases!'
+    }));
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm',
+      textContent: `The main game has ended and bases no longer score points for being held. ` +
+        `Scan a base where it stands to collect it, then bring the QR code back to the host` +
+        `${perBase ? ` for ${perBase} bonus points` : ' for bonus points'}.`
+    }));
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm font-semibold mt-1',
+      id: 'bonus-remaining-count',
+      textContent: `${remaining} base${remaining === 1 ? '' : 's'} still out there.`
+    }));
+
+    container.appendChild(bonusBanner);
+  }
+
   // Scoreboard section
   const scoreboardSection = document.createElement('div');
   scoreboardSection.className = 'mb-6';
@@ -1362,9 +1393,17 @@ function updateMapMarkers() {
   // Track which bases we've processed
   const processedBaseIds = new Set();
 
+  const bonusRoundActive = appState.gameData.status === 'bonus';
+
   // Update or create markers for current bases
   appState.gameData.bases.forEach(base => {
     if (base.deleted_at && !showDeleted) {
+      return;
+    }
+
+    // Bonus round: a collected base has physically left its location, so it
+    // comes off the map to stop others hunting for it
+    if (bonusRoundActive && base.collectedBy) {
       return;
     }
 
@@ -1385,7 +1424,12 @@ function updateMapMarkers() {
     const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
     const shieldLine = quizEnabled ? `<br>Shield: ${base.shield || 0}` : '';
 
-    if (base.deleted_at) {
+    if (bonusRoundActive && !base.deleted_at) {
+      // Uncollected base during the bonus round: shown neutral and up for grabs
+      const perBase = appState.gameData.settings?.bonus_points_per_base;
+      markerColor = getHexColorForTailwind('bg-yellow-500');
+      popupContent = `<strong>${base.name}</strong><br>Scan to collect${perBase ? ` (+${perBase} pts)` : ''}`;
+    } else if (base.deleted_at) {
       // Deleted base (only shown for hosts with toggle on)
       markerColor = '#6b7280'; // Gray
       popupContent = `<strong><s>${base.name}</s></strong><br><span style="color: red;">DELETED</span>`;
@@ -1444,6 +1488,16 @@ function updateMapMarkers() {
     }
     return true;
   });
+}
+
+// Keep the bonus banner's remaining-base count current between full renders
+function updateBonusBanner() {
+  const remainingElement = document.getElementById('bonus-remaining-count');
+  if (!remainingElement || appState.gameData.status !== 'bonus') return;
+
+  const remaining = (appState.gameData.bases || [])
+    .filter(base => !base.deleted_at && !base.collectedBy).length;
+  remainingElement.textContent = `${remaining} base${remaining === 1 ? '' : 's'} still out there.`;
 }
 
 function updateScoreboard() {
@@ -1785,6 +1839,9 @@ function updateGameStatusText(statusElement) {
       statusElement.className = 'text-sm';
     }
 
+  } else if (appState.gameData.status === 'bonus') {
+    statusElement.textContent = 'Bonus round • collect the bases!';
+    statusElement.className = 'text-sm font-semibold text-yellow-200';
   } else if (appState.gameData.status === 'ended') {
     statusElement.textContent = 'Game ended';
     statusElement.className = 'text-sm text-gray-200';
@@ -2302,6 +2359,7 @@ window.navigateTo = navigateTo;
 window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
 window.updateScoreboard = updateScoreboard;
+window.updateBonusBanner = updateBonusBanner;
 window.updateGameStatusText = updateGameStatusText;
 window.updateGPSStatusDisplay = updateGPSStatusDisplay;
 window.generateQRCode = generateQRCode;
