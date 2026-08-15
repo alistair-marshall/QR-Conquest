@@ -2150,7 +2150,9 @@ function quizFramingLine() {
 
 function renderQuizOptions(container) {
   container = container || document.getElementById('quiz-options-container');
-  const questionTextEl = document.getElementById('quiz-question-text');
+  const questionTextEl = container && container.parentElement
+    ? container.parentElement.querySelector('#quiz-question-text')
+    : document.getElementById('quiz-question-text');
   const session = appState.quizSession;
   if (!container) return;
 
