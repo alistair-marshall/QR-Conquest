@@ -861,8 +861,12 @@ async function fetchGameUpdates() {
           'info'
         );
       }
-      // Full re-render so the header status and map reflect the bonus round
-      if (window.renderApp) {
+      // Full re-render so the header status and map reflect the bonus round.
+      // Skip on scanQR: a full render there tears down and recreates the QR
+      // scanner, which re-requests camera permission out from under an
+      // open quiz modal (which lives outside elements.root and isn't
+      // actually affected by the wipe).
+      if (window.renderApp && appState.page !== 'scanQR') {
         window.renderApp();
       }
     }
@@ -895,8 +899,11 @@ async function fetchGameUpdates() {
       if (statusElement && window.updateGameStatusText) {
         window.updateGameStatusText(statusElement);
       }
-    } else {
-      // Only do full re-render if we're not on the game view
+    } else if (appState.page !== 'scanQR') {
+      // Full re-render for other pages, but not scanQR: this fires on every
+      // correct quiz answer (see submitQuizAnswer below), and a full render
+      // there would recreate the QR scanner and re-trigger the camera
+      // permission prompt while the quiz modal is open on top of it.
       if (window.renderApp) {
         window.renderApp();
       }

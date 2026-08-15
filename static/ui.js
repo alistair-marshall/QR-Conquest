@@ -1337,6 +1337,8 @@ function initGameMap() {
   // Initialize empty markers array
   gameMapInstance.baseMarkers = [];
 
+  addRecenterControl(gameMapInstance);
+
   // Create or update all markers
   updateMapMarkers();
 
@@ -1355,6 +1357,50 @@ function initGameMap() {
     gameMapInstance.setView([55.94763, -3.16202], 16);
     mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
   }
+}
+
+// A Leaflet control button that jumps the map back to the player's current
+// GPS position - lets a player who has panned/zoomed away from the game
+// area find their way back without hunting for the bases themselves.
+function addRecenterControl(mapInstance) {
+  const RecenterControl = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd: function () {
+      const button = L.DomUtil.create('button', 'leaflet-bar');
+      button.type = 'button';
+      button.title = 'Recenter on my location';
+      button.setAttribute('aria-label', 'Recenter on my location');
+      button.style.width = '34px';
+      button.style.height = '34px';
+      button.style.cursor = 'pointer';
+      button.style.display = 'flex';
+      button.style.alignItems = 'center';
+      button.style.justifyContent = 'center';
+      button.style.backgroundColor = '#ffffff';
+      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>`;
+
+      L.DomEvent.disableClickPropagation(button);
+      L.DomEvent.on(button, 'click', function () {
+        recenterMapOnPlayer(mapInstance);
+      });
+
+      return button;
+    }
+  });
+
+  mapInstance.addControl(new RecenterControl());
+}
+
+function recenterMapOnPlayer(mapInstance) {
+  const position = appState.gps.currentPosition;
+  if (!position) {
+    if (window.showNotification) {
+      window.showNotification('Still waiting for a GPS fix - move to an open area and try again.', 'error');
+    }
+    return;
+  }
+
+  mapInstance.setView([position.latitude, position.longitude], Math.max(mapInstance.getZoom(), 17));
 }
 
 function updateMapMarkers() {
@@ -2222,6 +2268,17 @@ function showQuizModal() {
     title: session.baseName,
     content: buildQuizModalContent(),
     size: 'md',
+    actions: [{
+      text: 'Close',
+      onClick: function () {
+        clearQuizSession();
+        quizModalRef.close();
+        if (appState.page === 'scanQR') {
+          navigateTo('gameView');
+        }
+      },
+      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }],
     onClose: function () {
       quizModalRef = null;
     }
@@ -2305,7 +2362,13 @@ function showCooldownLockout(cooldownUntil, explanation) {
     size: 'sm',
     actions: [{
       text: 'Close',
-      onClick: () => quizModalRef.close(),
+      onClick: () => {
+        clearQuizSession();
+        quizModalRef.close();
+        if (appState.page === 'scanQR') {
+          navigateTo('gameView');
+        }
+      },
       className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
     }],
     onClose: function () {
