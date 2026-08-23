@@ -2627,7 +2627,7 @@ def answer_session(session_id):
     player = cursor.fetchone()
 
     cursor.execute('''
-    SELECT b.*, g.max_shield, g.cooldown_seconds, g.host_id AS game_host_id, g.active_categories
+    SELECT b.*, g.status AS game_status, g.max_shield, g.cooldown_seconds, g.host_id AS game_host_id, g.active_categories
     FROM bases b JOIN games g ON b.game_id = g.id
     WHERE b.id = ?
     ''', (session['base_id'],))
@@ -2642,6 +2642,21 @@ def answer_session(session_id):
 
     current_time = int(time.time())
     is_correct = submitted_option_id == question['correct_option_id']
+
+    # The main game ended while this question was on screen. The answer has
+    # no effect either way - no capture, no cooldown - and instead of the
+    # next question the client is pointed at the bonus-round collect flow.
+    if base['game_status'] != 'active':
+        cursor.execute('UPDATE answer_sessions SET active = 0 WHERE id = ?', (session_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'correct': is_correct,
+            'explanation': question['explanation'],
+            'game_status': base['game_status'],
+            'bonus_round': base['game_status'] == 'bonus',
+            'next_question': None
+        })
 
     if not is_correct:
         cooldown_until = current_time + base['cooldown_seconds']

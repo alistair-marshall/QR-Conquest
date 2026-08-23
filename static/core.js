@@ -1861,6 +1861,23 @@ async function submitQuizAnswer(optionId) {
 
     const data = await handleApiResponse(response, 'Unable to submit answer');
 
+    // The main game ended while this question was open: the answer had no
+    // effect, and during the bonus round the base should be collected instead
+    if (data.game_status && data.game_status !== 'active') {
+      session.active = false;
+      clearQuizSession();
+      if (data.bonus_round && window.showBonusCollectPrompt) {
+        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct);
+      } else {
+        if (window.closeQuizModal) window.closeQuizModal();
+        if (window.showNotification) {
+          window.showNotification('The game ended while you were answering - captures are closed.', 'info');
+        }
+      }
+      fetchGameUpdates();
+      return;
+    }
+
     if (data.correct) {
       session.shield = data.shield_now;
       session.ownerTeamId = data.owner_now;

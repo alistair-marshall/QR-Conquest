@@ -4,7 +4,7 @@
     {
       "name": "qr-conquest",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-Command", "$env:SITE_ADMIN_PASSWORD='devtest123'; python flask_app.py"],
+      "runtimeArgs": ["-Command", "$env:SITE_ADMIN_PASSWORD='devtest123'; $env:DEBUG_FEATURES='1'; python flask_app.py"],
       "port": 5000
     }
   ]

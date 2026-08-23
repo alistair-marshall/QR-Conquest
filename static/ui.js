@@ -2300,6 +2300,64 @@ function showQuizOutcome(outcome, data) {
   renderQuizOptions();
 }
 
+function closeQuizModal() {
+  if (quizModalRef) {
+    quizModalRef.close();
+  }
+}
+
+// Called by core.js when an answer comes back after the main game has rolled
+// into the bonus round - replaces the quiz with the collect prompt, since
+// the player is already standing at the base
+function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
+  closeQuizModal();
+
+  const content = UIBuilder.createElement('div', { className: 'text-center' });
+
+  content.appendChild(UIBuilder.createElement('i', {
+    'data-lucide': 'flag',
+    className: 'w-10 h-10 mx-auto mb-3 text-yellow-500'
+  }));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-lg font-semibold text-gray-900 mb-2',
+    textContent: wasCorrect ? 'Correct - but the bonus round has started!' : 'The bonus round has started!'
+  }));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-700',
+    textContent: `The main game has ended, so bases can no longer be captured. ` +
+      `Collect ${baseName} instead and bring its QR code back to the host for bonus points.`
+  }));
+
+  const modal = UIBuilder.createModal({
+    title: 'Bonus Round',
+    content: content,
+    size: 'md',
+    actions: [
+      {
+        text: 'Collect This Base',
+        onClick: function () {
+          modal.close();
+          collectBase(baseId);
+        },
+        className: 'flex-1 bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors',
+        icon: 'flag'
+      },
+      {
+        text: 'Not Now',
+        onClick: function () {
+          modal.close();
+        },
+        className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+  if (window.lucide) window.lucide.createIcons();
+}
+
 // Called by core.js after a wrong answer - replaces the quiz modal with the
 // game-wide lockout state and a live countdown (Section 14)
 function showCooldownLockout(cooldownUntil, explanation) {
@@ -2431,3 +2489,5 @@ window.generateQRCode = generateQRCode;
 window.showQuizModal = showQuizModal;
 window.showQuizOutcome = showQuizOutcome;
 window.showCooldownLockout = showCooldownLockout;
+window.closeQuizModal = closeQuizModal;
+window.showBonusCollectPrompt = showBonusCollectPrompt;
