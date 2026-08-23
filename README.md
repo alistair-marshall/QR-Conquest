@@ -2,7 +2,7 @@
 
 A GPS-based team capture game using QR codes for authentication and base capture. Players join teams by scanning QR codes and compete to capture and hold bases around a physical area.
 
-## 🎮 Game Overview
+## Game Overview
 
 QR Conquest is a real-world team-based strategy game where teams compete to capture and control bases, consisting of physical locations with a QR code. The game combines digital technology with physical movement, creating an engaging outdoor activity perfect for team building, events, or casual competition.
 
@@ -39,6 +39,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - Race to the bases and scan them where they stand to collect them; collected bases disappear from everyone's map
 - Bring the physical QR codes back to the host - the points are only awarded once the host scans each base back in
 - Every collected base is worth a fixed number of bonus points, sized so that even the last-placed team could win by collecting them all
+- Mid-question when the bonus round starts? Your answer no longer affects the base (and a wrong answer costs no cooldown) - the app prompts you to collect the base instead
 
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
@@ -75,7 +76,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Build a reusable Question Bank from your host panel (multiple-choice or true/false, with categories) - it's shared across all of your games
 - In Game Settings, enable quiz-based capture, choose which categories are in play, and set the max shield and wrong-answer cooldown
 - The game can't start with quiz capture enabled unless at least one category is selected and has active questions
-- Bulk-import an existing question set as JSON or CSV from the Question Bank page
+- Bulk-import an existing question set as JSON or CSV from the Question Bank page - see [The Question Bank](#the-question-bank) for formats and details
 
 **Bonus Round (optional):**
 - Enable the bonus round in Game Settings to end each game with players collecting the physical QR codes back in
@@ -119,7 +120,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - Host permissions can be time-limited
 - Individual QR codes for each host account
 
-## 🚀 Complete Setup Guide
+## Complete Setup Guide
 
 ### For Players
 
@@ -209,7 +210,93 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Generate host secret link
    - Share the secret link with the host (can be sent digitally or printed)
 
-## 🖨️ QR Code Generation
+## The Question Bank
+
+The Question Bank powers quiz capture. It belongs to your host account, not to any single game: build it once and reuse it across every game you run. It is managed from the "Manage Question Bank" button on your host panel.
+
+### How questions are organised
+
+Every question has:
+
+| Field | Description |
+|-------|-------------|
+| Text | The question shown to the player |
+| Type | Multiple choice (`mc`) or true/false (`tf`) |
+| Options | The answer choices (multiple choice only; true/false always shows True and False) |
+| Correct answer | The option that captures/reinforces the base |
+| Category | A free-text label used to group questions (e.g. "Nature", "History", "Ages 5-8") |
+| Explanation | Optional text shown to the player after they answer, right or wrong |
+
+Categories are the unit of selection: when you create a game with quiz capture, you choose which categories are in play for that game. This lets one bank serve different audiences - for example a "Kids" category for a family event and a "Pub Quiz" category for an adults' game, without maintaining two banks.
+
+### How questions are served during a game
+
+- When a player scans a base, the server picks a random question from your **active** questions in the game's selected categories.
+- Within a single scan session, the server avoids repeating a question the player has already been served, as long as the pool is big enough.
+- The correct answer is never sent to the player's device - answers are checked server-side.
+- A game cannot start with quiz capture enabled unless at least one selected category contains at least one active question.
+
+### Managing questions
+
+Each question card in the Question Bank offers:
+
+- **Edit** - change any field. Edits apply immediately: answers are always marked against the latest saved version, so a mistake in a question can be corrected even mid-game.
+- **Disable / Enable** - a disabled question stays in the bank but is never served. Use this to temporarily pull a question (e.g. mid-game, if you spot a mistake in it) without losing it.
+- **Delete** - permanently removes the question. Each category header also has a **Delete All** button to delete the whole category at once.
+
+Deletion is blocked while a running game (active or in its bonus round) is using the question's category - a question already on a player's screen must remain answerable. Disable it instead, or delete it after the game ends. Bulk deletes skip in-use questions and report how many were skipped.
+
+### Importing a question bank
+
+The **Bulk Import** button on the Question Bank page accepts an existing question set in either JSON or CSV form - paste it into the import box. Rows are validated individually: valid rows are imported, invalid rows are skipped, and the import report lists each skipped row with the reason, so one bad row never blocks the rest.
+
+**JSON format** - an array of question objects:
+
+```json
+[
+  {
+    "text": "What is the capital of France?",
+    "type": "mc",
+    "options": ["Paris", "London", "Berlin"],
+    "correct": 0,
+    "category": "Geography",
+    "explanation": "Paris has been France's capital since 987."
+  },
+  {
+    "text": "The Pacific is the largest ocean.",
+    "type": "tf",
+    "correct": true,
+    "category": "Geography"
+  }
+]
+```
+
+**CSV format** - a header row followed by one question per line. Options are separated with `|`:
+
+```csv
+text,type,options,correct,category,explanation
+What is the capital of France?,mc,Paris|London|Berlin,Paris,Geography,Paris has been France's capital since 987.
+The Pacific is the largest ocean.,tf,,true,Geography,
+```
+
+**Field rules** (both formats):
+
+| Field | Required | Rules |
+|-------|----------|-------|
+| `text` | Yes | Any non-empty text |
+| `type` | Yes | `mc` (multiple choice) or `tf` (true/false) |
+| `options` | For `mc` | At least two non-blank options. JSON: an array of strings. CSV: pipe-separated (`Paris\|London\|Berlin`). Leave empty for `tf` |
+| `correct` | Yes | For `mc`: either the zero-based index of the correct option (`0` for the first) or the exact text of exactly one option (case-insensitive). For `tf`: `true` or `false` |
+| `category` | Yes | Any non-empty text; creates the category if it doesn't exist yet |
+| `explanation` | No | Shown to the player after answering |
+
+Tips:
+
+- If a question's text contains commas, use the JSON format or quote the CSV field (`"Which is bigger, the Sun or the Moon?"`).
+- Imported questions are active immediately. Import a category you don't want in play yet? Just don't select that category in Game Settings.
+- Spreadsheets export CSV directly, so a question bank can be maintained in Excel/Google Sheets with the columns above and pasted in whenever it changes.
+
+## QR Code Generation
 
 QR Conquest includes a built-in QR code generator for creating printable codes needed for games. This tool is essential for hosts who need to prepare physical QR codes before running games.
 
@@ -282,7 +369,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - No special software or plugins required
 
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
 ### Backend (Python Flask)
 - **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, and answer_sessions
@@ -303,8 +390,9 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 |------|---------------|----------|-------|
 | **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
 | **ui.js** | Main UI | Landing, game view, QR scanner, navigation, PWA | Core.js API functions |
-| **host.js** | Host UI | Host panel, team/base forms, host modals | Core.js API functions |
+| **host.js** | Host UI | Host panel, team/base forms, question bank, host modals | Core.js API functions |
 | **site-admin.js** | Admin UI | Admin login, host management, admin modals | Core.js API functions |
+| **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
 
 ### QR Code System
 - **Host Authentication**: Unique secret links for host authentication
@@ -312,7 +400,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Base QR**: Unique UUID linking to physical location and game
 - **URL Format**: `https://yoursite.com/?id={qr_uuid}`
 
-## 📱 Installation & Deployment
+## Installation & Deployment
 
 ### Prerequisites
 - Python 3.7+
@@ -341,6 +429,10 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 4. **Access application**:
    - Open `http://localhost:5000` in browser
    - For camera access, use HTTPS proxy or mobile device on same network
+
+5. **Testing without a park** (optional):
+   - Set `DEBUG_FEATURES=true` before starting the server to enable the GPS simulator
+   - An on-screen panel lets you move a fake GPS position (arrow buttons, right-click the map to teleport, or `devGPS.set(lat, lng)` in the console) and simulate QR scans by typing the code's value - so the full capture, quiz, and bonus-round flows can be exercised at a desk
 
 ### Production Deployment
 
@@ -382,24 +474,35 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
    gunicorn -w 1 --threads 100 -b 0.0.0.0:5000 flask_app:app
    ```
 
-## 🔧 Configuration Options
+## Configuration Options
 
 ### Environment Variables
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
-| `DEBUG_FEATURES` | No | Expose debug tools (mobile console viewer & manual GPS coordinate entry) in the client. Hidden by default. | `true` |
+| `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
 | `FLASK_DEBUG` | No | Enable debug mode | `False` |
 
 ### Game Settings
 
-- **Team Limit**: No hard limit, but 2-8 teams recommended
-- **Base Limit**: No hard limit, but 5-20 bases work well
-- **Capture Range**: Players must be close enough to bases for GPS verification
-- **Scoring Rate**: Teams earn points continuously while controlling bases
-- **Game Duration**: No time limit, manually ended by host
+Set when creating a game; most can be changed from Game Settings until the relevant phase locks them in.
+
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| Capture radius | 15 m | 5-500 m | How close a player must be to a base to capture or collect it (GPS-verified server-side) |
+| Points interval | 15 s | 5 s - 1 h | How often each held base earns its team a point |
+| Auto-start time | Off | - | Optionally start the game automatically at a set time |
+| Game duration | Manual end | 5 min - 30 days | Optionally end the game automatically after this long (must be at least 10x the points interval) |
+| Join method | Team QR only | - | How players join: scan a team QR, pick their own team, or auto-assign to the team with fewest players / lowest score |
+| Quiz capture | Off | - | Capture via quiz questions instead of instant scan; requires selecting question categories (see [The Question Bank](#the-question-bank)) |
+| Max shield | 5 | 1-20 | Quiz capture: the most a base can be reinforced |
+| Wrong-answer cooldown | 30 s | 5-3600 s | Quiz capture: how long a wrong answer locks the player out of answering anywhere |
+| Bonus round | Off | - | End the game with a collect-the-bases phase instead of stopping outright |
+| Bonus points per base | Auto | 1-1,000,000 | Auto sizes the value when the bonus round starts so the last-placed team could win by collecting every base; locked once the bonus round begins |
+
+There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in practice.
 
 ### Live Notifications
 
@@ -408,7 +511,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - Automatic reconnection with backoff if the connection drops
 - Visual indicators for online/offline status
 
-## 🔒 Security Features
+## Security Features
 
 ### Authentication Model
 - **Three-tier security**: Site Admin → Host → Player
@@ -427,7 +530,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **QR codes**: Unique UUIDs with no personal information
 - **Game isolation**: Each game's data is completely separate
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -453,6 +556,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - Ensure minimum 2 teams created
 - Check host authentication is valid
 - Verify all teams have valid QR codes
+- If quiz capture is enabled: at least one category must be selected and contain at least one active question
 - Check game status in host panel
 
 **Players can't join teams**:
@@ -474,11 +578,11 @@ Check browser console for JavaScript errors:
 - Check Console tab for error messages
 - Network tab shows API request/response details
 
-## 📄 License
+## License
 
 This project is provided as-is for educational and entertainment purposes. Please respect local laws and property rights when placing QR codes and conducting games.
 
-## 🤝 Contributing
+## Contributing
 
 This is a pre-beta project focused on functionality over backwards compatibility. Contributions welcome, but expect breaking changes as the system evolves.
 
@@ -497,4 +601,4 @@ This is a pre-beta project focused on functionality over backwards compatibility
 
 ---
 
-**Have fun conquering with QR codes! 🎯**
+**Have fun conquering with QR codes!**
