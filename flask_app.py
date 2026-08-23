@@ -2319,23 +2319,78 @@ def update_question(host_id, question_id):
 
     return jsonify(result)
 
+def categories_in_running_games(cursor, host_id):
+    """Categories a running game is drawing questions from. 'active' games
+    serve new questions; 'bonus' games can still resolve an open answer
+    session, so both block deletion."""
+    cursor.execute('''
+        SELECT active_categories FROM games
+        WHERE host_id = ? AND quiz_enabled = 1 AND status IN ('active', 'bonus')
+    ''', (host_id,))
+    used = set()
+    for row in cursor.fetchall():
+        used.update(json.loads(row['active_categories'] or '[]'))
+    return used
+
 @app.route('/api/hosts/<host_id>/questions/<question_id>', methods=['DELETE'])
 def delete_question(host_id, question_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM questions WHERE id = ? AND host_id = ?', (question_id, host_id))
-    if not cursor.fetchone():
+    question = cursor.fetchone()
+    if not question:
         conn.close()
         return jsonify({'error': 'Question not found'}), 404
 
-    # Soft-delete: a question already served mid-session must still be
-    # markable (Section 15), so it is disabled rather than removed.
-    cursor.execute('UPDATE questions SET active = 0 WHERE id = ?', (question_id,))
+    # A question in a running game's pool may already be on a player's
+    # screen (Section 15), so it can only be disabled until the game ends.
+    if question['category'] in categories_in_running_games(cursor, host_id):
+        conn.close()
+        return jsonify({'error': 'This question is in use by a running game. Disable it instead, or delete it after the game ends.'}), 409
+
+    cursor.execute('DELETE FROM questions WHERE id = ?', (question_id,))
     conn.commit()
     conn.close()
 
     return jsonify({'success': True})
+
+@app.route('/api/hosts/<host_id>/questions/bulk-delete', methods=['POST'])
+def bulk_delete_questions(host_id):
+    data = request.json
+    if not data or not isinstance(data.get('question_ids'), list) or not data['question_ids']:
+        return jsonify({'error': 'Provide a non-empty "question_ids" array'}), 400
+
+    question_ids = [str(q) for q in data['question_ids']]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Host not found'}), 404
+
+    used_categories = categories_in_running_games(cursor, host_id)
+
+    placeholders = ','.join('?' for _ in question_ids)
+    cursor.execute(f'SELECT * FROM questions WHERE host_id = ? AND id IN ({placeholders})',
+                   [host_id] + question_ids)
+    found = cursor.fetchall()
+
+    deletable = [q['id'] for q in found if q['category'] not in used_categories]
+    if deletable:
+        placeholders = ','.join('?' for _ in deletable)
+        cursor.execute(f'DELETE FROM questions WHERE id IN ({placeholders})', deletable)
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'deleted': len(deletable),
+        'in_use': len(found) - len(deletable),
+        'not_found': len(question_ids) - len(found)
+    })
 
 @app.route('/api/hosts/<host_id>/questions/bulk', methods=['POST'])
 def bulk_import_questions(host_id):

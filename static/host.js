@@ -2029,10 +2029,30 @@ async function loadQuestionBankList() {
 
     Object.keys(byCategory).sort().forEach(function(category) {
       const categorySection = UIBuilder.createElement('div', { className: 'bg-white rounded-lg shadow-md p-4' });
-      categorySection.appendChild(UIBuilder.createElement('h3', {
-        className: 'text-lg font-semibold mb-3',
+
+      const categoryHeader = UIBuilder.createElement('div', { className: 'flex items-center justify-between gap-3 mb-3' });
+      categoryHeader.appendChild(UIBuilder.createElement('h3', {
+        className: 'text-lg font-semibold',
         textContent: `${category} (${byCategory[category].length})`
       }));
+
+      const deleteCategoryBtn = UIBuilder.createButton('Delete All', async function() {
+        const count = byCategory[category].length;
+        if (!confirm(`Permanently delete all ${count} question(s) in "${category}"? This cannot be undone.`)) return;
+        try {
+          const result = await bulkDeleteQuestions(getAuthState().hostId, byCategory[category].map(q => q.id));
+          if (result.in_use) {
+            showNotification(`Deleted ${result.deleted} question(s); ${result.in_use} skipped because a running game is using this category`, 'warning');
+          } else {
+            showNotification(`Deleted ${result.deleted} question(s)`, 'success');
+          }
+          loadQuestionBankList();
+        } catch (err) {
+          showNotification(err.message || 'Unable to delete questions', 'error');
+        }
+      }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors flex-shrink-0', 'trash-2');
+      categoryHeader.appendChild(deleteCategoryBtn);
+      categorySection.appendChild(categoryHeader);
 
       const qList = UIBuilder.createElement('div', { className: 'space-y-2' });
       byCategory[category].forEach(function(q) {
@@ -2086,20 +2106,30 @@ function buildQuestionCard(question) {
   }, 'bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors', 'edit-2');
   actionsCol.appendChild(editBtn);
 
-  const deleteBtn = UIBuilder.createButton(question.active ? 'Disable' : 'Disabled', async function() {
-    if (!question.active) return;
-    if (!confirm('Disable this question? It will stop being served, but any already-served copy can still be answered.')) return;
+  const toggleBtn = UIBuilder.createButton(question.active ? 'Disable' : 'Enable', async function() {
     try {
-      await deleteQuestion(getAuthState().hostId, question.id);
-      showNotification('Question disabled', 'success');
+      await updateQuestion(getAuthState().hostId, question.id, { active: !question.active });
+      showNotification(question.active ? 'Question disabled' : 'Question enabled', 'success');
       loadQuestionBankList();
     } catch (err) {
-      showNotification(err.message || 'Unable to disable question', 'error');
+      showNotification(err.message || 'Unable to update question', 'error');
     }
   }, question.active
-    ? 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors'
-    : 'bg-gray-300 text-gray-500 px-3 py-1 rounded text-sm cursor-not-allowed', 'trash-2');
-  if (!question.active) deleteBtn.disabled = true;
+    ? 'bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 transition-colors'
+    : 'bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors',
+  question.active ? 'eye-off' : 'eye');
+  actionsCol.appendChild(toggleBtn);
+
+  const deleteBtn = UIBuilder.createButton('Delete', async function() {
+    if (!confirm('Permanently delete this question? This cannot be undone.')) return;
+    try {
+      await deleteQuestion(getAuthState().hostId, question.id);
+      showNotification('Question deleted', 'success');
+      loadQuestionBankList();
+    } catch (err) {
+      showNotification(err.message || 'Unable to delete question', 'error');
+    }
+  }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors', 'trash-2');
   actionsCol.appendChild(deleteBtn);
 
   row.appendChild(actionsCol);

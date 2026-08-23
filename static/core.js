@@ -2253,6 +2253,15 @@ async function deleteQuestion(hostId, questionId) {
   return handleApiResponse(response, 'Failed to delete question');
 }
 
+async function bulkDeleteQuestions(hostId, questionIds) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_ids: questionIds })
+  });
+  return handleApiResponse(response, 'Failed to delete questions');
+}
+
 async function bulkImportQuestions(hostId, payload) {
   const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk`, {
     method: 'POST',
