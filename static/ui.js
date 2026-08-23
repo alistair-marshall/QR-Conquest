@@ -338,6 +338,9 @@ function initializeApp() {
     appState.gameData.currentPlayer = authState.playerId;
     console.log('Found team ID in localStorage:', authState.teamId);
   }
+
+  // Cooldown lockouts persist across reloads (Section 14) - keep the banner live
+  startCooldownBannerMonitoring();
 }
 
 
@@ -546,6 +549,37 @@ function renderLandingPage() {
 // Game View
 function renderGameView() {
   const container = document.createElement('div');
+
+  // Bonus round banner - explains the collection phase to players
+  if (appState.gameData.status === 'bonus') {
+    const perBase = appState.gameData.settings?.bonus_points_per_base;
+    const remaining = (appState.gameData.bases || [])
+      .filter(base => !base.deleted_at && !base.collectedBy).length;
+
+    const bonusBanner = UIBuilder.createElement('div', {
+      className: 'bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg p-4 mb-6'
+    });
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'font-bold mb-1',
+      textContent: '🏁 Bonus Round - collect the bases!'
+    }));
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm',
+      textContent: `The main game has ended and bases no longer score points for being held. ` +
+        `Scan a base where it stands to collect it, then bring the QR code back to the host` +
+        `${perBase ? ` for ${perBase} bonus points` : ' for bonus points'}.`
+    }));
+
+    bonusBanner.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm font-semibold mt-1',
+      id: 'bonus-remaining-count',
+      textContent: `${remaining} base${remaining === 1 ? '' : 's'} still out there.`
+    }));
+
+    container.appendChild(bonusBanner);
+  }
 
   // Scoreboard section
   const scoreboardSection = document.createElement('div');
@@ -1303,6 +1337,8 @@ function initGameMap() {
   // Initialize empty markers array
   gameMapInstance.baseMarkers = [];
 
+  addRecenterControl(gameMapInstance);
+
   // Create or update all markers
   updateMapMarkers();
 
@@ -1321,6 +1357,50 @@ function initGameMap() {
     gameMapInstance.setView([55.94763, -3.16202], 16);
     mapElement.innerHTML = `<div class="flex items-center justify-center h-full text-gray-600">No valid bases to display on the map.</div>`;
   }
+}
+
+// A Leaflet control button that jumps the map back to the player's current
+// GPS position - lets a player who has panned/zoomed away from the game
+// area find their way back without hunting for the bases themselves.
+function addRecenterControl(mapInstance) {
+  const RecenterControl = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd: function () {
+      const button = L.DomUtil.create('button', 'leaflet-bar');
+      button.type = 'button';
+      button.title = 'Recenter on my location';
+      button.setAttribute('aria-label', 'Recenter on my location');
+      button.style.width = '34px';
+      button.style.height = '34px';
+      button.style.cursor = 'pointer';
+      button.style.display = 'flex';
+      button.style.alignItems = 'center';
+      button.style.justifyContent = 'center';
+      button.style.backgroundColor = '#ffffff';
+      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>`;
+
+      L.DomEvent.disableClickPropagation(button);
+      L.DomEvent.on(button, 'click', function () {
+        recenterMapOnPlayer(mapInstance);
+      });
+
+      return button;
+    }
+  });
+
+  mapInstance.addControl(new RecenterControl());
+}
+
+function recenterMapOnPlayer(mapInstance) {
+  const position = appState.gps.currentPosition;
+  if (!position) {
+    if (window.showNotification) {
+      window.showNotification('Still waiting for a GPS fix - move to an open area and try again.', 'error');
+    }
+    return;
+  }
+
+  mapInstance.setView([position.latitude, position.longitude], Math.max(mapInstance.getZoom(), 17));
 }
 
 function updateMapMarkers() {
@@ -1359,9 +1439,17 @@ function updateMapMarkers() {
   // Track which bases we've processed
   const processedBaseIds = new Set();
 
+  const bonusRoundActive = appState.gameData.status === 'bonus';
+
   // Update or create markers for current bases
   appState.gameData.bases.forEach(base => {
     if (base.deleted_at && !showDeleted) {
+      return;
+    }
+
+    // Bonus round: a collected base has physically left its location, so it
+    // comes off the map to stop others hunting for it
+    if (bonusRoundActive && base.collectedBy) {
       return;
     }
 
@@ -1379,8 +1467,15 @@ function updateMapMarkers() {
     // Determine marker colour and popup content
     let markerColor;
     let popupContent;
-    
-    if (base.deleted_at) {
+    const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+    const shieldLine = quizEnabled ? `<br>Shield: ${base.shield || 0}` : '';
+
+    if (bonusRoundActive && !base.deleted_at) {
+      // Uncollected base during the bonus round: shown neutral and up for grabs
+      const perBase = appState.gameData.settings?.bonus_points_per_base;
+      markerColor = getHexColorForTailwind('bg-yellow-500');
+      popupContent = `<strong>${base.name}</strong><br>Scan to collect${perBase ? ` (+${perBase} pts)` : ''}`;
+    } else if (base.deleted_at) {
       // Deleted base (only shown for hosts with toggle on)
       markerColor = '#6b7280'; // Gray
       popupContent = `<strong><s>${base.name}</s></strong><br><span style="color: red;">DELETED</span>`;
@@ -1389,15 +1484,16 @@ function updateMapMarkers() {
       const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
       if (owningTeam) {
         markerColor = getHexColorForTailwind(owningTeam.color);
-        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}`;
+        popupContent = `<strong>${base.name}</strong><br>Owner: ${owningTeam.name}${shieldLine}`;
       } else {
         markerColor = getHexColorForTailwind('bg-gray-400');
-        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team`;
+        popupContent = `<strong>${base.name}</strong><br>Owner: Unknown Team${shieldLine}`;
       }
     } else {
       // Active base without owner
       markerColor = getHexColorForTailwind('bg-gray-400');
-      popupContent = `<strong>${base.name}</strong><br>Uncaptured`;
+      const uncapturedLabel = quizEnabled ? 'Neutral' : 'Uncaptured';
+      popupContent = `<strong>${base.name}</strong><br>${uncapturedLabel}${shieldLine}`;
     }
 
     if (existingMarker) {
@@ -1438,6 +1534,16 @@ function updateMapMarkers() {
     }
     return true;
   });
+}
+
+// Keep the bonus banner's remaining-base count current between full renders
+function updateBonusBanner() {
+  const remainingElement = document.getElementById('bonus-remaining-count');
+  if (!remainingElement || appState.gameData.status !== 'bonus') return;
+
+  const remaining = (appState.gameData.bases || [])
+    .filter(base => !base.deleted_at && !base.collectedBy).length;
+  remainingElement.textContent = `${remaining} base${remaining === 1 ? '' : 's'} still out there.`;
 }
 
 function updateScoreboard() {
@@ -1604,6 +1710,9 @@ function renderApp() {
           break;
         case 'hostPanel':
           main.appendChild(renderHostPanel());
+          break;
+        case 'questionBank':
+          main.appendChild(renderQuestionBankPage());
           break;
         case 'scanQR':
           main.appendChild(renderQRScanner());
@@ -1776,6 +1885,9 @@ function updateGameStatusText(statusElement) {
       statusElement.className = 'text-sm';
     }
 
+  } else if (appState.gameData.status === 'bonus') {
+    statusElement.textContent = 'Bonus round • collect the bases!';
+    statusElement.className = 'text-sm font-semibold text-yellow-200';
   } else if (appState.gameData.status === 'ended') {
     statusElement.textContent = 'Game ended';
     statusElement.className = 'text-sm text-gray-200';
@@ -2043,6 +2155,321 @@ function startHeaderTimer() {
   }, 1000);
 }
 
+// =============================================================================
+// QUIZ CAPTURE - PLAYER MODAL & COOLDOWN LOCKOUT (Section 14)
+// =============================================================================
+
+let quizModalRef = null;
+let quizCountdownInterval = null;
+let cooldownBannerInterval = null;
+
+const QUIZ_OUTCOME_MESSAGES = {
+  reduced: 'Correct! Shield reduced.',
+  neutralised: 'Correct! Base neutralised!',
+  captured: 'Correct! Base captured!',
+  reinforced: 'Correct! Base reinforced.',
+  already_max: 'Correct! This base is already fully reinforced.'
+};
+
+function formatCooldownRemaining(totalSeconds) {
+  const seconds = Math.max(0, totalSeconds);
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Build the "Shield N — reduce it to capture" framing line for the base
+// currently being attempted, from the live quiz session state
+function quizFramingLine() {
+  const session = appState.quizSession;
+  if (!session) return '';
+
+  if (session.ownerTeamId) {
+    const isOwnTeam = session.ownerTeamId === getAuthState().teamId;
+    if (isOwnTeam) {
+      return `Your base, shield ${session.shield} — answer to reinforce`;
+    }
+    return `${getTeamName(session.ownerTeamId)}'s base, shield ${session.shield} — reduce it to capture`;
+  }
+  return 'Neutral — answer correctly to capture';
+}
+
+function renderQuizOptions(container) {
+  container = container || document.getElementById('quiz-options-container');
+  const questionTextEl = container && container.parentElement
+    ? container.parentElement.querySelector('#quiz-question-text')
+    : document.getElementById('quiz-question-text');
+  const session = appState.quizSession;
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!session || !session.question) {
+    if (questionTextEl) questionTextEl.textContent = '';
+    const msg = UIBuilder.createElement('p', {
+      className: 'text-gray-600 italic text-center py-4',
+      textContent: 'No more questions available right now - scan again shortly to keep going.'
+    });
+    container.appendChild(msg);
+    return;
+  }
+
+  if (questionTextEl) questionTextEl.textContent = session.question.text;
+
+  session.question.options.forEach(function (option) {
+    const btn = UIBuilder.createButton(option.text, function () {
+      Array.from(container.querySelectorAll('button')).forEach(function (b) {
+        b.disabled = true;
+        b.classList.add('opacity-50', 'cursor-not-allowed');
+      });
+      submitQuizAnswer(option.id);
+    }, 'w-full bg-purple-50 hover:bg-purple-100 text-purple-900 py-3 px-4 rounded-lg text-left font-medium transition-colors border border-purple-200');
+    container.appendChild(btn);
+  });
+}
+
+function buildQuizModalContent() {
+  const container = UIBuilder.createElement('div');
+
+  const framing = UIBuilder.createElement('p', {
+    className: 'text-sm font-medium text-gray-600 mb-4',
+    id: 'quiz-framing-line',
+    textContent: quizFramingLine()
+  });
+  container.appendChild(framing);
+
+  const questionText = UIBuilder.createElement('h4', {
+    className: 'text-lg font-semibold mb-4 text-gray-900',
+    id: 'quiz-question-text'
+  });
+  container.appendChild(questionText);
+
+  const optionsContainer = UIBuilder.createElement('div', {
+    className: 'space-y-3',
+    id: 'quiz-options-container'
+  });
+  container.appendChild(optionsContainer);
+
+  renderQuizOptions(optionsContainer);
+
+  return container;
+}
+
+// Called by core.js once a scan session has started successfully
+function showQuizModal() {
+  const session = appState.quizSession;
+  if (!session) return;
+
+  if (quizModalRef) {
+    quizModalRef.close();
+  }
+
+  quizModalRef = UIBuilder.createModal({
+    title: session.baseName,
+    content: buildQuizModalContent(),
+    size: 'md',
+    actions: [{
+      text: 'Close',
+      onClick: function () {
+        clearQuizSession();
+        quizModalRef.close();
+        if (appState.page === 'scanQR') {
+          navigateTo('gameView');
+        }
+      },
+      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }],
+    onClose: function () {
+      quizModalRef = null;
+    }
+  });
+
+  document.body.appendChild(quizModalRef);
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// Called by core.js after each correct answer to refresh the modal in place
+function showQuizOutcome(outcome, data) {
+  if (!quizModalRef) return;
+
+  showNotification(QUIZ_OUTCOME_MESSAGES[outcome] || 'Correct!', 'success');
+
+  const framing = document.getElementById('quiz-framing-line');
+  if (framing) framing.textContent = quizFramingLine();
+
+  renderQuizOptions();
+}
+
+function closeQuizModal() {
+  if (quizModalRef) {
+    quizModalRef.close();
+  }
+}
+
+// Called by core.js when an answer comes back after the main game has rolled
+// into the bonus round - replaces the quiz with the collect prompt, since
+// the player is already standing at the base
+function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
+  closeQuizModal();
+
+  const content = UIBuilder.createElement('div', { className: 'text-center' });
+
+  content.appendChild(UIBuilder.createElement('i', {
+    'data-lucide': 'flag',
+    className: 'w-10 h-10 mx-auto mb-3 text-yellow-500'
+  }));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-lg font-semibold text-gray-900 mb-2',
+    textContent: wasCorrect ? 'Correct - but the bonus round has started!' : 'The bonus round has started!'
+  }));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-700',
+    textContent: `The main game has ended, so bases can no longer be captured. ` +
+      `Collect ${baseName} instead and bring its QR code back to the host for bonus points.`
+  }));
+
+  const modal = UIBuilder.createModal({
+    title: 'Bonus Round',
+    content: content,
+    size: 'md',
+    actions: [
+      {
+        text: 'Collect This Base',
+        onClick: function () {
+          modal.close();
+          collectBase(baseId);
+        },
+        className: 'flex-1 bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors',
+        icon: 'flag'
+      },
+      {
+        text: 'Not Now',
+        onClick: function () {
+          modal.close();
+        },
+        className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// Called by core.js after a wrong answer - replaces the quiz modal with the
+// game-wide lockout state and a live countdown (Section 14)
+function showCooldownLockout(cooldownUntil, explanation) {
+  if (quizCountdownInterval) {
+    clearInterval(quizCountdownInterval);
+    quizCountdownInterval = null;
+  }
+
+  const content = UIBuilder.createElement('div', { className: 'text-center' });
+
+  const icon = UIBuilder.createElement('i', {
+    'data-lucide': 'lock',
+    className: 'w-10 h-10 mx-auto mb-3 text-red-500'
+  });
+  content.appendChild(icon);
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-lg font-semibold text-red-600 mb-2',
+    textContent: 'Wrong answer!'
+  }));
+
+  if (explanation) {
+    content.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm text-gray-700 mb-4 italic',
+      textContent: explanation
+    }));
+  }
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-600 mb-1',
+    textContent: "You're locked out of capturing any base until:"
+  }));
+
+  const countdownEl = UIBuilder.createElement('div', {
+    className: 'text-3xl font-bold text-gray-900 mb-2',
+    id: 'quiz-cooldown-countdown'
+  });
+  content.appendChild(countdownEl);
+
+  function tick() {
+    const remaining = cooldownUntil - Math.floor(Date.now() / 1000);
+    if (remaining <= 0) {
+      countdownEl.textContent = 'Cooldown over - scan a base to try again';
+      clearInterval(quizCountdownInterval);
+      quizCountdownInterval = null;
+      return;
+    }
+    countdownEl.textContent = formatCooldownRemaining(remaining);
+  }
+  tick();
+  quizCountdownInterval = setInterval(tick, 1000);
+
+  if (quizModalRef) {
+    quizModalRef.close();
+  }
+
+  quizModalRef = UIBuilder.createModal({
+    title: 'Locked Out',
+    content: content,
+    size: 'sm',
+    actions: [{
+      text: 'Close',
+      onClick: () => {
+        clearQuizSession();
+        quizModalRef.close();
+        if (appState.page === 'scanQR') {
+          navigateTo('gameView');
+        }
+      },
+      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }],
+    onClose: function () {
+      quizModalRef = null;
+    }
+  });
+
+  document.body.appendChild(quizModalRef);
+  if (window.lucide) window.lucide.createIcons();
+  updateCooldownBannerUI();
+}
+
+// Persistent bottom banner so a cooldown is visible even if the player
+// dismissed the lockout modal or reloaded the page mid-cooldown
+function updateCooldownBannerUI() {
+  const cooldownUntil = getPlayerCooldownUntil();
+  let banner = document.getElementById('cooldown-banner');
+
+  if (!cooldownUntil) {
+    if (banner) banner.remove();
+    return;
+  }
+
+  if (!banner) {
+    banner = UIBuilder.createElement('div', {
+      id: 'cooldown-banner',
+      className: 'fixed top-0 inset-x-0 z-[900] bg-red-600 text-white text-center py-2 text-sm font-medium shadow-md'
+    });
+    document.body.appendChild(banner);
+  }
+
+  const remaining = cooldownUntil - Math.floor(Date.now() / 1000);
+  banner.textContent = remaining > 0
+    ? `Locked out - ${formatCooldownRemaining(remaining)} remaining before you can capture again`
+    : 'Cooldown over - scan a base to try again';
+}
+
+function startCooldownBannerMonitoring() {
+  updateCooldownBannerUI();
+  if (cooldownBannerInterval) clearInterval(cooldownBannerInterval);
+  cooldownBannerInterval = setInterval(updateCooldownBannerUI, 1000);
+}
+
 // Initialize online status monitoring
 document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
 
@@ -2055,6 +2482,12 @@ window.navigateTo = navigateTo;
 window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
 window.updateScoreboard = updateScoreboard;
+window.updateBonusBanner = updateBonusBanner;
 window.updateGameStatusText = updateGameStatusText;
 window.updateGPSStatusDisplay = updateGPSStatusDisplay;
 window.generateQRCode = generateQRCode;
+window.showQuizModal = showQuizModal;
+window.showQuizOutcome = showQuizOutcome;
+window.showCooldownLockout = showCooldownLockout;
+window.closeQuizModal = closeQuizModal;
+window.showBonusCollectPrompt = showBonusCollectPrompt;

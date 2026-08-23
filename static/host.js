@@ -70,6 +70,29 @@ function renderHostPanel() {
     // Load host games after rendering
     setTimeout(() => loadHostGames(), 100);
 
+    // Question Bank Section - host-level, reusable across games
+    const questionBankSection = UIBuilder.createElement('div', {
+      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    });
+
+    const questionBankTitle = UIBuilder.createElement('h3', {
+      className: 'text-xl font-semibold mb-2',
+      textContent: 'Question Bank'
+    });
+    questionBankSection.appendChild(questionBankTitle);
+
+    questionBankSection.appendChild(UIBuilder.createElement('p', {
+      className: 'text-gray-600 mb-4 text-sm',
+      textContent: 'Manage the questions used for quiz capture. Questions are shared across all of your games.'
+    }));
+
+    const manageQuestionsBtn = UIBuilder.createButton('Manage Question Bank', function() {
+      navigateTo('questionBank');
+    }, 'w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors text-lg font-medium flex items-center justify-center', 'help-circle');
+    questionBankSection.appendChild(manageQuestionsBtn);
+
+    container.appendChild(questionBankSection);
+
     // Back to Home link
     const backContainer = UIBuilder.createElement('div', { className: 'text-center mt-6' });
 
@@ -131,9 +154,10 @@ function renderHostPanel() {
   const statusValue = UIBuilder.createElement('div', {
     className: 'text-lg font-bold capitalize' + (
       appState.gameData.status === 'active' ? ' text-green-600' :
-      appState.gameData.status === 'setup' ? ' text-orange-600' : ' text-gray-600'
+      appState.gameData.status === 'setup' ? ' text-orange-600' :
+      appState.gameData.status === 'bonus' ? ' text-yellow-600' : ' text-gray-600'
     ),
-    textContent: appState.gameData.status
+    textContent: appState.gameData.status === 'bonus' ? 'Bonus round' : appState.gameData.status
   });
   statusCard.appendChild(statusValue);
   gameInfoGrid.appendChild(statusCard);
@@ -264,19 +288,59 @@ function renderHostPanel() {
   joinMethodCard.appendChild(joinMethodCardValue);
   settingsGrid.appendChild(joinMethodCard);
 
+  // Quiz Capture
+  const quizCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const quizCardLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Quiz Capture'
+  });
+  quizCard.appendChild(quizCardLabel);
+  const quizCardValue = UIBuilder.createElement('div', {
+    className: settings.quiz_enabled ? 'text-lg font-bold text-indigo-600' : 'text-lg font-bold text-gray-500',
+    textContent: settings.quiz_enabled ? `On (max shield ${settings.max_shield || 5})` : 'Off'
+  });
+  quizCard.appendChild(quizCardValue);
+  settingsGrid.appendChild(quizCard);
+
+  // Bonus Round
+  const bonusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg text-center' });
+  const bonusCardLabel = UIBuilder.createElement('div', {
+    className: 'text-sm text-gray-600 font-medium',
+    textContent: 'Bonus Round'
+  });
+  bonusCard.appendChild(bonusCardLabel);
+  let bonusText = 'Off';
+  if (settings.bonus_round_enabled || settings.bonus_start_time) {
+    bonusText = settings.bonus_points_per_base
+      ? `On (${settings.bonus_points_per_base} pts/base)`
+      : 'On (auto points)';
+  }
+  const bonusCardValue = UIBuilder.createElement('div', {
+    className: (settings.bonus_round_enabled || settings.bonus_start_time)
+      ? 'text-lg font-bold text-yellow-600' : 'text-lg font-bold text-gray-500',
+    textContent: bonusText
+  });
+  bonusCard.appendChild(bonusCardValue);
+  settingsGrid.appendChild(bonusCard);
+
   settingsSection.appendChild(settingsGrid);
 
   // Settings actions (only show for games in setup or active state)
   if (appState.gameData.status === 'setup' || appState.gameData.status === 'active') {
     const settingsActions = UIBuilder.createElement('div', {
-      className: 'mt-4 pt-3 border-t'
+      className: 'mt-4 pt-3 border-t flex flex-wrap gap-2'
     });
 
     const editSettingsBtn = UIBuilder.createButton('Edit Settings', function() {
       renderGameSettingsModal();
     }, 'bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm', 'settings');
-
     settingsActions.appendChild(editSettingsBtn);
+
+    const questionBankBtn = UIBuilder.createButton('Manage Question Bank', function() {
+      navigateTo('questionBank');
+    }, 'bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors text-sm', 'help-circle');
+    settingsActions.appendChild(questionBankBtn);
+
     settingsSection.appendChild(settingsActions);
   }
 
@@ -579,6 +643,8 @@ function renderHostPanel() {
           className: 'flex items-center text-sm'
         });
 
+        const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+
         if (base.ownedBy && !base.deleted_at) {
           const owningTeam = appState.gameData.teams.find(t => t.id === base.ownedBy);
           if (owningTeam) {
@@ -596,9 +662,17 @@ function renderHostPanel() {
         } else if (!base.deleted_at) {
           const uncaptured = UIBuilder.createElement('span', {
             className: 'text-gray-500 italic',
-            textContent: 'Uncaptured'
+            textContent: quizEnabled ? 'Neutral' : 'Uncaptured'
           });
           ownerContainer.appendChild(uncaptured);
+        }
+
+        if (quizEnabled && !base.deleted_at) {
+          const shieldBadge = UIBuilder.createElement('span', {
+            className: 'ml-2 text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full',
+            textContent: `🛡 ${base.shield || 0}`
+          });
+          ownerContainer.appendChild(shieldBadge);
         }
 
         baseCard.appendChild(ownerContainer);
@@ -656,10 +730,105 @@ function renderHostPanel() {
 
   // Show different buttons based on game status
   if (appState.gameData.status === 'active') {
-    // Game is running - show only End Game button
+    const bonusEnabled = !!(appState.gameData.settings && appState.gameData.settings.bonus_round_enabled);
+
+    // Bonus round: end normal scoring and send players out to collect bases
+    if (bonusEnabled) {
+      const bonusButton = UIBuilder.createButton('Start Bonus Round', function() {
+        if (confirm('Start the bonus round? Bases will stop scoring points and players will be sent out to collect the base QR codes for bonus points.')) {
+          // Call the API function from core.js
+          startBonusRound();
+        }
+      }, 'w-full bg-yellow-500 text-white py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg font-medium flex items-center justify-center', 'flag');
+      controlButtons.appendChild(bonusButton);
+    }
+
+    // Game is running - show End Game button
+    const endConfirmText = bonusEnabled
+      ? 'Are you sure you want to end the game now? This will skip the bonus round and release all QR codes for reuse.'
+      : 'Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.';
     const endButton = UIBuilder.createButton('End Game', function() {
       // Confirm before ending
-      if (confirm('Are you sure you want to end the game? This will end the current game and release all QR codes for reuse.')) {
+      if (confirm(endConfirmText)) {
+        // Call the API function from core.js
+        endGame();
+      }
+    }, 'w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors text-lg font-medium flex items-center justify-center', 'stop-circle');
+    controlButtons.appendChild(endButton);
+
+  } else if (appState.gameData.status === 'bonus') {
+    // Bonus round in progress - host checks collected bases back in
+    const bonusInfo = UIBuilder.createElement('div', {
+      className: 'bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4'
+    });
+    bonusInfo.appendChild(UIBuilder.createElement('p', {
+      className: 'font-semibold text-yellow-800 mb-1',
+      textContent: '🏁 Bonus round in progress'
+    }));
+    const perBase = appState.gameData.settings?.bonus_points_per_base;
+    bonusInfo.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm text-yellow-800',
+      textContent: `Players are collecting bases${perBase ? ` for ${perBase} points each` : ''}. ` +
+        `Scan each base QR code as it is brought back to you to check it in and award the points.`
+    }));
+    controlSection.appendChild(bonusInfo);
+
+    // Collection checklist so the host can see what is still out there
+    const bases = (appState.gameData.bases || []).filter(base => !base.deleted_at);
+    if (bases.length > 0) {
+      const checklist = UIBuilder.createElement('div', {
+        className: 'border border-gray-200 rounded-lg divide-y mb-4'
+      });
+
+      bases.forEach(function(base) {
+        const row = UIBuilder.createElement('div', {
+          className: 'flex justify-between items-center px-3 py-2 text-sm'
+        });
+
+        row.appendChild(UIBuilder.createElement('span', {
+          className: 'font-medium text-gray-800',
+          textContent: base.name
+        }));
+
+        let statusBadge;
+        if (base.returnedAt) {
+          const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full',
+            textContent: `✓ Returned${team ? ' - ' + team.name : ''}`
+          });
+        } else if (base.collectedBy) {
+          const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full',
+            textContent: `Collected${team ? ' - ' + team.name : ''}`
+          });
+        } else {
+          statusBadge = UIBuilder.createElement('span', {
+            className: 'text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full',
+            textContent: 'Out there'
+          });
+        }
+        row.appendChild(statusBadge);
+
+        checklist.appendChild(row);
+      });
+
+      controlSection.appendChild(checklist);
+    }
+
+    const checkInButton = UIBuilder.createButton('Scan Base to Check In', function() {
+      navigateTo('scanQR');
+    }, 'w-full bg-yellow-500 text-white py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg font-medium flex items-center justify-center', 'qr-code');
+    controlButtons.appendChild(checkInButton);
+
+    const endButton = UIBuilder.createButton('End Game', function() {
+      const unreturned = (appState.gameData.bases || [])
+        .filter(base => !base.deleted_at && base.collectedBy && !base.returnedAt).length;
+      const warning = unreturned > 0
+        ? `Are you sure you want to end the game? ${unreturned} collected base${unreturned === 1 ? ' has' : 's have'} not been checked in and will score no bonus points. All QR codes will be released for reuse.`
+        : 'Are you sure you want to end the game? This will finish the bonus round and release all QR codes for reuse.';
+      if (confirm(warning)) {
         // Call the API function from core.js
         endGame();
       }
@@ -1222,6 +1391,208 @@ function buildGameSettingsForm(options = {}) {
   settingsSection.appendChild(settingsGrid);
   form.appendChild(settingsSection);
 
+  // Quiz Capture Section
+  const quizSection = UIBuilder.createElement('div');
+  quizSection.appendChild(UIBuilder.createElement('h4', {
+    className: 'text-lg font-medium mb-3 text-gray-800',
+    textContent: 'Quiz Capture'
+  }));
+
+  const quizEnabledGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+  const quizEnabledLabel = UIBuilder.createElement('label', { className: 'flex items-center gap-2 font-medium text-gray-700 cursor-pointer' });
+  const quizEnabledCheckbox = UIBuilder.createElement('input', { type: 'checkbox', id: 'quiz-enabled-checkbox' });
+  quizEnabledCheckbox.checked = !!currentSettings.quiz_enabled;
+  quizEnabledLabel.appendChild(quizEnabledCheckbox);
+  quizEnabledLabel.appendChild(document.createTextNode('Enable quiz-based capture'));
+  quizEnabledGroup.appendChild(quizEnabledLabel);
+  quizEnabledGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Players answer questions to reduce, capture and reinforce bases, instead of instant GPS capture.'
+  }));
+  quizSection.appendChild(quizEnabledGroup);
+
+  const quizFieldsContainer = UIBuilder.createElement('div', {
+    id: 'quiz-fields-container',
+    className: 'space-y-4',
+    style: { display: currentSettings.quiz_enabled ? 'block' : 'none' }
+  });
+
+  const categoriesGroup = UIBuilder.createElement('div');
+  categoriesGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Active Categories'
+  }));
+  const categoriesList = UIBuilder.createElement('div', {
+    id: 'quiz-categories-list',
+    className: 'flex flex-wrap gap-2'
+  });
+  categoriesList.appendChild(UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-500 italic',
+    textContent: 'Loading categories...'
+  }));
+  categoriesGroup.appendChild(categoriesList);
+  categoriesGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Only questions in the selected categories are used for this game.'
+  }));
+  quizFieldsContainer.appendChild(categoriesGroup);
+
+  const quizNumbersGrid = UIBuilder.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' });
+
+  const maxShieldGroup = UIBuilder.createElement('div');
+  maxShieldGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Max Shield'
+  }));
+  const maxShieldInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '1',
+    max: '20',
+    value: currentSettings.max_shield || 5,
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'max-shield-input'
+  });
+  maxShieldGroup.appendChild(maxShieldInput);
+  maxShieldGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Maximum shield a base can be reinforced to (1-20)'
+  }));
+  quizNumbersGrid.appendChild(maxShieldGroup);
+
+  const cooldownGroup = UIBuilder.createElement('div');
+  cooldownGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Cooldown (seconds)'
+  }));
+  const cooldownInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '5',
+    max: '3600',
+    value: currentSettings.cooldown_seconds || 30,
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'cooldown-seconds-input'
+  });
+  cooldownGroup.appendChild(cooldownInput);
+  cooldownGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'How long a player is locked out game-wide after a wrong answer'
+  }));
+  quizNumbersGrid.appendChild(cooldownGroup);
+
+  quizFieldsContainer.appendChild(quizNumbersGrid);
+
+  const manageQuestionsBtn = UIBuilder.createButton('Manage Question Bank', function() {
+    navigateTo('questionBank');
+  }, 'text-sm bg-indigo-100 text-indigo-700 py-2 px-3 rounded-lg hover:bg-indigo-200 transition-colors', 'help-circle');
+  manageQuestionsBtn.type = 'button';
+  quizFieldsContainer.appendChild(manageQuestionsBtn);
+
+  quizSection.appendChild(quizFieldsContainer);
+  form.appendChild(quizSection);
+
+  quizEnabledCheckbox.addEventListener('change', function() {
+    quizFieldsContainer.style.display = this.checked ? 'block' : 'none';
+  });
+
+  // Bonus Round Section
+  const bonusSection = UIBuilder.createElement('div');
+  bonusSection.appendChild(UIBuilder.createElement('h4', {
+    className: 'text-lg font-medium mb-3 text-gray-800',
+    textContent: 'Bonus Round'
+  }));
+
+  // Once the bonus round has started its points are locked in, so the
+  // fields become read-only information
+  const bonusLocked = !!currentSettings.bonus_start_time;
+
+  const bonusEnabledGroup = UIBuilder.createElement('div', { className: 'mb-4' });
+  const bonusEnabledLabel = UIBuilder.createElement('label', { className: 'flex items-center gap-2 font-medium text-gray-700 cursor-pointer' });
+  const bonusEnabledCheckbox = UIBuilder.createElement('input', { type: 'checkbox', id: 'bonus-enabled-checkbox' });
+  bonusEnabledCheckbox.checked = !!currentSettings.bonus_round_enabled;
+  bonusEnabledCheckbox.disabled = bonusLocked;
+  bonusEnabledLabel.appendChild(bonusEnabledCheckbox);
+  bonusEnabledLabel.appendChild(document.createTextNode('Enable bonus round when the main game ends'));
+  bonusEnabledGroup.appendChild(bonusEnabledLabel);
+  bonusEnabledGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'After the main game, players collect base QR codes and return them to you for bonus points.'
+  }));
+  bonusSection.appendChild(bonusEnabledGroup);
+
+  const bonusFieldsContainer = UIBuilder.createElement('div', {
+    id: 'bonus-fields-container',
+    style: { display: currentSettings.bonus_round_enabled ? 'block' : 'none' }
+  });
+
+  const bonusPointsGroup = UIBuilder.createElement('div');
+  bonusPointsGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    textContent: 'Points per Collected Base'
+  }));
+  const bonusPointsInput = UIBuilder.createElement('input', {
+    type: 'number',
+    min: '1',
+    max: '1000000',
+    value: currentSettings.bonus_points_per_base || '',
+    placeholder: 'Automatic',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'bonus-points-input'
+  });
+  bonusPointsInput.disabled = bonusLocked;
+  bonusPointsGroup.appendChild(bonusPointsInput);
+  bonusPointsGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: bonusLocked
+      ? 'The bonus round has started - its points value is locked in.'
+      : 'Leave blank for automatic: chosen when the bonus round starts so that the last-placed team would win by collecting every base.'
+  }));
+  bonusFieldsContainer.appendChild(bonusPointsGroup);
+
+  bonusSection.appendChild(bonusFieldsContainer);
+  form.appendChild(bonusSection);
+
+  bonusEnabledCheckbox.addEventListener('change', function() {
+    bonusFieldsContainer.style.display = this.checked ? 'block' : 'none';
+  });
+
+  // Populate the category picker asynchronously from the host's bank
+  const quizAuthState = getAuthState();
+  if (quizAuthState.hostId) {
+    fetchHostCategories(quizAuthState.hostId).then(function(categories) {
+      categoriesList.innerHTML = '';
+      if (!categories.length) {
+        categoriesList.appendChild(UIBuilder.createElement('p', {
+          className: 'text-sm text-gray-500 italic',
+          textContent: 'No categories yet - add questions in the Question Bank first.'
+        }));
+        return;
+      }
+      const selected = new Set(currentSettings.active_categories || []);
+      categories.forEach(function(cat) {
+        const label = UIBuilder.createElement('label', {
+          className: 'flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg text-sm cursor-pointer'
+        });
+        const checkbox = UIBuilder.createElement('input', {
+          type: 'checkbox',
+          className: 'quiz-category-checkbox',
+          value: cat
+        });
+        checkbox.checked = selected.has(cat);
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(cat));
+        categoriesList.appendChild(label);
+      });
+    }).catch(function() {
+      categoriesList.innerHTML = '';
+      categoriesList.appendChild(UIBuilder.createElement('p', {
+        className: 'text-sm text-red-500',
+        textContent: 'Could not load categories.'
+      }));
+    });
+  } else {
+    categoriesList.innerHTML = '';
+  }
+
   // Event Handlers for Dynamic UI
   // Handle custom interval selection
   intervalSelect.addEventListener('change', function() {
@@ -1512,13 +1883,64 @@ function validateGameSettings() {
   const joinMethodSelect = document.getElementById('join-method-select');
   const joinMethod = joinMethodSelect ? joinMethodSelect.value : 'team_qr';
 
+  // Get quiz capture settings
+  const quizEnabledCheckbox = document.getElementById('quiz-enabled-checkbox');
+  const quizEnabled = quizEnabledCheckbox ? quizEnabledCheckbox.checked : false;
+  const activeCategories = Array.from(document.querySelectorAll('.quiz-category-checkbox:checked')).map(cb => cb.value);
+
+  const maxShieldInput = document.getElementById('max-shield-input');
+  const maxShield = maxShieldInput ? parseInt(maxShieldInput.value) : 5;
+
+  const cooldownSecondsInput = document.getElementById('cooldown-seconds-input');
+  const cooldownSeconds = cooldownSecondsInput ? parseInt(cooldownSecondsInput.value) : 30;
+
+  if (quizEnabled) {
+    if (isNaN(maxShield) || maxShield < 1 || maxShield > 20) {
+      showNotification('Max shield must be between 1 and 20', 'error');
+      return null;
+    }
+    if (isNaN(cooldownSeconds) || cooldownSeconds < 5 || cooldownSeconds > 3600) {
+      showNotification('Cooldown must be between 5 and 3600 seconds', 'error');
+      return null;
+    }
+    if (activeCategories.length === 0) {
+      showNotification('Select at least one category to enable quiz capture', 'error');
+      return null;
+    }
+  }
+
+  // Get bonus round settings
+  const bonusEnabledCheckbox = document.getElementById('bonus-enabled-checkbox');
+  const bonusEnabled = bonusEnabledCheckbox ? bonusEnabledCheckbox.checked : false;
+
+  const bonusPointsInput = document.getElementById('bonus-points-input');
+  let bonusPointsPerBase = null; // null means automatic
+  if (bonusPointsInput && bonusPointsInput.value.trim() !== '') {
+    bonusPointsPerBase = parseInt(bonusPointsInput.value);
+    if (isNaN(bonusPointsPerBase) || bonusPointsPerBase < 1 || bonusPointsPerBase > 1000000) {
+      showNotification('Bonus points per base must be between 1 and 1,000,000, or blank for automatic', 'error');
+      return null;
+    }
+  }
+
   const settings = {
     name: gameName,
     capture_radius_meters: captureRadius,
     points_interval_seconds: pointsInterval,
     game_duration_minutes: gameDuration,
-    join_method: joinMethod
+    join_method: joinMethod,
+    quiz_enabled: quizEnabled,
+    active_categories: activeCategories,
+    max_shield: isNaN(maxShield) ? 5 : maxShield,
+    cooldown_seconds: isNaN(cooldownSeconds) ? 30 : cooldownSeconds,
+    bonus_round_enabled: bonusEnabled
   };
+
+  // The points value is locked once the bonus round has started, so only
+  // send it while the field is still editable
+  if (!bonusPointsInput || !bonusPointsInput.disabled) {
+    settings.bonus_points_per_base = bonusPointsPerBase;
+  }
 
   // Only include auto_start_time if the field exists and has a value
   if (autoStartTime !== null) {
@@ -1526,6 +1948,492 @@ function validateGameSettings() {
   }
 
   return settings;
+}
+
+// =============================================================================
+// QUESTION BANK (host-level, reusable across games)
+// =============================================================================
+
+function renderQuestionBankPage() {
+  const container = UIBuilder.createElement('div', { className: 'max-w-3xl mx-auto px-4 pb-4' });
+
+  const authState = getAuthState();
+  if (!authState.isHost) {
+    container.appendChild(UIBuilder.createElement('p', {
+      className: 'text-center text-gray-600 py-8',
+      textContent: 'Host authentication required to manage the question bank.'
+    }));
+    return container;
+  }
+
+  const header = UIBuilder.createElement('div', { className: 'flex items-center justify-between mb-6' });
+  header.appendChild(UIBuilder.createElement('h2', {
+    className: 'text-2xl font-bold',
+    textContent: 'Question Bank'
+  }));
+  const backBtn = UIBuilder.createButton('Back', function() {
+    navigateTo('hostPanel');
+  }, 'bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-sm', 'arrow-left');
+  header.appendChild(backBtn);
+  container.appendChild(header);
+
+  const actionsRow = UIBuilder.createElement('div', { className: 'flex flex-wrap gap-2 mb-4' });
+  const addBtn = UIBuilder.createButton('Add Question', function() {
+    renderQuestionFormModal(null);
+  }, 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-sm', 'plus');
+  actionsRow.appendChild(addBtn);
+
+  const bulkImportBtn = UIBuilder.createButton('Bulk Import', function() {
+    renderBulkImportModal();
+  }, 'bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm', 'upload');
+  actionsRow.appendChild(bulkImportBtn);
+  container.appendChild(actionsRow);
+
+  const listContainer = UIBuilder.createElement('div', {
+    id: 'question-bank-list',
+    className: 'space-y-3'
+  });
+  listContainer.appendChild(UIBuilder.createLoadingDisplay('Loading questions...'));
+  container.appendChild(listContainer);
+
+  setTimeout(() => loadQuestionBankList(), 0);
+
+  return container;
+}
+
+async function loadQuestionBankList() {
+  const listContainer = document.getElementById('question-bank-list');
+  if (!listContainer) return;
+
+  const authState = getAuthState();
+
+  try {
+    const questions = await fetchQuestions(authState.hostId);
+    listContainer.innerHTML = '';
+
+    if (!questions.length) {
+      listContainer.appendChild(UIBuilder.createEmptyState({
+        icon: 'help-circle',
+        title: 'No Questions Yet',
+        message: 'Add a question or bulk import your existing bank to enable quiz capture.',
+      }));
+      return;
+    }
+
+    // Group by category
+    const byCategory = {};
+    questions.forEach(function(q) {
+      byCategory[q.category] = byCategory[q.category] || [];
+      byCategory[q.category].push(q);
+    });
+
+    Object.keys(byCategory).sort().forEach(function(category) {
+      const categorySection = UIBuilder.createElement('div', { className: 'bg-white rounded-lg shadow-md p-4' });
+
+      const categoryHeader = UIBuilder.createElement('div', { className: 'flex items-center justify-between gap-3 mb-3' });
+      categoryHeader.appendChild(UIBuilder.createElement('h3', {
+        className: 'text-lg font-semibold',
+        textContent: `${category} (${byCategory[category].length})`
+      }));
+
+      const deleteCategoryBtn = UIBuilder.createButton('Delete All', async function() {
+        const count = byCategory[category].length;
+        if (!confirm(`Permanently delete all ${count} question(s) in "${category}"? This cannot be undone.`)) return;
+        try {
+          const result = await bulkDeleteQuestions(getAuthState().hostId, byCategory[category].map(q => q.id));
+          if (result.in_use) {
+            showNotification(`Deleted ${result.deleted} question(s); ${result.in_use} skipped because a running game is using this category`, 'warning');
+          } else {
+            showNotification(`Deleted ${result.deleted} question(s)`, 'success');
+          }
+          loadQuestionBankList();
+        } catch (err) {
+          showNotification(err.message || 'Unable to delete questions', 'error');
+        }
+      }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors flex-shrink-0', 'trash-2');
+      categoryHeader.appendChild(deleteCategoryBtn);
+      categorySection.appendChild(categoryHeader);
+
+      const qList = UIBuilder.createElement('div', { className: 'space-y-2' });
+      byCategory[category].forEach(function(q) {
+        qList.appendChild(buildQuestionCard(q));
+      });
+      categorySection.appendChild(qList);
+      listContainer.appendChild(categorySection);
+    });
+  } catch (err) {
+    listContainer.innerHTML = '';
+    listContainer.appendChild(UIBuilder.createElement('p', {
+      className: 'text-red-600 text-center py-4',
+      textContent: err.message || 'Unable to load questions.'
+    }));
+  }
+}
+
+function buildQuestionCard(question) {
+  const card = UIBuilder.createElement('div', {
+    className: question.active
+      ? 'border border-gray-200 rounded-lg p-3 bg-gray-50'
+      : 'border border-gray-200 rounded-lg p-3 bg-gray-100 opacity-60'
+  });
+
+  const row = UIBuilder.createElement('div', { className: 'flex items-start justify-between gap-3' });
+
+  const textCol = UIBuilder.createElement('div', { className: 'flex-1' });
+  const typeLabel = question.type === 'mc' ? 'Multiple choice' : 'True/False';
+  textCol.appendChild(UIBuilder.createElement('div', {
+    className: 'font-medium text-gray-900',
+    textContent: question.text
+  }));
+
+  const correctOption = (question.options || []).find(o => o.id === question.correct_option_id);
+  textCol.appendChild(UIBuilder.createElement('div', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: `${typeLabel} · Correct: ${correctOption ? correctOption.text : '—'}${question.active ? '' : ' · disabled'}`
+  }));
+
+  if (question.explanation) {
+    textCol.appendChild(UIBuilder.createElement('div', {
+      className: 'text-xs text-gray-400 italic mt-1',
+      textContent: question.explanation
+    }));
+  }
+  row.appendChild(textCol);
+
+  const actionsCol = UIBuilder.createElement('div', { className: 'flex items-center gap-2 flex-shrink-0' });
+  const editBtn = UIBuilder.createButton('Edit', function() {
+    renderQuestionFormModal(question);
+  }, 'bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors', 'edit-2');
+  actionsCol.appendChild(editBtn);
+
+  const toggleBtn = UIBuilder.createButton(question.active ? 'Disable' : 'Enable', async function() {
+    try {
+      await updateQuestion(getAuthState().hostId, question.id, { active: !question.active });
+      showNotification(question.active ? 'Question disabled' : 'Question enabled', 'success');
+      loadQuestionBankList();
+    } catch (err) {
+      showNotification(err.message || 'Unable to update question', 'error');
+    }
+  }, question.active
+    ? 'bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 transition-colors'
+    : 'bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors',
+  question.active ? 'eye-off' : 'eye');
+  actionsCol.appendChild(toggleBtn);
+
+  const deleteBtn = UIBuilder.createButton('Delete', async function() {
+    if (!confirm('Permanently delete this question? This cannot be undone.')) return;
+    try {
+      await deleteQuestion(getAuthState().hostId, question.id);
+      showNotification('Question deleted', 'success');
+      loadQuestionBankList();
+    } catch (err) {
+      showNotification(err.message || 'Unable to delete question', 'error');
+    }
+  }, 'bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors', 'trash-2');
+  actionsCol.appendChild(deleteBtn);
+
+  row.appendChild(actionsCol);
+  card.appendChild(row);
+  return card;
+}
+
+function renderQuestionFormModal(existingQuestion) {
+  const isEditing = !!existingQuestion;
+  const form = UIBuilder.createElement('form', { className: 'space-y-4' });
+
+  // Type selector
+  const typeGroup = UIBuilder.createElement('div');
+  typeGroup.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Type' }));
+  const typeSelect = UIBuilder.createElement('select', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'question-type-select'
+  });
+  ['mc', 'tf'].forEach(function(t) {
+    const opt = UIBuilder.createElement('option', { value: t, textContent: t === 'mc' ? 'Multiple choice' : 'True/False' });
+    if (existingQuestion && existingQuestion.type === t) opt.selected = true;
+    typeSelect.appendChild(opt);
+  });
+  typeGroup.appendChild(typeSelect);
+  form.appendChild(typeGroup);
+
+  // Text
+  const textGroup = UIBuilder.createElement('div');
+  textGroup.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Question' }));
+  const textInput = UIBuilder.createElement('textarea', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'question-text-input',
+    rows: '2'
+  });
+  textInput.value = existingQuestion ? existingQuestion.text : '';
+  textGroup.appendChild(textInput);
+  form.appendChild(textGroup);
+
+  // Category
+  const categoryGroup = UIBuilder.createElement('div');
+  categoryGroup.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Category' }));
+  const categoryInput = UIBuilder.createElement('input', {
+    type: 'text',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'question-category-input',
+    placeholder: 'e.g. Emergency Aid'
+  });
+  categoryInput.value = existingQuestion ? existingQuestion.category : '';
+  categoryGroup.appendChild(categoryInput);
+  form.appendChild(categoryGroup);
+
+  // MC options container (built/rebuilt based on type)
+  const optionsContainer = UIBuilder.createElement('div', { id: 'question-options-container', className: 'space-y-2' });
+  form.appendChild(optionsContainer);
+
+  function buildOptionsForType(type) {
+    optionsContainer.innerHTML = '';
+
+    if (type === 'tf') {
+      optionsContainer.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Correct Answer' }));
+      const tfSelect = UIBuilder.createElement('select', {
+        className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+        id: 'question-tf-correct'
+      });
+      ['true', 'false'].forEach(function(v) {
+        const opt = UIBuilder.createElement('option', { value: v, textContent: v === 'true' ? 'True' : 'False' });
+        if (existingQuestion && existingQuestion.type === 'tf' && existingQuestion.correct_option_id === v) {
+          opt.selected = true;
+        }
+        tfSelect.appendChild(opt);
+      });
+      optionsContainer.appendChild(tfSelect);
+      return;
+    }
+
+    // Multiple choice: a list of option text inputs with a radio for correct
+    optionsContainer.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Options (select the correct one)' }));
+
+    const rowsContainer = UIBuilder.createElement('div', { id: 'mc-option-rows', className: 'space-y-2' });
+    optionsContainer.appendChild(rowsContainer);
+
+    const existingOptions = (existingQuestion && existingQuestion.type === 'mc' && existingQuestion.options)
+      ? existingQuestion.options
+      : [{ id: null, text: '' }, { id: null, text: '' }];
+
+    existingOptions.forEach(function(opt, idx) {
+      addOptionRow(rowsContainer, opt.text, existingQuestion && existingQuestion.correct_option_id === opt.id);
+    });
+
+    const addOptionBtn = UIBuilder.createButton('Add Option', function() {
+      addOptionRow(rowsContainer, '', false);
+    }, 'text-sm bg-gray-200 text-gray-700 py-1 px-3 rounded hover:bg-gray-300 transition-colors mt-2', 'plus');
+    addOptionBtn.type = 'button';
+    optionsContainer.appendChild(addOptionBtn);
+  }
+
+  function addOptionRow(rowsContainer, value, checked) {
+    const row = UIBuilder.createElement('div', { className: 'flex items-center gap-2' });
+    const radio = UIBuilder.createElement('input', { type: 'radio', name: 'mc-correct-option', className: 'mc-correct-radio' });
+    radio.checked = !!checked;
+    row.appendChild(radio);
+
+    const input = UIBuilder.createElement('input', {
+      type: 'text',
+      className: 'flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500 mc-option-text'
+    });
+    input.value = value || '';
+    row.appendChild(input);
+
+    const removeBtn = UIBuilder.createButton('', function() {
+      if (rowsContainer.children.length > 2) {
+        row.remove();
+      } else {
+        showNotification('Multiple-choice questions need at least two options', 'warning');
+      }
+    }, 'bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 transition-colors', 'x');
+    removeBtn.type = 'button';
+    row.appendChild(removeBtn);
+
+    rowsContainer.appendChild(row);
+  }
+
+  buildOptionsForType(typeSelect.value);
+  typeSelect.addEventListener('change', function() {
+    buildOptionsForType(this.value);
+    if (window.lucide) window.lucide.createIcons();
+  });
+
+  // Explanation
+  const explanationGroup = UIBuilder.createElement('div');
+  explanationGroup.appendChild(UIBuilder.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1', textContent: 'Explanation (shown only on a wrong answer)' }));
+  const explanationInput = UIBuilder.createElement('textarea', {
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    id: 'question-explanation-input',
+    rows: '2'
+  });
+  explanationInput.value = (existingQuestion && existingQuestion.explanation) || '';
+  explanationGroup.appendChild(explanationInput);
+  form.appendChild(explanationGroup);
+
+  const submitButton = UIBuilder.createButton(isEditing ? 'Save Question' : 'Add Question', null,
+    'w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium');
+  submitButton.type = 'submit';
+  form.appendChild(submitButton);
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const text = textInput.value.trim();
+    const category = categoryInput.value.trim();
+    const type = typeSelect.value;
+
+    if (!text) {
+      showNotification('Question text is required', 'warning');
+      return;
+    }
+    if (!category) {
+      showNotification('Category is required', 'warning');
+      return;
+    }
+
+    const payload = { text, type, category, explanation: explanationInput.value.trim() || null };
+
+    if (type === 'tf') {
+      const tfSelect = document.getElementById('question-tf-correct');
+      payload.correct = tfSelect.value === 'true';
+    } else {
+      const optionInputs = Array.from(document.querySelectorAll('.mc-option-text'));
+      const radios = Array.from(document.querySelectorAll('.mc-correct-radio'));
+      const options = optionInputs.map(inp => inp.value.trim());
+
+      if (options.some(o => !o)) {
+        showNotification('Options cannot be blank', 'warning');
+        return;
+      }
+      if (options.length < 2) {
+        showNotification('Multiple-choice questions need at least two options', 'warning');
+        return;
+      }
+
+      const correctIndex = radios.findIndex(r => r.checked);
+      if (correctIndex === -1) {
+        showNotification('Select the correct option', 'warning');
+        return;
+      }
+
+      payload.options = options;
+      payload.correct = correctIndex;
+    }
+
+    try {
+      const hostId = getAuthState().hostId;
+      if (isEditing) {
+        await updateQuestion(hostId, existingQuestion.id, payload);
+        showNotification('Question updated', 'success');
+      } else {
+        await createQuestion(hostId, payload);
+        showNotification('Question added', 'success');
+      }
+      modal.close();
+      loadQuestionBankList();
+    } catch (err) {
+      showNotification(err.message || 'Unable to save question', 'error');
+    }
+  });
+
+  const modal = UIBuilder.createModal({
+    title: isEditing ? 'Edit Question' : 'Add Question',
+    content: form,
+    size: 'lg',
+    actions: [{
+      text: 'Cancel',
+      onClick: () => modal.close(),
+      className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }]
+  });
+
+  document.body.appendChild(modal);
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderBulkImportModal() {
+  const container = UIBuilder.createElement('div', { className: 'space-y-4' });
+
+  container.appendChild(UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600',
+    textContent: 'Paste a JSON array of questions, or CSV with header: text,type,options,correct,category,explanation (options pipe-separated for mc, e.g. "Paris|London|Berlin").'
+  }));
+
+  const formatSelect = UIBuilder.createElement('select', {
+    className: 'px-3 py-2 border rounded-lg',
+    id: 'bulk-import-format'
+  });
+  ['json', 'csv'].forEach(function(f) {
+    formatSelect.appendChild(UIBuilder.createElement('option', { value: f, textContent: f.toUpperCase() }));
+  });
+  container.appendChild(formatSelect);
+
+  const textarea = UIBuilder.createElement('textarea', {
+    id: 'bulk-import-textarea',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500 font-mono text-xs',
+    rows: '10',
+    placeholder: '[{"text":"2+2?","type":"mc","options":["3","4","5"],"correct":"4","category":"Maths"}]'
+  });
+  container.appendChild(textarea);
+
+  const resultsContainer = UIBuilder.createElement('div', { id: 'bulk-import-results', className: 'text-sm' });
+  container.appendChild(resultsContainer);
+
+  const importBtn = UIBuilder.createButton('Import', async function() {
+    const raw = textarea.value.trim();
+    if (!raw) {
+      showNotification('Paste some questions first', 'warning');
+      return;
+    }
+
+    let payload;
+    if (formatSelect.value === 'csv') {
+      payload = { csv: raw };
+    } else {
+      try {
+        payload = { questions: JSON.parse(raw) };
+      } catch (err) {
+        showNotification('Invalid JSON: ' + err.message, 'error');
+        return;
+      }
+    }
+
+    try {
+      const result = await bulkImportQuestions(getAuthState().hostId, payload);
+      resultsContainer.innerHTML = '';
+      resultsContainer.appendChild(UIBuilder.createElement('p', {
+        className: 'text-green-700 font-medium',
+        textContent: `Imported ${result.imported} question(s).`
+      }));
+      if (result.errors && result.errors.length) {
+        const errorList = UIBuilder.createElement('ul', { className: 'list-disc list-inside text-red-600 mt-2' });
+        result.errors.forEach(function(e) {
+          errorList.appendChild(UIBuilder.createElement('li', { textContent: `Row ${e.row}: ${e.error}` }));
+        });
+        resultsContainer.appendChild(errorList);
+      }
+      if (result.imported > 0) {
+        loadQuestionBankList();
+      }
+    } catch (err) {
+      showNotification(err.message || 'Import failed', 'error');
+    }
+  }, 'w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium');
+  importBtn.type = 'button';
+  container.appendChild(importBtn);
+
+  const modal = UIBuilder.createModal({
+    title: 'Bulk Import Questions',
+    content: container,
+    size: 'lg',
+    actions: [{
+      text: 'Close',
+      onClick: () => modal.close(),
+      className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }]
+  });
+
+  document.body.appendChild(modal);
 }
 
 // QR Assignment Page

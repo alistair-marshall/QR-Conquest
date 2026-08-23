@@ -14,6 +14,8 @@ const appState = {
   loading: false,
   error: null,
   pendingQRCode: null,
+  // Active quiz-capture scan session (Section 7.1), or null if none is open
+  quizSession: null,
   gps: {
     isTracking: false,
     watchId: null,
@@ -178,6 +180,7 @@ function clearGameState() {
   appState.pendingQRCode = null;
   appState.error = null;
   appState.loading = false;
+  appState.quizSession = null;
 
   console.log('Game state cleared');
 }
@@ -486,6 +489,14 @@ async function handleBaseQR(qrCode, statusData) {
 
     console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
 
+    // Bonus round: the game's host scanning a base QR checks it in as
+    // returned, awarding the collecting team its bonus points
+    if (authState.isHost && authState.hasGame && authState.gameId === gameId &&
+        appState.gameData.status === 'bonus') {
+      await returnBaseAsHost(baseId);
+      return;
+    }
+
     // Check if user is on a team
     if (!authState.hasTeam) {
       await handleBaseScanWithoutTeam(baseId, gameId);
@@ -497,13 +508,41 @@ async function handleBaseQR(qrCode, statusData) {
       throw new Error('This base belongs to a different game.');
     }
 
+    // Bonus round: players scan a base (at its location) to collect it
+    if (appState.gameData.status === 'bonus') {
+      if (!navigator.onLine) {
+        throw new Error('A connection is needed to collect this base.');
+      }
+      await collectBase(baseId);
+      return;
+    }
+
     // Check game status
     if (appState.gameData.status !== 'active') {
       throw new Error('The game is not active yet. Please wait for the host to start the game.');
     }
 
-    // Attempt to capture the base
-    await captureBase(baseId);
+    // Quiz answers cannot be validated offline without exposing the answer
+    // to the device, so attempting a base requires a live connection
+    if (!navigator.onLine) {
+      throw new Error('A connection is needed to capture this base.');
+    }
+
+    const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+
+    if (quizEnabled) {
+      const cooldownUntil = getPlayerCooldownUntil();
+      if (cooldownUntil && cooldownUntil > Math.floor(Date.now() / 1000)) {
+        if (window.showCooldownLockout) {
+          window.showCooldownLockout(cooldownUntil, null);
+        }
+        return;
+      }
+      await startQuizSession(baseId);
+    } else {
+      // Attempt to capture the base (legacy instantaneous capture)
+      await captureBase(baseId);
+    }
   } catch (err) {
     // Navigate appropriately based on error context
     if (!getAuthState().hasTeam && window.navigateTo) {
@@ -550,13 +589,37 @@ async function attemptPendingCapture() {
   sessionStorage.removeItem('pendingCaptureBaseId');
   sessionStorage.removeItem('pendingJoinGameId');
 
-  if (baseId && appState.gameData.status === 'active') {
-    try {
-      await captureBase(baseId);
-    } catch (err) {
-      // captureBase already notifies the user; joining still succeeded
-      console.warn('Pending base capture failed after joining:', err);
+  if (!baseId || (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
+    return;
+  }
+
+  try {
+    if (!navigator.onLine) {
+      throw new Error('A connection is needed to capture this base.');
     }
+
+    if (appState.gameData.status === 'bonus') {
+      await collectBase(baseId);
+      return;
+    }
+
+    const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+
+    if (quizEnabled) {
+      const cooldownUntil = getPlayerCooldownUntil();
+      if (cooldownUntil && cooldownUntil > Math.floor(Date.now() / 1000)) {
+        if (window.showCooldownLockout) {
+          window.showCooldownLockout(cooldownUntil, getPlayerCooldownExplanation());
+        }
+        return;
+      }
+      await startQuizSession(baseId);
+    } else {
+      await captureBase(baseId);
+    }
+  } catch (err) {
+    // capture/session functions already notify the user; joining still succeeded
+    console.warn('Pending base capture failed after joining:', err);
   }
 }
 
@@ -773,6 +836,8 @@ async function fetchGameUpdates() {
 
     const gameData = await response.json();
 
+    const previousStatus = appState.gameData.status;
+
     // Update teams with scores
     appState.gameData.teams = gameData.teams;
 
@@ -781,6 +846,30 @@ async function fetchGameUpdates() {
 
     // Update game status in case it changed
     appState.gameData.status = gameData.status;
+
+    // Keep quiz/capture settings current (the host may change them mid-game)
+    appState.gameData.settings = gameData.settings || appState.gameData.settings;
+
+    // Tell the player the main game just rolled into the bonus round
+    if (gameData.status === 'bonus' && previousStatus !== 'bonus') {
+      const perBase = gameData.settings && gameData.settings.bonus_points_per_base;
+      if (window.showNotification) {
+        window.showNotification(
+          `The main game has ended - bases no longer score points! ` +
+          `Bonus round: scan bases where they stand to collect them, then bring the QR codes back ` +
+          `to the host for ${perBase || 'bonus'} points each.`,
+          'info'
+        );
+      }
+      // Full re-render so the header status and map reflect the bonus round.
+      // Skip on scanQR: a full render there tears down and recreates the QR
+      // scanner, which re-requests camera permission out from under an
+      // open quiz modal (which lives outside elements.root and isn't
+      // actually affected by the wipe).
+      if (window.renderApp && appState.page !== 'scanQR') {
+        window.renderApp();
+      }
+    }
 
     if (gameData.status === 'ended') {
       // If the game has ended, stop polling
@@ -800,13 +889,21 @@ async function fetchGameUpdates() {
         window.updateMapMarkers();
       }
 
+      // Update bonus round banner (remaining base count)
+      if (window.updateBonusBanner) {
+        window.updateBonusBanner();
+      }
+
       // Update header status if it exists
       const statusElement = document.getElementById('game-status-text');
       if (statusElement && window.updateGameStatusText) {
         window.updateGameStatusText(statusElement);
       }
-    } else {
-      // Only do full re-render if we're not on the game view
+    } else if (appState.page !== 'scanQR') {
+      // Full re-render for other pages, but not scanQR: this fires on every
+      // correct quiz answer (see submitQuizAnswer below), and a full render
+      // there would recreate the QR scanner and re-trigger the camera
+      // permission prompt while the quiz modal is open on top of it.
       if (window.renderApp) {
         window.renderApp();
       }
@@ -925,6 +1022,21 @@ function disconnectGameSocket() {
 // shows a success message, so the matching broadcast is not shown again
 let lastOwnCapture = { baseId: null, time: 0 };
 
+// A quiz outcome the current player just caused already shows inline
+// feedback in the quiz modal, so the matching broadcast is not shown again
+let lastOwnQuizAction = { baseId: null, time: 0 };
+
+// Base the current player just collected in the bonus round; their own
+// collection already shows a success message, so the broadcast is skipped
+let lastOwnCollect = { baseId: null, time: 0 };
+
+const QUIZ_OUTCOME_VERBS = {
+  captured: 'captured',
+  neutralised: 'neutralised',
+  reduced: 'weakened',
+  reinforced: 'reinforced'
+};
+
 function handleGameSocketMessage(message) {
   if (message.type === 'base_captured') {
     console.log('Base captured event:', message);
@@ -941,6 +1053,54 @@ function handleGameSocketMessage(message) {
     }
 
     // Refresh scores and base ownership straight away
+    fetchGameUpdates();
+  } else if (message.type === 'base_state_changed') {
+    console.log('Base state changed event:', message);
+
+    const isOwnAction = message.base_id === lastOwnQuizAction.baseId &&
+      (Date.now() - lastOwnQuizAction.time) < 10000;
+
+    if (!isOwnAction && window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      const verb = QUIZ_OUTCOME_VERBS[message.outcome] || message.outcome;
+      window.showNotification(
+        `${message.base_name} ${verb} by ${message.team_name}! (shield ${message.shield})`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
+    fetchGameUpdates();
+  } else if (message.type === 'bonus_round_started') {
+    console.log('Bonus round started event:', message);
+
+    // fetchGameUpdates detects the status change and shows the announcement
+    fetchGameUpdates();
+  } else if (message.type === 'base_collected') {
+    console.log('Base collected event:', message);
+
+    const isOwnCollect = message.base_id === lastOwnCollect.baseId &&
+      (Date.now() - lastOwnCollect.time) < 10000;
+
+    if (!isOwnCollect && window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      window.showNotification(
+        `${message.base_name} collected by ${message.team_name}!`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
+    fetchGameUpdates();
+  } else if (message.type === 'base_returned') {
+    console.log('Base returned event:', message);
+
+    if (window.showNotification) {
+      const isOwnTeam = message.team_id === getAuthState().teamId;
+      window.showNotification(
+        `${message.base_name} returned by ${message.team_name}! +${message.points} points`,
+        isOwnTeam ? 'success' : 'info'
+      );
+    }
+
     fetchGameUpdates();
   }
 }
@@ -980,6 +1140,12 @@ async function createGame(gameSettings) {
     }
     if (gameSettings.join_method !== undefined) {
       requestBody.join_method = gameSettings.join_method;
+    }
+    if (gameSettings.bonus_round_enabled !== undefined) {
+      requestBody.bonus_round_enabled = gameSettings.bonus_round_enabled;
+    }
+    if (gameSettings.bonus_points_per_base !== undefined) {
+      requestBody.bonus_points_per_base = gameSettings.bonus_points_per_base;
     }
 
     const response = await fetch(API_BASE_URL + '/games', {
@@ -1300,75 +1466,76 @@ async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
   }
 }
 
-// Handle base capture with GPS location verification
+// Resolve the player's current GPS coordinates, preferring a recent
+// continuous-tracking fix and falling back to a fresh one-off request.
+async function getCurrentGPSCoordinates() {
+  if (appState.gps.currentPosition &&
+      appState.gps.lastUpdate &&
+      (Date.now() - appState.gps.lastUpdate) <= 30000) {
+    return {
+      latitude: appState.gps.currentPosition.latitude,
+      longitude: appState.gps.currentPosition.longitude,
+      accuracy: appState.gps.accuracy,
+      usingFreshGPS: false
+    };
+  }
+
+  if (window.showNotification) {
+    window.showNotification('Getting location...', 'info');
+  }
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      });
+    });
+
+    return {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      usingFreshGPS: true
+    };
+  } catch (error) {
+    let errorMessage = 'Unable to verify your location. ';
+
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        errorMessage += 'Please enable location services and try again.';
+        break;
+      case error.POSITION_UNAVAILABLE:
+        errorMessage += 'Location services are unavailable.';
+        break;
+      case error.TIMEOUT:
+        errorMessage += 'Location request timed out. Please try again.';
+        break;
+      default:
+        errorMessage += 'Please check your GPS settings and try again.';
+        break;
+    }
+    throw new Error(errorMessage);
+  }
+}
+
+// Handle base capture with GPS location verification (legacy, instantaneous
+// capture - used only when the game does not have quiz capture enabled)
 async function captureBase(baseId) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
   }
 
-  let latitude, longitude, accuracy;
-  let usingFreshGPS = false;
-
-  // Try to use continuous GPS first
-  if (appState.gps.currentPosition && 
-      appState.gps.lastUpdate && 
-      (Date.now() - appState.gps.lastUpdate) <= 30000) {
-    
-    latitude = appState.gps.currentPosition.latitude;
-    longitude = appState.gps.currentPosition.longitude;
-    accuracy = appState.gps.accuracy;
-    
-  } else {
-    // Fall back to fresh GPS request
-    if (window.showNotification) {
-      window.showNotification('Getting location for capture...', 'info');
-    }
-    
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 5000
-        });
-      });
-      
-      latitude = position.coords.latitude;
-      longitude = position.coords.longitude;
-      accuracy = position.coords.accuracy;
-      usingFreshGPS = true;
-      
-    } catch (error) {
-      // Only throw error if we truly can't get any GPS
-      let errorMessage = 'Unable to verify your location for base capture. ';
-      
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage += 'Please enable location services and try again.';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage += 'Location services are unavailable.';
-          break;
-        case error.TIMEOUT:
-          errorMessage += 'Location request timed out. Please try again.';
-          break;
-        default:
-          errorMessage += 'Please check your GPS settings and try again.';
-          break;
-      }
-      throw new Error(errorMessage);
-    }
-  }
+  const { latitude, longitude, accuracy, usingFreshGPS } = await getCurrentGPSCoordinates();
 
   // Provide feedback about GPS accuracy but don't block capture
-  if (accuracy > 20) {
-    if (window.showNotification) {
-      window.showNotification(
-        `Capturing with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`, 
-        'warning'
-      );
-    }
+  if (accuracy > 20 && window.showNotification) {
+    window.showNotification(
+      `Capturing with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`,
+      'warning'
+    );
   }
 
   // Always attempt the capture - let the server validate distance
@@ -1408,6 +1575,337 @@ async function captureBase(baseId) {
       window.showNotification(userMessage, 'error');
     }
     throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// =============================================================================
+// BONUS ROUND - COLLECTING BASES IN
+// =============================================================================
+
+// Player collects a base during the bonus round. GPS-verified server-side so
+// the base is marked collected at its map location, not wherever it ends up.
+async function collectBase(baseId) {
+  const authState = getAuthState();
+  if (!authState.hasTeam) {
+    throw new Error('You must be on a team to collect bases.');
+  }
+
+  const { latitude, longitude, accuracy } = await getCurrentGPSCoordinates();
+
+  if (accuracy > 20 && window.showNotification) {
+    window.showNotification(
+      `Collecting with GPS accuracy of ±${accuracy.toFixed(1)}m. Server will verify if you're close enough.`,
+      'warning'
+    );
+  }
+
+  try {
+    setLoading(true);
+
+    // Mark before the request: the WebSocket broadcast of our own collection
+    // can arrive before the HTTP response does
+    lastOwnCollect = { baseId: baseId, time: Date.now() };
+
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/collect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        player_id: authState.playerId,
+        latitude: latitude,
+        longitude: longitude
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to collect base');
+
+    // Refresh so the collected base disappears from the map
+    await fetchGameUpdates();
+
+    if (window.showNotification) {
+      const points = data.bonus_points_per_base;
+      window.showNotification(
+        `Base collected! Bring the QR code back to the host to score ${points ? points + ' bonus points' : 'the bonus points'}.`,
+        'success'
+      );
+    }
+  } catch (err) {
+    console.error('Error collecting base:', err);
+    const userMessage = err.message || 'Unable to collect base. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Host checks a collected base back in, confirming the QR code was returned
+// and awarding the collecting team its bonus points
+async function returnBaseAsHost(baseId) {
+  const authState = getAuthState();
+  if (!authState.isHost) {
+    throw new Error('Host authentication required to check bases in.');
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/return', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to check base in');
+
+    await fetchGameUpdates();
+
+    if (window.showNotification) {
+      window.showNotification(
+        `Base checked in! ${data.team_name} scores ${data.points} bonus points.`,
+        'success'
+      );
+    }
+
+    // Send the host back to their panel so they can keep scanning bases in
+    if (window.navigateTo) {
+      window.navigateTo('hostPanel');
+    }
+  } catch (err) {
+    console.error('Error checking base in:', err);
+    const userMessage = err.message || 'Unable to check base in. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Host ends the main game and starts the bonus round
+async function startBonusRound() {
+  if (!appState.gameData.id) {
+    throw new Error('No game loaded.');
+  }
+
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.isHost) {
+      throw new Error('Only the game host can start the bonus round.');
+    }
+
+    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/bonus/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Failed to start bonus round');
+
+    await fetchGameData(appState.gameData.id);
+
+    if (window.showNotification) {
+      window.showNotification(
+        `Bonus round started! Each base collected in is worth ${data.bonus_points_per_base} points. ` +
+        `Scan base QR codes as players bring them back to check them in.`,
+        'success'
+      );
+    }
+  } catch (err) {
+    console.error('Error starting bonus round:', err);
+    const userMessage = err.message || 'Unable to start bonus round. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// =============================================================================
+// QUIZ CAPTURE - SCAN SESSIONS
+// =============================================================================
+
+// Persist the player's cooldown so the lockout survives a page reload
+function setPlayerCooldown(cooldownUntil, explanation) {
+  localStorage.setItem('cooldownUntil', String(cooldownUntil));
+  if (explanation) {
+    localStorage.setItem('cooldownExplanation', explanation);
+  } else {
+    localStorage.removeItem('cooldownExplanation');
+  }
+}
+
+function getPlayerCooldownUntil() {
+  const stored = localStorage.getItem('cooldownUntil');
+  if (!stored) return null;
+  const value = parseInt(stored, 10);
+  if (isNaN(value) || value <= Math.floor(Date.now() / 1000)) {
+    localStorage.removeItem('cooldownUntil');
+    localStorage.removeItem('cooldownExplanation');
+    return null;
+  }
+  return value;
+}
+
+function getPlayerCooldownExplanation() {
+  return localStorage.getItem('cooldownExplanation') || null;
+}
+
+function clearQuizSession() {
+  appState.quizSession = null;
+}
+
+// Begin a scan session against a base (quiz-enabled games only)
+async function startQuizSession(baseId) {
+  const authState = getAuthState();
+  if (!authState.hasTeam) {
+    throw new Error('You must join a team before capturing bases.');
+  }
+
+  const { latitude, longitude } = await getCurrentGPSCoordinates();
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/session/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        player_id: authState.playerId,
+        latitude: latitude,
+        longitude: longitude
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      if (response.status === 403 && errData.cooldown_until) {
+        setPlayerCooldown(errData.cooldown_until, getPlayerCooldownExplanation());
+        if (window.showCooldownLockout) {
+          window.showCooldownLockout(errData.cooldown_until, getPlayerCooldownExplanation());
+        }
+        return;
+      }
+      throw new Error(errData.error || 'Unable to start capture session');
+    }
+
+    const data = await response.json();
+
+    appState.quizSession = {
+      active: true,
+      sessionId: data.session_id,
+      baseId: baseId,
+      baseName: data.base.name,
+      shield: data.base.shield,
+      ownerTeamId: data.base.owner_team_id,
+      question: data.question
+    };
+
+    if (window.showQuizModal) {
+      window.showQuizModal();
+    }
+  } catch (err) {
+    console.error('Error starting quiz session:', err);
+    const userMessage = err.message || 'Unable to start capture session. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Submit an answer for the active quiz session's current question
+async function submitQuizAnswer(optionId) {
+  const session = appState.quizSession;
+  if (!session || !session.active) return;
+
+  try {
+    setLoading(true);
+
+    // Mark before the request: the WebSocket broadcast of our own action can
+    // arrive before the HTTP response does
+    lastOwnQuizAction = { baseId: session.baseId, time: Date.now() };
+
+    const response = await fetch(API_BASE_URL + '/sessions/' + session.sessionId + '/answer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        question_id: session.question.id,
+        submitted_option_id: optionId
+      })
+    });
+
+    const data = await handleApiResponse(response, 'Unable to submit answer');
+
+    // The main game ended while this question was open: the answer had no
+    // effect, and during the bonus round the base should be collected instead
+    if (data.game_status && data.game_status !== 'active') {
+      session.active = false;
+      clearQuizSession();
+      if (data.bonus_round && window.showBonusCollectPrompt) {
+        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct);
+      } else {
+        if (window.closeQuizModal) window.closeQuizModal();
+        if (window.showNotification) {
+          window.showNotification('The game ended while you were answering - captures are closed.', 'info');
+        }
+      }
+      fetchGameUpdates();
+      return;
+    }
+
+    if (data.correct) {
+      session.shield = data.shield_now;
+      session.ownerTeamId = data.owner_now;
+      session.question = data.next_question;
+
+      if (!data.next_question) {
+        session.active = false;
+      }
+
+      if (window.showQuizOutcome) {
+        window.showQuizOutcome(data.outcome, data);
+      }
+
+      // Refresh scores/map in the background so other views stay current
+      fetchGameUpdates();
+    } else {
+      session.active = false;
+      setPlayerCooldown(data.cooldown_until, data.explanation);
+
+      if (window.showCooldownLockout) {
+        window.showCooldownLockout(data.cooldown_until, data.explanation);
+      }
+    }
+  } catch (err) {
+    console.error('Error submitting answer:', err);
+    if (window.showNotification) {
+      window.showNotification(err.message || 'Unable to submit answer. Please try again.', 'error');
+    }
   } finally {
     setLoading(false);
   }
@@ -1731,6 +2229,63 @@ async function fetchHostGames(hostId) {
     }
     throw err;
   }
+}
+
+// =============================================================================
+// QUESTION BANK FUNCTIONS (host-level, reusable across games)
+// =============================================================================
+
+async function fetchHostCategories(hostId) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/categories`);
+  return handleApiResponse(response, 'Failed to fetch categories');
+}
+
+async function fetchQuestions(hostId) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`);
+  return handleApiResponse(response, 'Failed to fetch questions');
+}
+
+async function createQuestion(hostId, payload) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return handleApiResponse(response, 'Failed to create question');
+}
+
+async function updateQuestion(hostId, questionId, payload) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return handleApiResponse(response, 'Failed to update question');
+}
+
+async function deleteQuestion(hostId, questionId) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
+    method: 'DELETE'
+  });
+  return handleApiResponse(response, 'Failed to delete question');
+}
+
+async function bulkDeleteQuestions(hostId, questionIds) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_ids: questionIds })
+  });
+  return handleApiResponse(response, 'Failed to delete questions');
+}
+
+async function bulkImportQuestions(hostId, payload) {
+  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return handleApiResponse(response, 'Failed to import questions');
 }
 
 // =============================================================================
