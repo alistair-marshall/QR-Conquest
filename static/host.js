@@ -769,7 +769,8 @@ function renderHostPanel() {
     bonusInfo.appendChild(UIBuilder.createElement('p', {
       className: 'text-sm text-yellow-800',
       textContent: `Players are collecting bases${perBase ? ` for ${perBase} points each` : ''}. ` +
-        `Scan each base QR code as it is brought back to you to check it in and award the points.`
+        `Scan each base QR code as it is brought back to you to check it in and award the points. ` +
+        `Bases that were never collected properly can be scanned in too - they come off the map without scoring.`
     }));
     controlSection.appendChild(bonusInfo);
 
@@ -795,7 +796,7 @@ function renderHostPanel() {
           const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
           statusBadge = UIBuilder.createElement('span', {
             className: 'text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full',
-            textContent: `✓ Returned${team ? ' - ' + team.name : ''}`
+            textContent: `✓ Returned${team ? ' - ' + team.name : ' - no points'}`
           });
         } else if (base.collectedBy) {
           const team = appState.gameData.teams.find(t => t.id === base.collectedBy);
@@ -2839,7 +2840,7 @@ function renderBaseDeleteModal(base) {
 
   const warningText = UIBuilder.createElement('p', {
     className: 'text-sm',
-    textContent: 'This will remove the base from the game and release its QR code for reuse.'
+    textContent: 'This will remove the base from the game. Its QR code can be reused for a new base or team, and can still be scanned in during the bonus round.'
   });
   warningDiv.appendChild(warningText);
 
@@ -3030,10 +3031,10 @@ function renderBaseRestoreModal(base) {
   });
 
   const info1 = UIBuilder.createElement('li', {
-    textContent: 'A fresh QR code scan is required to complete the restoration'
+    textContent: 'A QR code scan is required to complete the restoration'
   });
   const info2 = UIBuilder.createElement('li', {
-    textContent: 'The original QR code was released'
+    textContent: 'The original QR code can be scanned again, or use a new one'
   });
   const info3 = UIBuilder.createElement('li', {
     textContent: 'All previous captures and points will be restored'

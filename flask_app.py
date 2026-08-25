@@ -1079,6 +1079,7 @@ def calculate_team_score(cursor, team_id, game):
         cursor.execute('''
         SELECT COUNT(*) FROM bases
         WHERE game_id = ? AND collected_by_team_id = ? AND returned_at IS NOT NULL
+          AND deleted_at IS NULL
         ''', (game['id'], team_id))
         total_score += cursor.fetchone()[0] * game['bonus_points_per_base']
 
@@ -1355,7 +1356,10 @@ def collect_base(base_id):
         'bonus_points_per_base': base_data['bonus_points_per_base']
     })
 
-# Host confirms a collected base has been brought back, awarding the points.
+# Host confirms a base has been brought back. A base a team collected
+# properly scores its bonus points; any other base in the host's hand
+# (never collected, or deleted) can still be scanned in so it comes off
+# the map, but scores nothing.
 # No location check: the host scans the physical QR code wherever they are.
 @app.route('/api/bases/<base_id>/return', methods=['POST'])
 def return_base(base_id):
@@ -1385,31 +1389,35 @@ def return_base(base_id):
         conn.close()
         return jsonify({'error': 'Bases can only be checked in during the bonus round'}), 403
 
-    if base_data['collected_by_team_id'] is None:
-        conn.close()
-        return jsonify({'error': 'This base has not been collected by a team yet'}), 400
-
     if base_data['returned_at'] is not None:
         conn.close()
         return jsonify({'error': 'This base has already been checked in'}), 400
 
+    # Points only for a live base a team collected correctly - an uncollected
+    # or deleted base is still checked in, just without awarding anything
+    awards_points = (base_data['collected_by_team_id'] is not None
+                     and base_data['deleted_at'] is None)
+
     current_time = int(time.time())
     cursor.execute('UPDATE bases SET returned_at = ? WHERE id = ?', (current_time, base_id))
 
-    cursor.execute('SELECT name, color FROM teams WHERE id = ?', (base_data['collected_by_team_id'],))
-    team = cursor.fetchone()
+    team = None
+    if awards_points:
+        cursor.execute('SELECT name, color FROM teams WHERE id = ?', (base_data['collected_by_team_id'],))
+        team = cursor.fetchone()
 
     conn.commit()
     conn.close()
 
-    points = base_data['bonus_points_per_base'] or 0
+    points = (base_data['bonus_points_per_base'] or 0) if awards_points else 0
+    team_id = base_data['collected_by_team_id'] if awards_points else None
 
     broadcast_game_event(base_data['game_id'], {
         'type': 'base_returned',
         'base_id': base_id,
         'base_name': base_data['name'],
-        'team_id': base_data['collected_by_team_id'],
-        'team_name': team['name'] if team else 'Unknown Team',
+        'team_id': team_id,
+        'team_name': (team['name'] if team else 'Unknown Team') if awards_points else None,
         'team_color': team['color'] if team else None,
         'points': points,
         'returned_at': current_time
@@ -1417,8 +1425,8 @@ def return_base(base_id):
 
     return jsonify({
         'success': True,
-        'team_id': base_data['collected_by_team_id'],
-        'team_name': team['name'] if team else 'Unknown Team',
+        'team_id': team_id,
+        'team_name': (team['name'] if team else 'Unknown Team') if awards_points else None,
         'points': points
     })
 
@@ -1711,18 +1719,24 @@ def get_scores(game_id):
     return jsonify(scores)
 
 # Check whether a QR code is already assigned to a team, base or host.
-# Returns an error message string, or None if the code is free.
+# Returns an error message string, or None if the code is free. A code held
+# only by a soft-deleted base counts as free: deleted bases keep their code
+# so the host can scan them in during the bonus round, and this reclaims it
+# (the caller's commit makes the release permanent).
 def qr_code_conflict(cursor, qr_code, exclude_base_id=None):
     cursor.execute('SELECT id FROM teams WHERE qr_code = ?', (qr_code,))
     if cursor.fetchone():
         return 'QR code already assigned to a team'
 
     if exclude_base_id:
-        cursor.execute('SELECT id FROM bases WHERE qr_code = ? AND id != ?', (qr_code, exclude_base_id))
+        cursor.execute('SELECT id, deleted_at FROM bases WHERE qr_code = ? AND id != ?', (qr_code, exclude_base_id))
     else:
-        cursor.execute('SELECT id FROM bases WHERE qr_code = ?', (qr_code,))
-    if cursor.fetchone():
-        return 'QR code already assigned to a base'
+        cursor.execute('SELECT id, deleted_at FROM bases WHERE qr_code = ?', (qr_code,))
+    base = cursor.fetchone()
+    if base:
+        if base['deleted_at'] is None:
+            return 'QR code already assigned to a base'
+        cursor.execute('UPDATE bases SET qr_code = NULL WHERE id = ?', (base['id'],))
 
     cursor.execute('SELECT id FROM hosts WHERE qr_code = ?', (qr_code,))
     if cursor.fetchone():
@@ -1905,10 +1919,12 @@ def delete_base(base_id):
             conn.close()
             return jsonify({'error': 'Cannot delete the last active base in a running game'}), 400
     
-    # Soft delete the base
+    # Soft delete the base. The QR code stays attached so the host can still
+    # scan the physical code in during the bonus round; it is reclaimed when
+    # reassigned (see qr_code_conflict) or when the game ends.
     cursor.execute('''
     UPDATE bases
-    SET deleted_at = ?, qr_code = NULL
+    SET deleted_at = ?
     WHERE id = ?
     ''', (deleted_at, base_id))
     
@@ -2044,8 +2060,10 @@ def check_qr_code_status(qr_code):
             'game_id': team['game_id']
         })
 
-    # Check if QR code is assigned to a base
-    cursor.execute('SELECT id, game_id FROM bases WHERE qr_code = ?', (qr_code,))
+    # Check if QR code is assigned to a base. Soft-deleted bases keep their
+    # code so the host can still scan them in during the bonus round; the
+    # deleted flag lets the client treat the code as reusable otherwise.
+    cursor.execute('SELECT id, game_id, deleted_at FROM bases WHERE qr_code = ?', (qr_code,))
     base = cursor.fetchone()
 
     if base:
@@ -2053,7 +2071,8 @@ def check_qr_code_status(qr_code):
         return jsonify({
             'status': 'base',
             'base_id': base['id'],
-            'game_id': base['game_id']
+            'game_id': base['game_id'],
+            'deleted': base['deleted_at'] is not None
         })
 
     # Check if QR code is assigned to a host
