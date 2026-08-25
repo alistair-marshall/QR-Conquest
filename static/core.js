@@ -16,6 +16,8 @@ const appState = {
   pendingQRCode: null,
   // Active quiz-capture scan session (Section 7.1), or null if none is open
   quizSession: null,
+  // Base shown on the baseView page (set when a quiz scan session starts)
+  baseViewBaseId: null,
   gps: {
     isTracking: false,
     watchId: null,
@@ -181,6 +183,7 @@ function clearGameState() {
   appState.error = null;
   appState.loading = false;
   appState.quizSession = null;
+  appState.baseViewBaseId = null;
 
   console.log('Game state cleared');
 }
@@ -551,6 +554,9 @@ async function handleBaseQR(qrCode, statusData) {
     if (quizEnabled) {
       const cooldownUntil = getPlayerCooldownUntil();
       if (cooldownUntil && cooldownUntil > Math.floor(Date.now() / 1000)) {
+        // Leave the scanner page first, otherwise it restarts the camera and
+        // keeps rescanning the same base while the lockout modal is open
+        leaveScannerPage();
         if (window.showCooldownLockout) {
           window.showCooldownLockout(cooldownUntil, null);
         }
@@ -560,6 +566,8 @@ async function handleBaseQR(qrCode, statusData) {
     } else {
       // Attempt to capture the base (legacy instantaneous capture)
       await captureBase(baseId);
+      // Back to the map so the scanner doesn't rescan the captured base
+      leaveScannerPage();
     }
   } catch (err) {
     // Navigate appropriately based on error context
@@ -567,8 +575,21 @@ async function handleBaseQR(qrCode, statusData) {
       window.navigateTo('scanQR');
     } else if (appState.gameData.status !== 'active' && window.navigateTo) {
       window.navigateTo('gameView');
+    } else {
+      // The scan failed while the player stays in the game: leave the scanner
+      // page so it doesn't restart and rescan the same code in a loop
+      leaveScannerPage();
     }
     throw err;
+  }
+}
+
+// If the player is on the live scanner page, move them to the game view.
+// Any re-render of the scanner page restarts the camera, which would keep
+// rescanning a QR code the phone is still pointed at.
+function leaveScannerPage() {
+  if (appState.page === 'scanQR' && window.navigateTo) {
+    window.navigateTo('gameView');
   }
 }
 
@@ -916,6 +937,12 @@ async function fetchGameUpdates() {
       const statusElement = document.getElementById('game-status-text');
       if (statusElement && window.updateGameStatusText) {
         window.updateGameStatusText(statusElement);
+      }
+    } else if (appState.page === 'baseView') {
+      // Update the base status display in place - a full render here would
+      // wipe the attack animation that plays after each quiz answer
+      if (window.updateBaseViewInfo) {
+        window.updateBaseViewInfo();
       }
     } else if (appState.page !== 'scanQR') {
       // Full re-render for other pages, but not scanQR: this fires on every
@@ -1834,6 +1861,7 @@ async function startQuizSession(baseId) {
       const errData = await response.json().catch(() => ({}));
       if (response.status === 403 && errData.cooldown_until) {
         setPlayerCooldown(errData.cooldown_until, getPlayerCooldownExplanation());
+        leaveScannerPage();
         if (window.showCooldownLockout) {
           window.showCooldownLockout(errData.cooldown_until, getPlayerCooldownExplanation());
         }
@@ -1854,11 +1882,20 @@ async function startQuizSession(baseId) {
       question: data.question
     };
 
+    // Show the base status page (name, owner, shield) with the quiz modal on
+    // top. This also leaves the scanner page - staying there would restart
+    // the camera and rescan the same base over and over under the modal.
+    appState.baseViewBaseId = baseId;
+    if (window.navigateTo) {
+      window.navigateTo('baseView');
+    }
+
     if (window.showQuizModal) {
       window.showQuizModal();
     }
   } catch (err) {
     console.error('Error starting quiz session:', err);
+    leaveScannerPage();
     const userMessage = err.message || 'Unable to start capture session. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
@@ -1869,14 +1906,15 @@ async function startQuizSession(baseId) {
   }
 }
 
-// Submit an answer for the active quiz session's current question
+// Submit an answer for the active quiz session's current question.
+// No setLoading here: the option buttons are already disabled while the
+// request is in flight, and a loading render would tear down the baseView
+// page (and its attack animation) behind the quiz modal.
 async function submitQuizAnswer(optionId) {
   const session = appState.quizSession;
   if (!session || !session.active) return;
 
   try {
-    setLoading(true);
-
     // Mark before the request: the WebSocket broadcast of our own action can
     // arrive before the HTTP response does
     lastOwnQuizAction = { baseId: session.baseId, time: Date.now() };
@@ -1931,7 +1969,8 @@ async function submitQuizAnswer(optionId) {
       setPlayerCooldown(data.cooldown_until, data.explanation);
 
       if (window.showCooldownLockout) {
-        window.showCooldownLockout(data.cooldown_until, data.explanation);
+        // animateMiss: show the attack missing the base before the lockout
+        window.showCooldownLockout(data.cooldown_until, data.explanation, { animateMiss: true });
       }
     }
   } catch (err) {
@@ -1939,8 +1978,10 @@ async function submitQuizAnswer(optionId) {
     if (window.showNotification) {
       window.showNotification(err.message || 'Unable to submit answer. Please try again.', 'error');
     }
-  } finally {
-    setLoading(false);
+    // Re-enable the option buttons so the player can try submitting again
+    if (window.showQuizModal && appState.quizSession && appState.quizSession.active) {
+      window.showQuizModal();
+    }
   }
 }
 
