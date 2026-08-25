@@ -16,8 +16,11 @@ const appState = {
   pendingQRCode: null,
   // Active quiz-capture scan session (Section 7.1), or null if none is open
   quizSession: null,
-  // Base shown on the baseView page (set when a quiz scan session starts)
+  // Base shown on the baseView page (set when a base is scanned)
   baseViewBaseId: null,
+  // Snapshot of that base as it was before an attack, held while the
+  // animation plays so the hit is seen landing on the old state
+  baseViewPending: null,
   gps: {
     isTracking: false,
     watchId: null,
@@ -184,6 +187,7 @@ function clearGameState() {
   appState.loading = false;
   appState.quizSession = null;
   appState.baseViewBaseId = null;
+  appState.baseViewPending = null;
 
   console.log('Game state cleared');
 }
@@ -564,10 +568,10 @@ async function handleBaseQR(qrCode, statusData) {
       }
       await startQuizSession(baseId);
     } else {
-      // Attempt to capture the base (legacy instantaneous capture)
+      // Attempt to capture the base (legacy instantaneous capture). This
+      // moves to the base view for the attack animation, leaving the
+      // scanner page so it can't rescan the base just captured.
       await captureBase(baseId);
-      // Back to the map so the scanner doesn't rescan the captured base
-      leaveScannerPage();
     }
   } catch (err) {
     // Navigate appropriately based on error context
@@ -1591,6 +1595,10 @@ async function captureBase(baseId) {
     );
   }
 
+  // How the base stood before this capture, so the attack animation can show
+  // the hit landing on the previous owner rather than on the result
+  const snapshot = snapshotBaseForView(baseId);
+
   // Always attempt the capture - let the server validate distance
   try {
     setLoading(true);
@@ -1615,12 +1623,6 @@ async function captureBase(baseId) {
 
     // Update scores
     await fetchGameUpdates();
-
-    // Show success message with GPS info
-    if (window.showNotification) {
-      const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
-      window.showNotification(`Base captured successfully! (using ${gpsInfo})`, 'success');
-    }
   } catch (err) {
     console.error('Error capturing base:', err);
     const userMessage = err.message || 'Unable to capture base. Please try again.';
@@ -1631,6 +1633,44 @@ async function captureBase(baseId) {
   } finally {
     setLoading(false);
   }
+
+  // Started only once the loading render has settled: a render while the
+  // animation is playing would tear the scene down mid-flight.
+  if (snapshot && window.showBaseCaptureAnimation) {
+    window.showBaseCaptureAnimation(baseId, snapshot);
+  } else {
+    // No base view to animate on (the base isn't in local game data yet) -
+    // still leave the scanner so it can't rescan the captured base
+    leaveScannerPage();
+  }
+
+  // Show success message with GPS info. A base the team already held is
+  // called out as such, so this doesn't contradict the animation.
+  if (window.showNotification) {
+    const gpsInfo = usingFreshGPS ? 'fresh GPS' : 'tracked GPS';
+    const alreadyOurs = !!(snapshot && snapshot.ownerTeamId &&
+      snapshot.ownerTeamId === authState.teamId);
+    window.showNotification(
+      alreadyOurs
+        ? `This base was already yours. (using ${gpsInfo})`
+        : `Base captured successfully! (using ${gpsInfo})`,
+      'success'
+    );
+  }
+}
+
+// Snapshot a base's current display state from local game data, for the
+// base view to show while an attack animation plays over it
+function snapshotBaseForView(baseId) {
+  const base = (appState.gameData.bases || []).find(function (b) { return b.id === baseId; });
+  if (!base) return null;
+
+  return {
+    baseId: baseId,
+    name: base.name,
+    ownerTeamId: base.ownedBy || null,
+    shield: base.shield || 0
+  };
 }
 
 // =============================================================================
@@ -2847,7 +2887,15 @@ async function deleteGameAsAdmin(game) {
 
 // Set loading state
 function setLoading(isLoading) {
-  appState.loading = isLoading;
+  const next = !!isLoading;
+
+  // Nothing to show differently, so don't re-render. These calls nest (an
+  // outer handler and the operation it delegates to each wrap themselves in
+  // setLoading), and the redundant render as the outer one unwinds used to
+  // tear down whatever the inner one had just put on screen.
+  if (appState.loading === next) return;
+
+  appState.loading = next;
 
   // Re-render to show loading state - UI will handle this
   if (window.renderApp) {

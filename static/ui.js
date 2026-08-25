@@ -2213,6 +2213,11 @@ function getBaseViewData() {
   const baseId = appState.baseViewBaseId;
   if (!baseId) return null;
 
+  // While an attack is in flight the base is shown as it stood before the
+  // hit, so the change is seen happening rather than being there already
+  const pending = appState.baseViewPending;
+  if (pending && pending.baseId === baseId) return pending;
+
   const session = appState.quizSession && appState.quizSession.baseId === baseId
     ? appState.quizSession
     : null;
@@ -2225,6 +2230,13 @@ function getBaseViewData() {
     ownerTeamId: session ? session.ownerTeamId : (base ? base.ownedBy : null),
     shield: session ? (session.shield || 0) : ((base && base.shield) || 0)
   };
+}
+
+// The moment an attack resolves on screen: drop the pre-attack snapshot so
+// the base view shows the state the attack produced
+function settleBaseView() {
+  appState.baseViewPending = null;
+  updateBaseViewInfo();
 }
 
 // Page shown once a base with a quiz has been scanned: the base, its current
@@ -2273,18 +2285,23 @@ function renderBaseView() {
     className: 'text-gray-700 mb-2'
   }));
 
-  const shieldRow = UIBuilder.createElement('div', {
-    className: 'flex items-center justify-center gap-2 text-gray-800'
-  });
-  shieldRow.appendChild(UIBuilder.createElement('i', {
-    'data-lucide': 'shield',
-    className: 'w-5 h-5 text-purple-600'
-  }));
-  shieldRow.appendChild(UIBuilder.createElement('span', {
-    id: 'base-view-shield',
-    className: 'font-semibold'
-  }));
-  card.appendChild(shieldRow);
+  // Shields only exist in quiz-capture games; elsewhere a base is simply
+  // held or not, so the row would always read zero
+  const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+  if (quizEnabled) {
+    const shieldRow = UIBuilder.createElement('div', {
+      className: 'flex items-center justify-center gap-2 text-gray-800'
+    });
+    shieldRow.appendChild(UIBuilder.createElement('i', {
+      'data-lucide': 'shield',
+      className: 'w-5 h-5 text-purple-600'
+    }));
+    shieldRow.appendChild(UIBuilder.createElement('span', {
+      id: 'base-view-shield',
+      className: 'font-semibold'
+    }));
+    card.appendChild(shieldRow);
+  }
 
   container.appendChild(card);
 
@@ -2354,7 +2371,8 @@ function playBaseAttackAnimation(kind, outcome, done) {
     neutralised: 'Neutralised!',
     captured: 'Captured!',
     reinforced: '+1 Shield',
-    already_max: 'Shield full!'
+    already_max: 'Shield full!',
+    held: 'Still yours!'
   };
 
   function showLabel(text, colorClass) {
@@ -2372,9 +2390,10 @@ function playBaseAttackAnimation(kind, outcome, done) {
   }
 
   if (kind === 'reinforce') {
-    // The owning team answering correctly: no attack, the shield grows
+    // The base is already the player's own: no attack, just a pulse
     pulse('base-reinforce-pulse', 900);
     showLabel(LABELS[outcome] || '+1 Shield', 'text-green-600');
+    settleBaseView();
     setTimeout(finish, 1000);
     return;
   }
@@ -2410,16 +2429,39 @@ function playBaseAttackAnimation(kind, outcome, done) {
 
     if (kind === 'miss') {
       showLabel('Missed!', 'text-red-600');
+      settleBaseView();
       setTimeout(finish, 800);
       return;
     }
 
     pulse(outcome === 'captured' ? 'base-captured' : 'base-hit', 850);
     showLabel(LABELS[outcome] || 'Hit!', outcome === 'captured' ? 'text-green-600' : 'text-red-600');
-    updateBaseViewInfo();
+    settleBaseView();
 
     setTimeout(finish, 950);
   }, flightMs);
+}
+
+// Called by core.js after a capture in a game without quiz capture. Opens the
+// base view showing the base as it stood, then attacks it: a hit that takes
+// it, or - when the team already held it - a pulse that says so.
+function showBaseCaptureAnimation(baseId, snapshot) {
+  appState.baseViewBaseId = baseId;
+  appState.baseViewPending = snapshot;
+  navigateTo('baseView');
+
+  const alreadyOurs = !!snapshot.ownerTeamId && snapshot.ownerTeamId === getAuthState().teamId;
+
+  // Deferred to a macrotask so the animation starts on a settled page: the
+  // scan handlers that got us here still have their own renders to unwind,
+  // and any of those would tear the scene down mid-flight.
+  setTimeout(function () {
+    playBaseAttackAnimation(
+      alreadyOurs ? 'reinforce' : 'hit',
+      alreadyOurs ? 'held' : 'captured',
+      settleBaseView
+    );
+  }, 0);
 }
 
 // =============================================================================
@@ -2789,4 +2831,5 @@ window.showQuizOutcome = showQuizOutcome;
 window.showCooldownLockout = showCooldownLockout;
 window.closeQuizModal = closeQuizModal;
 window.updateBaseViewInfo = updateBaseViewInfo;
+window.showBaseCaptureAnimation = showBaseCaptureAnimation;
 window.showBonusCollectPrompt = showBonusCollectPrompt;
