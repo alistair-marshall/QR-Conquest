@@ -226,8 +226,13 @@ async function handleQRCode(qrCode, context = 'scan') {
       
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
-        
-        if (statusData.status !== 'unassigned') {
+
+        // Deleted bases keep their QR code, so the original code (or any
+        // other deleted base's code) is fine - the server reclaims it
+        const reusable = statusData.status === 'unassigned' ||
+          (statusData.status === 'base' &&
+            (statusData.base_id === restoringBaseId || statusData.deleted));
+        if (!reusable) {
           throw new Error('This QR code is already assigned. Please use an unassigned QR code.');
         }
       }
@@ -490,11 +495,24 @@ async function handleBaseQR(qrCode, statusData) {
     console.log('Base QR scanned:', baseId, 'QR code:', qrCode);
 
     // Bonus round: the game's host scanning a base QR checks it in as
-    // returned, awarding the collecting team its bonus points
+    // returned, awarding the collecting team its bonus points. This works
+    // for any base in the host's hand - deleted or never collected bases
+    // are checked in too, they just score nothing.
     if (authState.isHost && authState.hasGame && authState.gameId === gameId &&
         appState.gameData.status === 'bonus') {
       await returnBaseAsHost(baseId);
       return;
+    }
+
+    // A deleted base keeps its QR code so the bonus-round check-in above can
+    // find it. Outside that flow the code is effectively free again: hosts
+    // get the assignment flow to reuse it, players are told the base is gone.
+    if (statusData.deleted) {
+      if (authState.isHost) {
+        await handleUnassignedQR(qrCode);
+        return;
+      }
+      throw new Error('This base has been removed from the game.');
     }
 
     // Check if user is on a team
@@ -1094,11 +1112,19 @@ function handleGameSocketMessage(message) {
     console.log('Base returned event:', message);
 
     if (window.showNotification) {
-      const isOwnTeam = message.team_id === getAuthState().teamId;
-      window.showNotification(
-        `${message.base_name} returned by ${message.team_name}! +${message.points} points`,
-        isOwnTeam ? 'success' : 'info'
-      );
+      if (message.team_id) {
+        const isOwnTeam = message.team_id === getAuthState().teamId;
+        window.showNotification(
+          `${message.base_name} returned by ${message.team_name}! +${message.points} points`,
+          isOwnTeam ? 'success' : 'info'
+        );
+      } else {
+        // Checked in by the host without a proper collection - no points
+        window.showNotification(
+          `${message.base_name} returned to the host.`,
+          'info'
+        );
+      }
     }
 
     fetchGameUpdates();
@@ -1670,10 +1696,17 @@ async function returnBaseAsHost(baseId) {
     await fetchGameUpdates();
 
     if (window.showNotification) {
-      window.showNotification(
-        `Base checked in! ${data.team_name} scores ${data.points} bonus points.`,
-        'success'
-      );
+      if (data.team_id && data.points > 0) {
+        window.showNotification(
+          `Base checked in! ${data.team_name} scores ${data.points} bonus points.`,
+          'success'
+        );
+      } else {
+        window.showNotification(
+          'Base checked in and cleared from the map. No points awarded.',
+          'success'
+        );
+      }
     }
 
     // Send the host back to their panel so they can keep scanning bases in

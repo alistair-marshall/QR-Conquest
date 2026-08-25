@@ -83,6 +83,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - When the main game ends (manually or on its timer), base scoring freezes and players are told to collect the bases
 - Players must scan each base at its location to mark it collected (so nobody hunts for a base that has already gone), then bring the QR code back to you
 - Scan each returned QR code to check it in - only then does the collecting team score the bonus points
+- Any base QR code in your hand can be scanned in, even one that was never marked collected or belongs to a deleted base - it comes off the map so players stop hunting for it, but scores no points
 - Points per base can be set manually, or left on automatic: the value is chosen when the bonus round starts so that the last-placed team would win by collecting every base
 - Your host panel shows a live checklist of which bases are still out, collected, or returned; ending the game releases all QR codes as usual
 
@@ -376,7 +377,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
-- **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win)
+- **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
 - **PWA**: Installable Progressive Web App

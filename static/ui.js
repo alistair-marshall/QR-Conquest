@@ -554,7 +554,7 @@ function renderGameView() {
   if (appState.gameData.status === 'bonus') {
     const perBase = appState.gameData.settings?.bonus_points_per_base;
     const remaining = (appState.gameData.bases || [])
-      .filter(base => !base.deleted_at && !base.collectedBy).length;
+      .filter(base => !base.deleted_at && !base.collectedBy && !base.returnedAt).length;
 
     const bonusBanner = UIBuilder.createElement('div', {
       className: 'bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg p-4 mb-6'
@@ -1447,9 +1447,11 @@ function updateMapMarkers() {
       return;
     }
 
-    // Bonus round: a collected base has physically left its location, so it
-    // comes off the map to stop others hunting for it
-    if (bonusRoundActive && base.collectedBy) {
+    // Bonus round: a collected or checked-in base has physically left its
+    // location, so it comes off the map to stop others hunting for it
+    // (returnedAt without collectedBy means the host scanned in a base that
+    // was never collected properly)
+    if (bonusRoundActive && (base.collectedBy || base.returnedAt)) {
       return;
     }
 
@@ -1542,7 +1544,7 @@ function updateBonusBanner() {
   if (!remainingElement || appState.gameData.status !== 'bonus') return;
 
   const remaining = (appState.gameData.bases || [])
-    .filter(base => !base.deleted_at && !base.collectedBy).length;
+    .filter(base => !base.deleted_at && !base.collectedBy && !base.returnedAt).length;
   remainingElement.textContent = `${remaining} base${remaining === 1 ? '' : 's'} still out there.`;
 }
 
