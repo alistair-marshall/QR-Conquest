@@ -827,6 +827,11 @@ let activeDeviceId = null;
 let scanning = false;
 let scannerGeneration = 0;
 
+// Pending setTimeout that brings the camera up after the page renders. Held
+// so a stop can cancel it: two renders in quick succession would otherwise
+// queue two camera starts, and the loser of that race leaks a live stream.
+let scannerInitTimer = null;
+
 // True while a detected code is being handled. Handling a code re-renders
 // this page (the loading screen, then back again), and without this the
 // scanner would restart mid-flight and detect the same code a second time.
@@ -836,6 +841,11 @@ let qrHandlingInFlight = false;
 function stopQRScanner() {
   scanning = false;
   scannerGeneration++;
+
+  if (scannerInitTimer) {
+    clearTimeout(scannerInitTimer);
+    scannerInitTimer = null;
+  }
 
   if (videoStream) {
     videoStream.getTracks().forEach(track => track.stop());
@@ -1054,7 +1064,10 @@ function renderQRScanner() {
   // code is still being handled, so the camera doesn't come back up and
   // re-detect the code the phone is pointed at.
   if (!qrHandlingInFlight) {
-    setTimeout(initQRScanner, 100);
+    scannerInitTimer = setTimeout(function () {
+      scannerInitTimer = null;
+      initQRScanner();
+    }, 100);
   }
 
   // Helper function to set status message with optional styling
@@ -1133,6 +1146,10 @@ function renderQRScanner() {
       // Stop any existing stream
       stopQRScanner();
 
+      // Claimed after the stop above bumped it, so a later start can be told
+      // apart from this one while the permission prompt is still pending
+      const generation = scannerGeneration;
+
       // Show loading indicator
       const loadingElem = document.getElementById('camera-loading');
       if (loadingElem) loadingElem.style.display = 'flex';
@@ -1152,7 +1169,17 @@ function renderQRScanner() {
       }
 
       // Get camera stream
-      videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // Something else started or stopped the scanner while this was pending:
+      // this stream is already orphaned, so shut it down rather than leaving
+      // it running behind the one that replaced it
+      if (generation !== scannerGeneration) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      videoStream = stream;
 
       // Connect stream to video element
       const videoElement = document.getElementById('qr-video');
@@ -2362,6 +2389,9 @@ function playBaseAttackAnimation(kind, outcome, done) {
   const finish = typeof done === 'function' ? done : function () {};
 
   if (!scene || !graphic) {
+    // Nothing to animate on, so don't leave the pre-attack snapshot pinned
+    // over the real state
+    settleBaseView();
     finish();
     return;
   }
@@ -2614,19 +2644,26 @@ function showQuizOutcome(outcome, data) {
   const scene = document.getElementById('base-view-scene');
   if (scene) {
     const modal = quizModalRef;
-    modal.style.display = 'none';
+    // Faded out rather than hidden: the backdrop stays in the layout and keeps
+    // swallowing taps, so the base view's own buttons can't be hit while the
+    // animation plays. Hiding it outright let a tap on "Scan Another Base"
+    // through, and the modal then came back on top of a live scanner.
+    modal.style.opacity = '0';
     const kind = (outcome === 'reinforced' || outcome === 'already_max') ? 'reinforce' : 'hit';
     playBaseAttackAnimation(kind, outcome, function () {
       updateBaseViewInfo();
       // The player may have dismissed the modal (Escape) mid-animation
       if (quizModalRef === modal) {
-        modal.style.display = '';
+        modal.style.opacity = '';
         refreshModal();
       }
     });
     return;
   }
 
+  // No base view on screen to animate on, so nothing will settle the
+  // pre-answer snapshot - drop it here instead
+  settleBaseView();
   refreshModal();
 }
 

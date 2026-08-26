@@ -539,6 +539,9 @@ async function handleBaseQR(qrCode, statusData) {
         throw new Error('A connection is needed to collect this base.');
       }
       await collectBase(baseId);
+      // Leave the scanner: it would otherwise restart and collect the same
+      // base again, which the server rejects as already collected
+      leaveScannerPage();
       return;
     }
 
@@ -1990,6 +1993,20 @@ async function submitQuizAnswer(optionId) {
     }
 
     if (data.correct) {
+      // Hold the base as it stood before this answer so the attack is seen
+      // landing on the old state, not on the one it produced - the score
+      // refresh below reaches the base view well before the hit does.
+      // Only while the base view is on screen to play the animation:
+      // otherwise nothing would ever settle the snapshot again.
+      if (appState.page === 'baseView' && appState.baseViewBaseId === session.baseId) {
+        appState.baseViewPending = {
+          baseId: session.baseId,
+          name: session.baseName,
+          ownerTeamId: session.ownerTeamId,
+          shield: session.shield || 0
+        };
+      }
+
       session.shield = data.shield_now;
       session.ownerTeamId = data.owner_now;
       session.question = data.next_question;
