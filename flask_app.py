@@ -171,6 +171,10 @@ def init_db():
         name TEXT NOT NULL,
         join_time INTEGER NOT NULL,
         cooldown_until INTEGER,
+        last_latitude REAL,
+        last_longitude REAL,
+        last_accuracy REAL,
+        last_position_time INTEGER,
         FOREIGN KEY (team_id) REFERENCES teams (id)
     )
     ''')
@@ -289,6 +293,17 @@ def init_db():
     player_columns = [row['name'] for row in cursor.fetchall()]
     if 'cooldown_until' not in player_columns:
         cursor.execute('ALTER TABLE players ADD COLUMN cooldown_until INTEGER')
+
+    # Migrate databases created before players reported their last known
+    # position (only the latest fix is kept - no route history)
+    if 'last_latitude' not in player_columns:
+        cursor.execute('ALTER TABLE players ADD COLUMN last_latitude REAL')
+    if 'last_longitude' not in player_columns:
+        cursor.execute('ALTER TABLE players ADD COLUMN last_longitude REAL')
+    if 'last_accuracy' not in player_columns:
+        cursor.execute('ALTER TABLE players ADD COLUMN last_accuracy REAL')
+    if 'last_position_time' not in player_columns:
+        cursor.execute('ALTER TABLE players ADD COLUMN last_position_time INTEGER')
 
     # Migrate databases where captures.team_id was NOT NULL, so
     # neutralisation events (NULL team_id) can be recorded
@@ -1674,6 +1689,116 @@ def capture_base(base_id):
     })
 
     return jsonify({'success': True})
+
+# ==========================================================
+# Player Positions - Live Location Sharing
+# ==========================================================
+
+# Players report their GPS fix here while they play so the host can see
+# where everyone is. Only the latest fix is kept - there is deliberately no
+# route history.
+@app.route('/api/players/<player_id>/position', methods=['POST'])
+def update_player_position(player_id):
+    data = request.json
+    if not data or 'latitude' not in data or 'longitude' not in data:
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        latitude = float(data['latitude'])
+        longitude = float(data['longitude'])
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid coordinates'}), 400
+
+    if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+        return jsonify({'error': 'Invalid coordinates'}), 400
+
+    accuracy = data.get('accuracy')
+    if accuracy is not None:
+        try:
+            accuracy = float(accuracy)
+        except (TypeError, ValueError):
+            accuracy = None
+        else:
+            if accuracy < 0:
+                accuracy = None
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT p.id, g.status AS game_status FROM players p
+    JOIN teams t ON p.team_id = t.id
+    JOIN games g ON t.game_id = g.id
+    WHERE p.id = ?
+    ''', (player_id,))
+    player = cursor.fetchone()
+
+    if not player:
+        conn.close()
+        return jsonify({'error': 'Player not found'}), 404
+
+    # Once a game is over there is nothing left to track
+    if player['game_status'] == 'ended':
+        conn.close()
+        return jsonify({'error': 'Game has ended'}), 403
+
+    cursor.execute('''
+    UPDATE players
+    SET last_latitude = ?, last_longitude = ?, last_accuracy = ?, last_position_time = ?
+    WHERE id = ?
+    ''', (latitude, longitude, accuracy, int(time.time()), player_id))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True})
+
+# Host-only view of where everyone was last seen. Player positions are not
+# exposed through the shared game payload, so one team can't track another.
+@app.route('/api/games/<game_id>/positions', methods=['GET'])
+def get_player_positions(game_id):
+    host_id = request.args.get('host_id')
+    if not host_id:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != host_id:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    cursor.execute('''
+    SELECT p.id, p.name, p.last_latitude, p.last_longitude, p.last_accuracy,
+           p.last_position_time, t.id AS team_id, t.name AS team_name, t.color AS team_color
+    FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE t.game_id = ? AND p.last_latitude IS NOT NULL AND p.last_longitude IS NOT NULL
+    ORDER BY p.last_position_time DESC
+    ''', (game_id,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    positions = [{
+        'playerId': row['id'],
+        'playerName': row['name'],
+        'teamId': row['team_id'],
+        'teamName': row['team_name'],
+        'teamColor': row['team_color'],
+        'lat': row['last_latitude'],
+        'lng': row['last_longitude'],
+        'accuracy': row['last_accuracy'],
+        'timestamp': row['last_position_time']
+    } for row in rows]
+
+    return jsonify({'positions': positions, 'serverTime': int(time.time())})
 
 # Get current scores
 @app.route('/api/games/<game_id>/scores', methods=['GET'])
