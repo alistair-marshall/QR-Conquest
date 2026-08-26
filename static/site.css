@@ -24,6 +24,88 @@
     pointer-events: none;
 }
 
+/* Base view (quiz capture) attack animations. The projectile is positioned
+   against the scene, so anchor it here rather than relying on Tailwind. */
+#base-view-scene {
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+}
+
+.base-projectile {
+    position: absolute;
+    font-size: 2rem;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 10;
+    transition: transform 0.55s ease-in, opacity 0.55s ease-in;
+    will-change: transform;
+}
+
+/* The base graphic behind the label is tinted with the owning team's colour,
+   so the label carries its own light chip rather than relying on contrast
+   against whatever that colour happens to be. */
+.base-anim-label {
+    position: absolute;
+    left: 50%;
+    top: 6%;
+    padding: 0.15rem 0.6rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    font-weight: 700;
+    font-size: 1.25rem;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 11;
+    animation: base-anim-label 1s ease-out forwards;
+}
+
+@keyframes base-anim-label {
+    0%   { opacity: 0; transform: translate(-50%, 12px); }
+    25%  { opacity: 1; transform: translate(-50%, 0); }
+    75%  { opacity: 1; transform: translate(-50%, -10px); }
+    100% { opacity: 0; transform: translate(-50%, -20px); }
+}
+
+/* Shake + red flash when an attack lands on the base */
+.base-hit {
+    animation: base-hit-shake 0.5s ease-in-out, base-hit-flash 0.7s ease-out;
+}
+
+/* Shake + growing green pulse when the base is captured */
+.base-captured {
+    animation: base-hit-shake 0.5s ease-in-out, base-capture-pulse 0.8s ease-in-out;
+}
+
+/* Green pulse when the owning team reinforces the base */
+.base-reinforce-pulse {
+    animation: base-reinforce-pulse 0.8s ease-out;
+}
+
+@keyframes base-hit-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px) rotate(-3deg); }
+    40% { transform: translateX(7px) rotate(2deg); }
+    60% { transform: translateX(-5px) rotate(-2deg); }
+    80% { transform: translateX(4px) rotate(1deg); }
+}
+
+@keyframes base-hit-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+    100% { box-shadow: 0 0 0 30px rgba(239, 68, 68, 0); }
+}
+
+@keyframes base-reinforce-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8); }
+    100% { box-shadow: 0 0 0 30px rgba(34, 197, 94, 0); }
+}
+
+@keyframes base-capture-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8); }
+    100% { box-shadow: 0 0 0 30px rgba(34, 197, 94, 0); }
+}
+
 /* Host QR Modal - Disable Tailwind for Print */
 
 @media print {

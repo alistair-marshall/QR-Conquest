@@ -382,13 +382,23 @@ function navigateTo(page) {
     stopScorePolling();
   }
 
+  // Leaving the scanner page (the only page that renders the camera feed):
+  // shut the camera down. Without this a scan that navigates onwards - to the
+  // base view, or the host's QR assignment form - leaves the camera running
+  // and still detecting the code the phone is pointed at.
+  if (previousPage === 'scanQR' && page !== 'scanQR') {
+    stopQRScanner();
+  }
+
   // Start polling if entering game view
   if (page === 'gameView') {
     startScorePolling();
   }
 
   // GPS tracking management
-  const gpsPages = ['gameView', 'scanQR', 'hostPanel', 'qrAssignment'];
+  // baseView included: the player is standing at a base there, so keeping the
+  // fix warm means the next scan doesn't wait on a cold GPS lock
+  const gpsPages = ['gameView', 'scanQR', 'hostPanel', 'qrAssignment', 'baseView'];
   const wasOnGPSPage = gpsPages.includes(previousPage);
   const isOnGPSPage = gpsPages.includes(page);
 
@@ -807,8 +817,74 @@ function renderResultsPage() {
   return container;
 }
 
+// QR scanner state, module-scoped so that a re-render of the scanner page
+// cannot leave a second camera and scan loop running. Each scan loop claims
+// a generation when it starts; loops from an earlier render see the number
+// has moved on and exit, instead of also scanning the new video feed and
+// firing handleQRCode again for the same code the phone is still pointed at.
+let videoStream = null;
+let activeDeviceId = null;
+let scanning = false;
+let scannerGeneration = 0;
+
+// Pending setTimeout that brings the camera up after the page renders. Held
+// so a stop can cancel it: two renders in quick succession would otherwise
+// queue two camera starts, and the loser of that race leaks a live stream.
+let scannerInitTimer = null;
+
+// True while a detected code is being handled. Handling a code re-renders
+// this page (the loading screen, then back again), and without this the
+// scanner would restart mid-flight and detect the same code a second time.
+let qrHandlingInFlight = false;
+
+// Shut down the camera and invalidate any running scan loop
+function stopQRScanner() {
+  scanning = false;
+  scannerGeneration++;
+
+  if (scannerInitTimer) {
+    clearTimeout(scannerInitTimer);
+    scannerInitTimer = null;
+  }
+
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+    videoStream = null;
+  }
+
+  const videoElement = document.getElementById('qr-video');
+  if (videoElement && videoElement.srcObject) {
+    videoElement.srcObject = null;
+  }
+}
+
+// Shared by both scan loops: hand a detected code off for processing, with
+// the camera stopped so it can't fire again for the code still in frame.
+function handleDetectedQRCode(qrCode) {
+  stopQRScanner();
+  qrHandlingInFlight = true;
+
+  const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
+  setTimeout(function () {
+    Promise.resolve()
+      .then(function () { return handleQRCode(qrCode, context); })
+      .catch(function (err) { console.error('Error handling scanned QR code:', err); })
+      .then(function () {
+        qrHandlingInFlight = false;
+        // Still on the scanner page - the scan didn't lead anywhere (an
+        // unknown code, say), so give the player the camera back
+        if (appState.page === 'scanQR') {
+          renderApp();
+        }
+      });
+  }, 500);
+}
+
 // QR Scanner
 function renderQRScanner() {
+  // Tear down a scanner left over from a previous render of this page
+  stopQRScanner();
+
   const container = document.createElement('div');
   container.className = 'text-center';
 
@@ -967,7 +1043,7 @@ function renderQRScanner() {
 
   const cancelButton = UIBuilder.createButton('Cancel', function() {
     // Stop camera before navigating away
-    stopCamera();
+    stopQRScanner();
 
     // Different return destinations based on context
     if (appState.page === 'qrAssignment') {
@@ -984,8 +1060,15 @@ function renderQRScanner() {
 
   container.appendChild(actionsContainer);
 
-  // Setup function to be called after rendering
-  setTimeout(initQRScanner, 100);
+  // Setup function to be called after rendering. Skipped while a detected
+  // code is still being handled, so the camera doesn't come back up and
+  // re-detect the code the phone is pointed at.
+  if (!qrHandlingInFlight) {
+    scannerInitTimer = setTimeout(function () {
+      scannerInitTimer = null;
+      initQRScanner();
+    }, 100);
+  }
 
   // Helper function to set status message with optional styling
   function setStatusMessage(message, type = 'info') {
@@ -1006,10 +1089,6 @@ function renderQRScanner() {
       statusElem.className += ' text-gray-600';
     }
   }
-
-  let videoStream = null;
-  let activeDeviceId = null;
-  let scanning = false;
 
   // Initialize the QR scanner
   async function initQRScanner() {
@@ -1065,7 +1144,11 @@ function renderQRScanner() {
   async function startCamera(deviceId) {
     try {
       // Stop any existing stream
-      stopCamera();
+      stopQRScanner();
+
+      // Claimed after the stop above bumped it, so a later start can be told
+      // apart from this one while the permission prompt is still pending
+      const generation = scannerGeneration;
 
       // Show loading indicator
       const loadingElem = document.getElementById('camera-loading');
@@ -1086,7 +1169,17 @@ function renderQRScanner() {
       }
 
       // Get camera stream
-      videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // Something else started or stopped the scanner while this was pending:
+      // this stream is already orphaned, so shut it down rather than leaving
+      // it running behind the one that replaced it
+      if (generation !== scannerGeneration) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      videoStream = stream;
 
       // Connect stream to video element
       const videoElement = document.getElementById('qr-video');
@@ -1113,39 +1206,24 @@ function renderQRScanner() {
     }
   }
 
-  // Stop camera and cleanup
-  function stopCamera() {
-    // Stop scanning
-    scanning = false;
-
-    // Stop any video track
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop());
-      videoStream = null;
-    }
-
-    // Clear video source
-    const videoElement = document.getElementById('qr-video');
-    if (videoElement && videoElement.srcObject) {
-      videoElement.srcObject = null;
-    }
-  }
-
-  // Start QR code scanning
+  // Start QR code scanning. The loop claims a generation so that a scanner
+  // from an earlier render of this page stops instead of scanning alongside
+  // this one.
   function startScanning() {
     scanning = true;
+    const generation = ++scannerGeneration;
 
     // Check if BarcodeDetector API is available
     if ('BarcodeDetector' in window) {
-      scanWithBarcodeDetector();
+      scanWithBarcodeDetector(generation);
     } else {
       // Load jsQR library if BarcodeDetector is not available
-      loadJsQR();
+      loadJsQR(generation);
     }
   }
 
   // Scan using the BarcodeDetector API
-  async function scanWithBarcodeDetector() {
+  async function scanWithBarcodeDetector(generation) {
     try {
       const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
 
@@ -1155,7 +1233,7 @@ function renderQRScanner() {
       if (!videoElement || !canvasElement) return;
 
       const scanFrame = async () => {
-        if (!scanning) return;
+        if (!scanning || generation !== scannerGeneration) return;
 
         if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
           // Set canvas dimensions to match video
@@ -1178,11 +1256,7 @@ function renderQRScanner() {
               setStatusMessage('QR Code detected!', 'success');
 
               // Stop scanning and handle the QR code
-              stopCamera();
-
-              // Determine context based on current page
-              const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
-              setTimeout(() => handleQRCode(qrCode, context), 500);
+              handleDetectedQRCode(qrCode);
               return;
             }
           } catch (err) {
@@ -1199,15 +1273,15 @@ function renderQRScanner() {
     } catch (error) {
       console.error('BarcodeDetector error:', error);
       // Fall back to jsQR
-      loadJsQR();
+      loadJsQR(generation);
     }
   }
 
   // Load the jsQR library and scan with it
-  function loadJsQR() {
+  function loadJsQR(generation) {
     // Check if jsQR is already loaded
     if (window.jsQR) {
-      scanWithJsQR();
+      scanWithJsQR(generation);
       return;
     }
 
@@ -1216,7 +1290,7 @@ function renderQRScanner() {
     // Create script element to load jsQR
     const script = document.createElement('script');
     script.src = '/libs/jsQR.js';
-    script.onload = scanWithJsQR;
+    script.onload = () => scanWithJsQR(generation);
     script.onerror = () => {
       setStatusMessage('Failed to load QR scanner library', 'error');
     };
@@ -1225,14 +1299,14 @@ function renderQRScanner() {
   }
 
   // Scan using the jsQR library
-  function scanWithJsQR() {
+  function scanWithJsQR(generation) {
     const videoElement = document.getElementById('qr-video');
     const canvasElement = document.getElementById('qr-canvas');
 
     if (!videoElement || !canvasElement) return;
 
     const scanFrame = () => {
-      if (!scanning) return;
+      if (!scanning || generation !== scannerGeneration) return;
 
       if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
         // Set canvas dimensions to match video
@@ -1259,11 +1333,7 @@ function renderQRScanner() {
           setStatusMessage('QR Code detected!', 'success');
 
           // Stop scanning and handle the QR code
-          stopCamera();
-
-          // Determine context based on current page
-          const context = appState.page === 'qrAssignment' ? 'assignment' : 'scan';
-          setTimeout(() => handleQRCode(qrCode, context), 500);
+          handleDetectedQRCode(qrCode);
           return;
         }
       }
@@ -1719,6 +1789,9 @@ function renderApp() {
         case 'scanQR':
           main.appendChild(renderQRScanner());
           break;
+        case 'baseView':
+          main.appendChild(renderBaseView());
+          break;
         case 'results':
           main.appendChild(renderResultsPage());
           break;
@@ -2158,6 +2231,270 @@ function startHeaderTimer() {
 }
 
 // =============================================================================
+// BASE VIEW PAGE (quiz capture) - base status with attack animations
+// =============================================================================
+
+// Current state of the base being viewed, preferring the live quiz session
+// (updated on every answer) over the polled game data
+function getBaseViewData() {
+  const baseId = appState.baseViewBaseId;
+  if (!baseId) return null;
+
+  // While an attack is in flight the base is shown as it stood before the
+  // hit, so the change is seen happening rather than being there already
+  const pending = appState.baseViewPending;
+  if (pending && pending.baseId === baseId) return pending;
+
+  const session = appState.quizSession && appState.quizSession.baseId === baseId
+    ? appState.quizSession
+    : null;
+  const base = (appState.gameData.bases || []).find(function (b) { return b.id === baseId; });
+
+  if (!session && !base) return null;
+
+  return {
+    name: session ? session.baseName : base.name,
+    ownerTeamId: session ? session.ownerTeamId : (base ? base.ownedBy : null),
+    shield: session ? (session.shield || 0) : ((base && base.shield) || 0)
+  };
+}
+
+// The moment an attack resolves on screen: drop the pre-attack snapshot so
+// the base view shows the state the attack produced
+function settleBaseView() {
+  appState.baseViewPending = null;
+  updateBaseViewInfo();
+}
+
+// Page shown once a base with a quiz has been scanned: the base, its current
+// owner and its shield strength, with the quiz modal loaded on top
+function renderBaseView() {
+  const container = document.createElement('div');
+  container.className = 'max-w-md mx-auto';
+
+  const data = getBaseViewData();
+  if (!data) {
+    // Nothing to show (e.g. a reload wiped the state) - back to the game
+    setTimeout(function () { navigateTo('gameView'); }, 0);
+    return container;
+  }
+
+  const card = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-6 mb-6 text-center'
+  });
+
+  // Scene: the base graphic plus room for the attack animation around it
+  const scene = UIBuilder.createElement('div', {
+    id: 'base-view-scene',
+    className: 'relative mx-auto mb-4 flex items-center justify-center overflow-hidden',
+    style: { height: '11rem' }
+  });
+
+  const graphic = UIBuilder.createElement('div', {
+    id: 'base-view-graphic',
+    className: 'w-28 h-28 rounded-full flex items-center justify-center shadow-lg transition-colors duration-500'
+  });
+  graphic.appendChild(UIBuilder.createElement('i', {
+    'data-lucide': 'castle',
+    className: 'w-14 h-14 text-white'
+  }));
+  scene.appendChild(graphic);
+  card.appendChild(scene);
+
+  card.appendChild(UIBuilder.createElement('h2', {
+    id: 'base-view-name',
+    className: 'text-2xl font-bold text-gray-900 mb-1',
+    textContent: data.name
+  }));
+
+  card.appendChild(UIBuilder.createElement('p', {
+    id: 'base-view-owner',
+    className: 'text-gray-700 mb-2'
+  }));
+
+  // Shields only exist in quiz-capture games; elsewhere a base is simply
+  // held or not, so the row would always read zero
+  const quizEnabled = !!(appState.gameData.settings && appState.gameData.settings.quiz_enabled);
+  if (quizEnabled) {
+    const shieldRow = UIBuilder.createElement('div', {
+      className: 'flex items-center justify-center gap-2 text-gray-800'
+    });
+    shieldRow.appendChild(UIBuilder.createElement('i', {
+      'data-lucide': 'shield',
+      className: 'w-5 h-5 text-purple-600'
+    }));
+    shieldRow.appendChild(UIBuilder.createElement('span', {
+      id: 'base-view-shield',
+      className: 'font-semibold'
+    }));
+    card.appendChild(shieldRow);
+  }
+
+  container.appendChild(card);
+
+  const actions = UIBuilder.createElement('div', { className: 'flex gap-4' });
+  actions.appendChild(UIBuilder.createButton('Scan Another Base', function () {
+    navigateTo('scanQR');
+  }, 'flex-1 bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors', 'camera'));
+  actions.appendChild(UIBuilder.createButton('Back to Map', function () {
+    navigateTo('gameView');
+  }, 'flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors', 'map'));
+  container.appendChild(actions);
+
+  updateBaseViewInfo(container);
+
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    setTimeout(function () { window.lucide.createIcons(); }, 0);
+  }
+
+  return container;
+}
+
+// Refresh the owner line, shield count and graphic colour from current state.
+// root is optional - during the initial render the elements aren't in the
+// document yet, so the freshly built container is passed in instead.
+function updateBaseViewInfo(root) {
+  const scope = root || document;
+  const data = getBaseViewData();
+  if (!data) return;
+
+  const graphic = scope.querySelector('#base-view-graphic');
+  const ownerEl = scope.querySelector('#base-view-owner');
+  const shieldEl = scope.querySelector('#base-view-shield');
+  if (!graphic && !ownerEl && !shieldEl) return;
+
+  let ownerText = 'Neutral - not held by any team';
+  let color = getHexColorForTailwind('bg-gray-400');
+
+  if (data.ownerTeamId) {
+    const team = (appState.gameData.teams || []).find(function (t) { return t.id === data.ownerTeamId; });
+    const isOwnTeam = data.ownerTeamId === getAuthState().teamId;
+    const teamName = team ? team.name : 'Unknown Team';
+    ownerText = isOwnTeam ? 'Held by your team (' + teamName + ')' : 'Held by ' + teamName;
+    if (team) color = getHexColorForTailwind(team.color);
+  }
+
+  if (graphic) graphic.style.backgroundColor = color;
+  if (ownerEl) ownerEl.textContent = ownerText;
+  if (shieldEl) shieldEl.textContent = 'Shield strength: ' + data.shield;
+}
+
+// Play an attack animation on the base view scene. kind is 'hit', 'miss' or
+// 'reinforce'; outcome is the server outcome for a correct answer ('reduced',
+// 'neutralised', 'captured', 'reinforced', 'already_max'). Calls done() when
+// the animation finishes, or immediately if the scene isn't on screen.
+function playBaseAttackAnimation(kind, outcome, done) {
+  const scene = document.getElementById('base-view-scene');
+  const graphic = document.getElementById('base-view-graphic');
+  const finish = typeof done === 'function' ? done : function () {};
+
+  if (!scene || !graphic) {
+    // Nothing to animate on, so don't leave the pre-attack snapshot pinned
+    // over the real state
+    settleBaseView();
+    finish();
+    return;
+  }
+
+  const LABELS = {
+    reduced: '-1 Shield',
+    neutralised: 'Neutralised!',
+    captured: 'Captured!',
+    reinforced: '+1 Shield',
+    already_max: 'Shield full!',
+    held: 'Still yours!'
+  };
+
+  function showLabel(text, colorClass) {
+    const label = UIBuilder.createElement('div', {
+      className: 'base-anim-label ' + colorClass,
+      textContent: text
+    });
+    scene.appendChild(label);
+    setTimeout(function () { label.remove(); }, 1100);
+  }
+
+  function pulse(className, duration) {
+    graphic.classList.add(className);
+    setTimeout(function () { graphic.classList.remove(className); }, duration);
+  }
+
+  if (kind === 'reinforce') {
+    // The base is already the player's own: no attack, just a pulse
+    pulse('base-reinforce-pulse', 900);
+    showLabel(LABELS[outcome] || '+1 Shield', 'text-green-600');
+    settleBaseView();
+    setTimeout(finish, 1000);
+    return;
+  }
+
+  // Throw a projectile from the bottom-left corner of the scene
+  const proj = UIBuilder.createElement('div', {
+    className: 'base-projectile',
+    textContent: '⚔️'
+  });
+  proj.style.left = '8px';
+  proj.style.top = (scene.clientHeight - 44) + 'px';
+  scene.appendChild(proj);
+
+  const flightMs = 550;
+  let dx, dy;
+  if (kind === 'hit') {
+    // Into the middle of the scene, where the base graphic sits
+    dx = scene.clientWidth / 2 - 24;
+    dy = -(scene.clientHeight / 2 - 24);
+  } else {
+    // Sail right past the base and out of the scene
+    dx = scene.clientWidth + 20;
+    dy = -(scene.clientHeight - 60);
+  }
+
+  requestAnimationFrame(function () {
+    proj.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) rotate(' + (kind === 'hit' ? 315 : 90) + 'deg)';
+    if (kind === 'miss') proj.style.opacity = '0';
+  });
+
+  setTimeout(function () {
+    proj.remove();
+
+    if (kind === 'miss') {
+      showLabel('Missed!', 'text-red-600');
+      settleBaseView();
+      setTimeout(finish, 800);
+      return;
+    }
+
+    pulse(outcome === 'captured' ? 'base-captured' : 'base-hit', 850);
+    showLabel(LABELS[outcome] || 'Hit!', outcome === 'captured' ? 'text-green-600' : 'text-red-600');
+    settleBaseView();
+
+    setTimeout(finish, 950);
+  }, flightMs);
+}
+
+// Called by core.js after a capture in a game without quiz capture. Opens the
+// base view showing the base as it stood, then attacks it: a hit that takes
+// it, or - when the team already held it - a pulse that says so.
+function showBaseCaptureAnimation(baseId, snapshot) {
+  appState.baseViewBaseId = baseId;
+  appState.baseViewPending = snapshot;
+  navigateTo('baseView');
+
+  const alreadyOurs = !!snapshot.ownerTeamId && snapshot.ownerTeamId === getAuthState().teamId;
+
+  // Deferred to a macrotask so the animation starts on a settled page: the
+  // scan handlers that got us here still have their own renders to unwind,
+  // and any of those would tear the scene down mid-flight.
+  setTimeout(function () {
+    playBaseAttackAnimation(
+      alreadyOurs ? 'reinforce' : 'hit',
+      alreadyOurs ? 'held' : 'captured',
+      settleBaseView
+    );
+  }, 0);
+}
+
+// =============================================================================
 // QUIZ CAPTURE - PLAYER MODAL & COOLDOWN LOCKOUT (Section 14)
 // =============================================================================
 
@@ -2290,16 +2627,44 @@ function showQuizModal() {
   if (window.lucide) window.lucide.createIcons();
 }
 
-// Called by core.js after each correct answer to refresh the modal in place
+// Called by core.js after each correct answer. Hides the quiz modal, plays
+// the attack animation on the base view behind it (hit, capture or
+// reinforce), then refreshes the modal with the next question.
 function showQuizOutcome(outcome, data) {
   if (!quizModalRef) return;
 
   showNotification(QUIZ_OUTCOME_MESSAGES[outcome] || 'Correct!', 'success');
 
-  const framing = document.getElementById('quiz-framing-line');
-  if (framing) framing.textContent = quizFramingLine();
+  const refreshModal = function () {
+    const framing = document.getElementById('quiz-framing-line');
+    if (framing) framing.textContent = quizFramingLine();
+    renderQuizOptions();
+  };
 
-  renderQuizOptions();
+  const scene = document.getElementById('base-view-scene');
+  if (scene) {
+    const modal = quizModalRef;
+    // Faded out rather than hidden: the backdrop stays in the layout and keeps
+    // swallowing taps, so the base view's own buttons can't be hit while the
+    // animation plays. Hiding it outright let a tap on "Scan Another Base"
+    // through, and the modal then came back on top of a live scanner.
+    modal.style.opacity = '0';
+    const kind = (outcome === 'reinforced' || outcome === 'already_max') ? 'reinforce' : 'hit';
+    playBaseAttackAnimation(kind, outcome, function () {
+      updateBaseViewInfo();
+      // The player may have dismissed the modal (Escape) mid-animation
+      if (quizModalRef === modal) {
+        modal.style.opacity = '';
+        refreshModal();
+      }
+    });
+    return;
+  }
+
+  // No base view on screen to animate on, so nothing will settle the
+  // pre-answer snapshot - drop it here instead
+  settleBaseView();
+  refreshModal();
 }
 
 function closeQuizModal() {
@@ -2361,8 +2726,10 @@ function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
 }
 
 // Called by core.js after a wrong answer - replaces the quiz modal with the
-// game-wide lockout state and a live countdown (Section 14)
-function showCooldownLockout(cooldownUntil, explanation) {
+// game-wide lockout state and a live countdown (Section 14). With
+// options.animateMiss the attack-missed animation plays on the base view
+// before the lockout modal appears.
+function showCooldownLockout(cooldownUntil, explanation, options) {
   if (quizCountdownInterval) {
     clearInterval(quizCountdownInterval);
     quizCountdownInterval = null;
@@ -2416,29 +2783,37 @@ function showCooldownLockout(cooldownUntil, explanation) {
     quizModalRef.close();
   }
 
-  quizModalRef = UIBuilder.createModal({
-    title: 'Locked Out',
-    content: content,
-    size: 'sm',
-    actions: [{
-      text: 'Close',
-      onClick: () => {
-        clearQuizSession();
-        quizModalRef.close();
-        if (appState.page === 'scanQR') {
-          navigateTo('gameView');
-        }
-      },
-      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
-    }],
-    onClose: function () {
-      quizModalRef = null;
-    }
-  });
+  const openLockoutModal = function () {
+    quizModalRef = UIBuilder.createModal({
+      title: 'Locked Out',
+      content: content,
+      size: 'sm',
+      actions: [{
+        text: 'Close',
+        onClick: () => {
+          clearQuizSession();
+          quizModalRef.close();
+          if (appState.page === 'scanQR') {
+            navigateTo('gameView');
+          }
+        },
+        className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }],
+      onClose: function () {
+        quizModalRef = null;
+      }
+    });
 
-  document.body.appendChild(quizModalRef);
-  if (window.lucide) window.lucide.createIcons();
-  updateCooldownBannerUI();
+    document.body.appendChild(quizModalRef);
+    if (window.lucide) window.lucide.createIcons();
+    updateCooldownBannerUI();
+  };
+
+  if (options && options.animateMiss && document.getElementById('base-view-scene')) {
+    playBaseAttackAnimation('miss', null, openLockoutModal);
+  } else {
+    openLockoutModal();
+  }
 }
 
 // Persistent bottom banner so a cooldown is visible even if the player
@@ -2492,4 +2867,6 @@ window.showQuizModal = showQuizModal;
 window.showQuizOutcome = showQuizOutcome;
 window.showCooldownLockout = showCooldownLockout;
 window.closeQuizModal = closeQuizModal;
+window.updateBaseViewInfo = updateBaseViewInfo;
+window.showBaseCaptureAnimation = showBaseCaptureAnimation;
 window.showBonusCollectPrompt = showBonusCollectPrompt;
