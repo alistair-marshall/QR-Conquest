@@ -44,7 +44,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 **Finding Your Way:**
 - A black arrowhead on the map shows where you are, so you can see how far you are from each base - it turns to point the way you're travelling once you start moving
 - Tap the crosshair button on the map to jump back to your own position if you've panned away
-- Your latest position is shared with your game host while you play, so they can see where everyone is - only the host sees it, only your most recent position is kept, and nothing is stored once the game ends
+- Your latest position is shared with your game host while you play, so they can see where everyone is - only the host sees it, only your most recent position is kept (never a route history), and sharing stops as soon as the game ends
 
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
@@ -392,7 +392,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
-- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other
+- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
