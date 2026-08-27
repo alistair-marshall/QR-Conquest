@@ -41,6 +41,11 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - Every collected base is worth a fixed number of bonus points, sized so that even the last-placed team could win by collecting them all
 - Mid-question when the bonus round starts? Your answer no longer affects the base (and a wrong answer costs no cooldown) - the app prompts you to collect the base instead
 
+**Finding Your Way:**
+- A black arrowhead on the map shows where you are, so you can see how far you are from each base - it turns to point the way you're travelling once you start moving
+- Tap the crosshair button on the map to jump back to your own position if you've panned away
+- Your latest position is shared with your game host while you play, so they can see where everyone is - only the host sees it, only your most recent position is kept (never a route history), and sharing stops as soon as the game ends
+
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
 - **Live Scoreboard**: Track team rankings as they change throughout the game
@@ -95,6 +100,13 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Monitor all team activity in real-time
 - Watch live base captures and score changes
 - End the game and view final results
+
+**Seeing Where Everyone Is:**
+- Your game map shows the last known position of every player as a small pin in their team's colour - handy for spotting a team that's drifted out of the play area or a player who's gone quiet
+- Bases are circles and players are pins, so the two never get confused at a glance
+- Positions that haven't updated in the last five minutes are faded, and each pin's popup names the player, their team, and when they were last seen
+- Use the "Show players" tick box above the map to take the pins off it when a big group crowds the bases - the setting sticks between visits
+- Your own position shows as a black arrowhead, the same as it does for players
 
 **Game Control:**
 - **Real-time Dashboard**: See all teams, bases, and current game status
@@ -380,12 +392,13 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
+- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
 - **PWA**: Installable Progressive Web App
 - **QR Scanning**: Camera-based QR code detection
-- **Maps**: Interactive Leaflet maps showing base locations and ownership
+- **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
 - **Responsive Design**: Works on mobile phones and tablets
 

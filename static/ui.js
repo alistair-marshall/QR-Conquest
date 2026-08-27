@@ -382,6 +382,12 @@ function navigateTo(page) {
     stopScorePolling();
   }
 
+  // Player positions are only drawn on the pages that show the game map;
+  // initGameMap restarts the polling when one of those maps is built
+  if (page !== 'hostPanel' && page !== 'gameView') {
+    stopPlayerPositionPolling();
+  }
+
   // Leaving the scanner page (the only page that renders the camera feed):
   // shut the camera down. Without this a scan that navigates onwards - to the
   // base view, or the host's QR assignment form - leaves the camera running
@@ -1411,6 +1417,13 @@ function initGameMap() {
 
   // Create or update all markers
   updateMapMarkers();
+  updateOwnPositionMarker();
+  updatePlayerPositionMarkers();
+
+  // Hosts see where their players were last seen; keep it refreshed
+  if (getAuthState().isHost && appState.gameData.id && showPlayerPositions()) {
+    startPlayerPositionPolling();
+  }
 
   // Set initial view
   const latLngs = [];
@@ -1601,6 +1614,199 @@ function updateMapMarkers() {
   gameMapInstance.baseMarkers = gameMapInstance.baseMarkers.filter(marker => {
     if (!processedBaseIds.has(marker.baseId)) {
       // Base no longer exists or shouldn't be shown, remove marker
+      gameMapInstance.removeLayer(marker);
+      return false;
+    }
+    return true;
+  });
+}
+
+// =============================================================================
+// POSITION MARKERS - YOU AND (FOR HOSTS) YOUR PLAYERS
+// =============================================================================
+
+// The viewer's own position: a black arrowhead pointing the way they are
+// travelling, or a black dot while the heading is still unknown (phones only
+// report a heading once you are moving)
+function createOwnPositionIcon(heading) {
+  const hasHeading = typeof heading === 'number' && !isNaN(heading);
+
+  const shape = hasHeading
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+         style="transform: rotate(${heading}deg); transform-origin: 50% 50%;">
+         <path d="M12 2 L20 21 L12 16 L4 21 Z" fill="#000000" stroke="#ffffff"
+               stroke-width="1.5" stroke-linejoin="round"/>
+       </svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24">
+         <circle cx="12" cy="12" r="7" fill="#000000" stroke="#ffffff" stroke-width="2"/>
+       </svg>`;
+
+  return L.divIcon({
+    className: 'own-position-marker',
+    html: shape,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+}
+
+// Draw (or move, or remove) the arrowhead showing where the viewer is
+function updateOwnPositionMarker() {
+  if (!gameMapInstance) return;
+
+  const position = appState.gps.currentPosition;
+
+  // No fix (yet, or any more) - take the marker off the map
+  if (!position) {
+    if (gameMapInstance.ownPositionMarker) {
+      gameMapInstance.removeLayer(gameMapInstance.ownPositionMarker);
+      gameMapInstance.ownPositionMarker = null;
+    }
+    return;
+  }
+
+  const latLng = [position.latitude, position.longitude];
+  const heading = appState.gps.heading;
+  const accuracy = appState.gps.accuracy;
+  const popupContent = `<strong>You are here</strong>` +
+    (typeof accuracy === 'number' ? `<br>Accuracy: ±${accuracy.toFixed(0)}m` : '') +
+    (typeof heading === 'number' && !isNaN(heading) ? '' : '<br>Start moving to show your direction');
+
+  if (gameMapInstance.ownPositionMarker) {
+    gameMapInstance.ownPositionMarker.setLatLng(latLng);
+    gameMapInstance.ownPositionMarker.setIcon(createOwnPositionIcon(heading));
+    gameMapInstance.ownPositionMarker.getPopup().setContent(popupContent);
+    return;
+  }
+
+  const marker = L.marker(latLng, {
+    icon: createOwnPositionIcon(heading),
+    // Above the base circles, so the player can always find themselves
+    zIndexOffset: 1000,
+    interactive: true
+  }).addTo(gameMapInstance);
+
+  marker.bindPopup(popupContent);
+  gameMapInstance.ownPositionMarker = marker;
+}
+
+// "just now" / "3 mins ago" for a unix timestamp in seconds
+function formatTimeSince(timestamp) {
+  if (!timestamp) return 'unknown';
+
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
+  if (seconds < 60) return 'just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+}
+
+// Popup for a player's dot. Built as DOM nodes rather than an HTML string:
+// players choose their own names, and this popup is rendered on the host's map.
+function buildPlayerPopup(entry) {
+  const container = document.createElement('div');
+
+  const name = document.createElement('strong');
+  name.textContent = entry.playerName;
+  container.appendChild(name);
+  container.appendChild(document.createElement('br'));
+
+  const team = document.createElement('span');
+  team.textContent = entry.teamName;
+  container.appendChild(team);
+  container.appendChild(document.createElement('br'));
+
+  const lastSeen = document.createElement('span');
+  lastSeen.textContent = `Last seen ${formatTimeSince(entry.timestamp)}`;
+  container.appendChild(lastSeen);
+
+  return container;
+}
+
+// A position older than this is drawn faded - the player has probably lost
+// signal, closed the app, or stopped playing
+const STALE_POSITION_SECONDS = 300;
+
+// A player is a small pin standing at a point, rather than another filled
+// circle: bases are areas on this map, so shape - not colour or size - is what
+// tells the two apart at a glance. Kept deliberately small so a crowd of
+// players doesn't swamp the bases underneath.
+const PLAYER_PIN_WIDTH = 15;
+const PLAYER_PIN_HEIGHT = 20;
+
+function createPlayerPinIcon(teamColor, stale) {
+  const fill = getHexColorForTailwind(teamColor);
+
+  return L.divIcon({
+    className: 'player-position-marker',
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="${PLAYER_PIN_WIDTH}"
+        height="${PLAYER_PIN_HEIGHT}" viewBox="0 0 24 32"
+        style="opacity: ${stale ? 0.45 : 1};">
+        <path d="M12 1.5c-5.8 0-10.5 4.7-10.5 10.5 0 7.5 10.5 18.5 10.5 18.5S22.5 19.5 22.5 12c0-5.8-4.7-10.5-10.5-10.5z"
+              fill="${fill}" stroke="#111827" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="3.5" fill="#ffffff"/>
+      </svg>`,
+    iconSize: [PLAYER_PIN_WIDTH, PLAYER_PIN_HEIGHT],
+    // Anchored at the tip of the pin, which is the position itself
+    iconAnchor: [PLAYER_PIN_WIDTH / 2, PLAYER_PIN_HEIGHT]
+  });
+}
+
+// Whether the host has player pins switched on (default: shown)
+function showPlayerPositions() {
+  return localStorage.getItem('showPlayerPositions') !== 'false';
+}
+
+// Host view: each player's last known position, in their team's colour.
+// Players never see these - the server only serves them to the game's host.
+function updatePlayerPositionMarkers() {
+  if (!gameMapInstance) return;
+
+  if (!gameMapInstance.playerPositionMarkers) {
+    gameMapInstance.playerPositionMarkers = [];
+  }
+
+  const authState = getAuthState();
+  const show = authState.isHost && showPlayerPositions();
+  const positions = (show && appState.playerPositions) ? appState.playerPositions : [];
+  const seenPlayerIds = new Set();
+
+  positions.forEach(entry => {
+    if (typeof entry.lat !== 'number' || typeof entry.lng !== 'number') return;
+
+    seenPlayerIds.add(entry.playerId);
+
+    const latLng = [entry.lat, entry.lng];
+    const stale = !entry.timestamp ||
+      (Math.floor(Date.now() / 1000) - entry.timestamp) > STALE_POSITION_SECONDS;
+    const popupContent = buildPlayerPopup(entry);
+
+    const existingMarker = gameMapInstance.playerPositionMarkers
+      .find(m => m.playerId === entry.playerId);
+
+    if (existingMarker) {
+      existingMarker.setLatLng(latLng);
+      existingMarker.setIcon(createPlayerPinIcon(entry.teamColor, stale));
+      existingMarker.getPopup().setContent(popupContent);
+    } else {
+      const marker = L.marker(latLng, {
+        icon: createPlayerPinIcon(entry.teamColor, stale),
+        // Above the base circles, but below the viewer's own arrowhead
+        zIndexOffset: 500
+      }).addTo(gameMapInstance);
+
+      marker.bindPopup(popupContent);
+      marker.playerId = entry.playerId;
+      gameMapInstance.playerPositionMarkers.push(marker);
+    }
+  });
+
+  // Drop markers for players who no longer have a shared position (or all of
+  // them, when the host has switched the pins off)
+  gameMapInstance.playerPositionMarkers = gameMapInstance.playerPositionMarkers.filter(marker => {
+    if (!seenPlayerIds.has(marker.playerId)) {
       gameMapInstance.removeLayer(marker);
       return false;
     }
@@ -2858,6 +3064,9 @@ document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
 window.navigateTo = navigateTo;
 window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
+window.updateOwnPositionMarker = updateOwnPositionMarker;
+window.updatePlayerPositionMarkers = updatePlayerPositionMarkers;
+window.showPlayerPositions = showPlayerPositions;
 window.updateScoreboard = updateScoreboard;
 window.updateBonusBanner = updateBonusBanner;
 window.updateGameStatusText = updateGameStatusText;

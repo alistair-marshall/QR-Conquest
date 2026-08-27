@@ -26,9 +26,14 @@ const appState = {
     watchId: null,
     currentPosition: null,
     accuracy: null,
+    // Degrees clockwise from north, or null while we can't tell which way
+    // the player is facing - rotates the player's arrowhead on the map
+    heading: null,
     status: 'inactive', // 'inactive', 'getting', 'ready', 'poor', 'error'
     lastUpdate: null
   },
+  // Last known position of each player, host-only (see fetchPlayerPositions)
+  playerPositions: [],
   // Authentication state
   hostId: null,
   siteAdmin: {
@@ -743,12 +748,20 @@ function stopGPSTracking() {
   appState.gps.status = 'inactive';
   appState.gps.currentPosition = null;
   appState.gps.accuracy = null;
+  appState.gps.heading = null;
   appState.gps.lastUpdate = null;
-  
+  headingReference = null;
+
+  if (window.updateOwnPositionMarker) {
+    window.updateOwnPositionMarker();
+  }
+
   updateGPSStatusUI();
 }
 
 function handleGPSSuccess(position) {
+  updateGPSHeading(position);
+
   appState.gps.currentPosition = {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude
@@ -764,6 +777,15 @@ function handleGPSSuccess(position) {
   }
 
   updateGPSStatusUI();
+
+  // Move the player's own arrowhead on whichever map is showing
+  if (window.updateOwnPositionMarker) {
+    window.updateOwnPositionMarker();
+  }
+
+  // Let the host see where this player is (throttled internally)
+  reportPositionToServer();
+
   console.log(`GPS updated: accuracy ±${appState.gps.accuracy.toFixed(1)}m`);
 }
 
@@ -772,7 +794,12 @@ function handleGPSError(error) {
   appState.gps.status = 'error';
   appState.gps.currentPosition = null;
   appState.gps.accuracy = null;
-  
+  appState.gps.heading = null;
+
+  if (window.updateOwnPositionMarker) {
+    window.updateOwnPositionMarker();
+  }
+
   updateGPSStatusUI();
 
   let errorMessage = '';
@@ -800,6 +827,158 @@ function updateGPSStatusUI() {
   // This will be called by UI functions
   if (window.updateGPSStatusDisplay) {
     window.updateGPSStatusDisplay();
+  }
+}
+
+// =============================================================================
+// POSITION SHARING - PLAYER LOCATION ON THE MAP
+// =============================================================================
+
+// Distance between two GPS points in metres (equirectangular approximation -
+// plenty accurate over the few hundred metres a game covers)
+function distanceBetween(lat1, lng1, lat2, lng2) {
+  const toRad = deg => deg * Math.PI / 180;
+  const meanLat = toRad((lat1 + lat2) / 2);
+  const x = toRad(lng2 - lng1) * Math.cos(meanLat);
+  const y = toRad(lat2 - lat1);
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+// Bearing from one point to another, in degrees clockwise from north
+function bearingBetween(lat1, lng1, lat2, lng2) {
+  const toRad = deg => deg * Math.PI / 180;
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Last fix used to work out which way the player is travelling
+let headingReference = null;
+
+// Which way to point the player's arrowhead. Phones only report a heading
+// while they are actually moving, so fall back to the bearing between this
+// fix and the last one far enough away to be movement rather than GPS drift.
+function updateGPSHeading(position) {
+  const coords = position.coords;
+
+  if (typeof coords.heading === 'number' && !isNaN(coords.heading) &&
+      typeof coords.speed === 'number' && coords.speed > 0.5) {
+    appState.gps.heading = coords.heading;
+    headingReference = { latitude: coords.latitude, longitude: coords.longitude };
+    return;
+  }
+
+  if (!headingReference) {
+    headingReference = { latitude: coords.latitude, longitude: coords.longitude };
+    return;
+  }
+
+  const moved = distanceBetween(
+    headingReference.latitude, headingReference.longitude,
+    coords.latitude, coords.longitude
+  );
+
+  // 10m is comfortably beyond the jitter of a stationary phone
+  if (moved >= 10) {
+    appState.gps.heading = bearingBetween(
+      headingReference.latitude, headingReference.longitude,
+      coords.latitude, coords.longitude
+    );
+    headingReference = { latitude: coords.latitude, longitude: coords.longitude };
+  }
+}
+
+// Positions are reported at most this often, so a fast-updating GPS watch
+// doesn't turn into a flood of requests
+const POSITION_REPORT_INTERVAL_MS = 15000;
+let lastPositionReport = 0;
+let positionReportInFlight = false;
+
+// Share the player's latest fix with the server so the host can see where
+// their players are. Only the newest position is kept server-side.
+async function reportPositionToServer() {
+  const authState = getAuthState();
+  const position = appState.gps.currentPosition;
+
+  if (!authState.playerId || !position) return;
+
+  // Nothing to track once the game is over
+  if (appState.gameData.status === 'ended') return;
+
+  const now = Date.now();
+  if ((now - lastPositionReport) < POSITION_REPORT_INTERVAL_MS) return;
+  if (positionReportInFlight) return;
+
+  positionReportInFlight = true;
+  lastPositionReport = now;
+
+  try {
+    await fetch(`${API_BASE_URL}/players/${authState.playerId}/position`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: appState.gps.accuracy
+      })
+    });
+  } catch (err) {
+    // A missed position report is not worth bothering the player about;
+    // the next fix will try again
+    console.warn('Unable to share position with the host:', err);
+  } finally {
+    positionReportInFlight = false;
+  }
+}
+
+// Host-side polling for where the players were last seen
+let playerPositionPollingInterval = null;
+
+async function fetchPlayerPositions() {
+  const authState = getAuthState();
+  if (!authState.isHost || !appState.gameData.id) return;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/positions?host_id=${encodeURIComponent(authState.hostId)}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch player positions');
+    }
+
+    const data = await response.json();
+    appState.playerPositions = data.positions || [];
+
+    if (window.updatePlayerPositionMarkers) {
+      window.updatePlayerPositionMarkers();
+    }
+  } catch (err) {
+    // Background refresh - stay quiet and try again on the next tick
+    console.warn('Error fetching player positions:', err);
+  }
+}
+
+function startPlayerPositionPolling() {
+  const authState = getAuthState();
+  if (!authState.isHost || !appState.gameData.id) return;
+
+  // The host panel rebuilds its map on every render; leave a running poll
+  // alone rather than firing a fresh request each time
+  if (playerPositionPollingInterval) return;
+
+  fetchPlayerPositions();
+  playerPositionPollingInterval = setInterval(fetchPlayerPositions, 15000);
+  console.log('Player position polling started');
+}
+
+function stopPlayerPositionPolling() {
+  if (playerPositionPollingInterval) {
+    clearInterval(playerPositionPollingInterval);
+    playerPositionPollingInterval = null;
+    console.log('Player position polling stopped');
   }
 }
 
