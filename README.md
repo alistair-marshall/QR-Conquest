@@ -46,10 +46,16 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - Tap the crosshair button on the map to jump back to your own position if you've panned away
 - Your latest position is shared with your game host while you play, so they can see where everyone is - only the host sees it, only your most recent position is kept (never a route history), and sharing stops as soon as the game ends
 
+**Messages From Your Host:**
+- Your host can send a message to everyone playing - a start time, a change of plan, a base that's out of action
+- New messages pop up as a notification, and the megaphone icon in the header carries an unread count until you've read them
+- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
+
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
 - **Live Scoreboard**: Track team rankings as they change throughout the game
 - **Capture Notifications**: Instant WebSocket notifications whenever any team captures a base
+- **Host Messages**: Announcements from your host, sent to everyone at once
 - **Team Coordination**: Work together to develop capture and defense strategies
 
 ### For Hosts - Managing Games
@@ -107,6 +113,13 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Positions that haven't updated in the last five minutes are faded, and each pin's popup names the player, their team, and when they were last seen
 - Use the "Show players" tick box above the map to take the pins off it when a big group crowds the bases - the setting sticks between visits
 - Your own position shows as a black arrowhead, the same as it does for players
+
+**Messaging Your Players:**
+- Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
+- Messages reach players as a notification, and are kept in a list they can scroll back through
+- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
+- Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
+- Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
 
 **Game Control:**
 - **Real-time Dashboard**: See all teams, bases, and current game status
@@ -197,6 +210,8 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Brief players on rules and base locations
    - Click "Start Game" from your host panel
    - Monitor live scoreboard and base ownership
+   - Use the megaphone icon in the header to message all players at once
+   - Make sure players have a way to contact you outside the app - the app has no reply channel
    - End game when appropriate and review final results
 
 ### For Site Administrators
@@ -388,11 +403,13 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ## Technical Architecture
 
 ### Backend (Python Flask)
-- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, and answer_sessions
+- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, answer_sessions and announcements
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
+- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game code can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
+- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host passing their own `host_id` gets those fields for their own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
@@ -400,13 +417,14 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **QR Scanning**: Camera-based QR code detection
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
+- **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
 - **Responsive Design**: Works on mobile phones and tablets
 
 **File Responsibility Matrix**:
 | File | Responsibility | Contains | Calls |
 |------|---------------|----------|-------|
 | **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
-| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, PWA | Core.js API functions |
+| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, PWA | Core.js API functions |
 | **host.js** | Host UI | Host panel, team/base forms, question bank, host modals | Core.js API functions |
 | **site-admin.js** | Admin UI | Admin login, host management, admin modals | Core.js API functions |
 | **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
@@ -561,6 +579,7 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 
 - Base captures are broadcast over WebSockets to everyone in the game
 - Scoreboard and map refresh immediately when a capture happens
+- Host announcements arrive as a toast with an unread badge on the header's megaphone icon; they are polled every 10 seconds as well as pushed, so they still reach a player sitting on a page where the game socket isn't running
 - Automatic reconnection with backoff if the connection drops
 - Visual indicators for online/offline status
 
@@ -571,6 +590,7 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Secret link expiry**: Host permissions can be time-limited
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
+- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
 
 ### Data Protection
 - **Input validation**: All API inputs validated
@@ -579,9 +599,29 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 
 ### Privacy Considerations
 - **Location data**: Only stored for base creation and capture verification
+- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text
+- **Player names and QR codes**: Never served to an anonymous caller, only to the game's own host
 - **Player data**: Minimal personal information collected
 - **QR codes**: Unique UUIDs with no personal information
 - **Game isolation**: Each game's data is completely separate
+
+### Legal Responsibilities of Running a Deployment
+
+Putting this on a public URL makes **you** the provider of a user-to-user
+service under the Online Safety Act 2023 and the data controller under UK
+GDPR - not the authors of this software. Both carry duties: risk assessments
+you must write and keep, a reporting route for players, terms of service, a
+privacy notice, and a retention rule for finished games. If children will play,
+more applies again.
+
+The design keeps the risk low on purpose - no player-to-player messaging, no
+private channel between a host and a player, no free text from players beyond
+their display name, and no personal data in anonymous API responses - but it
+cannot do the paperwork for you.
+
+**Read [docs/COMPLIANCE.md](docs/COMPLIANCE.md) before running games for other
+people.** It sets out what is in scope and why, what the design already
+handles, the gaps you must cover yourself, and the documents worth holding.
 
 ## Troubleshooting
 
@@ -649,6 +689,7 @@ This is a pre-beta project focused on functionality over backwards compatibility
 - Single server instance (no clustering support)
 - SQLite database (not suitable for high concurrency)
 - Basic error handling (needs improvement for production)
+- No in-app reporting route, content moderation tooling or retention purge - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - Limited game customization options
 - No game history or analytics
 

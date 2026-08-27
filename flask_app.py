@@ -175,6 +175,7 @@ def init_db():
         last_longitude REAL,
         last_accuracy REAL,
         last_position_time INTEGER,
+        announcements_read_at INTEGER,
         FOREIGN KEY (team_id) REFERENCES teams (id)
     )
     ''')
@@ -243,6 +244,30 @@ def init_db():
     )
     ''')
 
+    # Announcements the host broadcasts to everyone in their game. There is
+    # deliberately no reply channel and no way to address one team or player:
+    # a private line between an adult host and a child player is the risk this
+    # design avoids carrying (see docs/COMPLIANCE.md)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS announcements (
+        id TEXT PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        body TEXT NOT NULL,
+        sent_at INTEGER NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES games (id)
+    )
+    ''')
+
+    cursor.execute('''
+    CREATE INDEX IF NOT EXISTS idx_announcements_game_time
+    ON announcements (game_id, sent_at)
+    ''')
+
+    # An unreleased first cut of this feature stored two-way host/player
+    # messages. It never shipped, but drop the table so private messages are
+    # not left sitting in a database that was run from that branch
+    cursor.execute('DROP TABLE IF EXISTS messages')
+
     # Migrate databases created before the deleted_at column existed
     cursor.execute('PRAGMA table_info(bases)')
     base_columns = [row['name'] for row in cursor.fetchall()]
@@ -304,6 +329,11 @@ def init_db():
         cursor.execute('ALTER TABLE players ADD COLUMN last_accuracy REAL')
     if 'last_position_time' not in player_columns:
         cursor.execute('ALTER TABLE players ADD COLUMN last_position_time INTEGER')
+
+    # Migrate databases created before players tracked which announcements
+    # they had already read
+    if 'announcements_read_at' not in player_columns:
+        cursor.execute('ALTER TABLE players ADD COLUMN announcements_read_at INTEGER')
 
     # Migrate databases where captures.team_id was NOT NULL, so
     # neutralisation events (NULL team_id) can be recorded
@@ -864,8 +894,15 @@ def update_game_settings(game_id):
     return jsonify({'success': True})
 
 # Get game details
+# The game payload is read by everyone playing, so it is fetched without a
+# credential. Game codes are short and guessable, so the anonymous view must
+# carry nothing that could be used or misused by someone who guessed one: no
+# player names or ids, and none of the QR codes that let a device join a team.
+# A host passing their own host_id gets those extra fields for their own game.
 @app.route('/api/games/<game_id>', methods=['GET'])
 def get_game(game_id):
+    host_id = request.args.get('host_id')
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -930,6 +967,8 @@ def get_game(game_id):
         ''', (game_id,))
         game = cursor.fetchone()
 
+    is_host = bool(host_id) and host_id == game['host_id']
+
     # Get teams
     cursor.execute('SELECT * FROM teams WHERE game_id = ?', (game_id,))
     teams_data = cursor.fetchall()
@@ -952,15 +991,21 @@ def get_game(game_id):
         # Calculate team score (fixed logic)
         team_score = calculate_team_score(cursor, team['id'], game)
 
-        teams.append({
+        team_payload = {
             'id': team['id'],
             'name': team['name'],
             'color': team['color'],
-            'qrCode': team['qr_code'],
             'playerCount': len(players),
-            'players': players,
             'score': team_score,
-        })
+        }
+
+        # Who is on a team, and the QR code that joins it, are the host's to
+        # see - players only need the scoreboard
+        if is_host:
+            team_payload['qrCode'] = team['qr_code']
+            team_payload['players'] = players
+
+        teams.append(team_payload)
 
     # Get bases
     cursor.execute('SELECT * FROM bases WHERE game_id = ?', (game_id,))
@@ -974,7 +1019,7 @@ def get_game(game_id):
         shield = base['shield'] or 0
         owner = base['owner_team_id']
 
-        bases.append({
+        base_payload = {
             'id': base['id'],
             'name': base['name'],
             'lat': base['latitude'],
@@ -982,12 +1027,18 @@ def get_game(game_id):
             'ownedBy': owner,
             'shield': shield,
             'neutral': owner is None,
-            'qrCode': base['qr_code'],
             'deleted_at': base['deleted_at'],
             'collectedBy': base['collected_by_team_id'],
             'collectedAt': base['collected_at'],
             'returnedAt': base['returned_at']
-        })
+        }
+
+        # A base's QR code is meant to be found in the field, not read out of
+        # the API by anyone who guessed the game code
+        if is_host:
+            base_payload['qrCode'] = base['qr_code']
+
+        bases.append(base_payload)
 
     conn.close()
 
@@ -1799,6 +1850,194 @@ def get_player_positions(game_id):
     } for row in rows]
 
     return jsonify({'positions': positions, 'serverTime': int(time.time())})
+
+
+# ==========================================================
+# Announcements - the host broadcasts to everyone in the game
+# ==========================================================
+
+# Long enough for a round of instructions, short enough to stay readable in a
+# toast on a phone held at arm's length in the rain
+ANNOUNCEMENT_MAX_LENGTH = 500
+
+# Only the most recent announcements are served; a game is short enough that
+# this is never reached in practice, but it keeps the payload bounded
+ANNOUNCEMENT_HISTORY_LIMIT = 200
+
+
+def announcement_row_to_dict(row):
+    """Shape one announcement row for the client."""
+    return {
+        'id': row['id'],
+        'body': row['body'],
+        'sentAt': row['sent_at']
+    }
+
+
+def read_announcement_body(data):
+    """Pull the announcement text out of a request body.
+
+    Returns (body, error) where exactly one of the two is set.
+    """
+    body = (data or {}).get('body')
+    if not isinstance(body, str):
+        return None, 'Announcement text required'
+
+    body = body.strip()
+    if not body:
+        return None, 'Announcement text required'
+
+    if len(body) > ANNOUNCEMENT_MAX_LENGTH:
+        return None, f'Announcement must be {ANNOUNCEMENT_MAX_LENGTH} characters or fewer'
+
+    return body, None
+
+
+def fetch_announcements(cursor, game_id):
+    """Read a game's most recent announcements, oldest first."""
+    cursor.execute("""
+    SELECT id, body, sent_at FROM announcements
+    WHERE game_id = ?
+    ORDER BY sent_at DESC, rowid DESC
+    LIMIT ?
+    """, (game_id, ANNOUNCEMENT_HISTORY_LIMIT))
+
+    return [announcement_row_to_dict(row) for row in reversed(cursor.fetchall())]
+
+
+# Host posts an announcement to everyone in the game
+@app.route('/api/games/<game_id>/announcements', methods=['POST'])
+def send_announcement(game_id):
+    data = request.json or {}
+    host_id = data.get('host_id')
+    if not host_id:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    body, error = read_announcement_body(data)
+    if error:
+        return jsonify({'error': error}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT host_id FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != host_id:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    announcement_id = str(uuid.uuid4())
+    sent_at = int(time.time())
+
+    cursor.execute("""
+    INSERT INTO announcements (id, game_id, body, sent_at)
+    VALUES (?, ?, ?, ?)
+    """, (announcement_id, game_id, body, sent_at))
+
+    conn.commit()
+    conn.close()
+
+    # Anyone who knows a game code can listen on its socket, so the event says
+    # only that there is something new; the text is served to players below
+    broadcast_game_event(game_id, {'type': 'announcement_posted'})
+
+    return jsonify({'id': announcement_id, 'body': body, 'sentAt': sent_at}), 201
+
+
+# The host's own record of what they have already sent
+@app.route('/api/games/<game_id>/announcements', methods=['GET'])
+def get_host_announcements(game_id):
+    host_id = request.args.get('host_id')
+    if not host_id:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT host_id FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != host_id:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    announcements = fetch_announcements(cursor, game_id)
+    conn.close()
+
+    # Nothing is ever sent to the host, so there is nothing for them to read
+    return jsonify({'announcements': announcements, 'unread': 0, 'serverTime': int(time.time())})
+
+
+# A player's announcements, with a count of what they have not seen yet
+@app.route('/api/players/<player_id>/announcements', methods=['GET'])
+def get_player_announcements(player_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT p.announcements_read_at, t.game_id FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE p.id = ?
+    """, (player_id,))
+    player = cursor.fetchone()
+
+    if not player:
+        conn.close()
+        return jsonify({'error': 'Player not found'}), 404
+
+    announcements = fetch_announcements(cursor, player['game_id'])
+
+    read_at = player['announcements_read_at'] or 0
+    cursor.execute("""
+    SELECT COUNT(*) FROM announcements WHERE game_id = ? AND sent_at > ?
+    """, (player['game_id'], read_at))
+    unread = cursor.fetchone()[0]
+
+    conn.close()
+
+    return jsonify({'announcements': announcements, 'unread': unread, 'serverTime': int(time.time())})
+
+
+# Read marker, so the unread badge only counts what has not been shown yet
+@app.route('/api/players/<player_id>/announcements/read', methods=['POST'])
+def mark_announcements_read(player_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT announcements_read_at FROM players WHERE id = ?', (player_id,))
+    player = cursor.fetchone()
+
+    if not player:
+        conn.close()
+        return jsonify({'error': 'Player not found'}), 404
+
+    # The client sends the timestamp of the newest announcement it actually
+    # displayed, so one that lands between its fetch and this call stays
+    # unread. Anything missing or out of range falls back to now.
+    now = int(time.time())
+    try:
+        read_through = int((request.json or {}).get('read_through'))
+    except (TypeError, ValueError):
+        read_through = now
+
+    read_through = max(min(read_through, now), player['announcements_read_at'] or 0)
+
+    cursor.execute('UPDATE players SET announcements_read_at = ? WHERE id = ?', (read_through, player_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'readThrough': read_through})
+
+
 
 # Get current scores
 @app.route('/api/games/<game_id>/scores', methods=['GET'])
@@ -3054,6 +3293,12 @@ def delete_game(game_id):
         cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
         teams_count = cursor.fetchone()[0]
 
+        cursor.execute('SELECT COUNT(*) FROM announcements WHERE game_id = ?', (game_id,))
+        announcements_count = cursor.fetchone()[0]
+
+        # Delete announcements (they reference the game)
+        cursor.execute('DELETE FROM announcements WHERE game_id = ?', (game_id,))
+
         # Delete captures (must be deleted before bases and teams due to foreign keys)
         cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
 
@@ -3087,7 +3332,8 @@ def delete_game(game_id):
             'teams': teams_count,
             'bases': bases_count,
             'players': players_count,
-            'captures': captures_count
+            'captures': captures_count,
+            'announcements': announcements_count
         }
     })
 
