@@ -2823,6 +2823,69 @@ def update_team(team_id):
 
     return jsonify({'success': True})
 
+# Delete a team (only while it is empty, so no scores or history are lost)
+@app.route('/api/teams/<team_id>', methods=['DELETE'])
+def delete_team(team_id):
+    data = request.json
+    if not data or 'host_id' not in data:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT t.*, g.host_id FROM teams t
+    JOIN games g ON t.game_id = g.id
+    WHERE t.id = ?
+    ''', (team_id,))
+
+    team = cursor.fetchone()
+
+    if not team:
+        conn.close()
+        return jsonify({'error': 'Team not found'}), 404
+
+    if team['host_id'] != data['host_id']:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    # A team that anyone joined keeps its players, captures and score, so it
+    # can only be removed while it is still empty - during setup or once the
+    # game is under way and it is clear nobody is using it
+    cursor.execute('SELECT COUNT(*) FROM players WHERE team_id = ?', (team_id,))
+    if cursor.fetchone()[0] > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete a team that has players'}), 400
+
+    # Defensive: an empty team should have no game history, but never drop a
+    # team that is still referenced by captures or bases
+    cursor.execute('SELECT COUNT(*) FROM captures WHERE team_id = ?', (team_id,))
+    if cursor.fetchone()[0] > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete a team that has captured bases'}), 400
+
+    cursor.execute('''
+    SELECT COUNT(*) FROM bases
+    WHERE owner_team_id = ? OR collected_by_team_id = ?
+    ''', (team_id, team_id))
+    if cursor.fetchone()[0] > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete a team that owns or has collected a base'}), 400
+
+    # Removing the row frees the team's QR code for reuse (see qr_code_conflict)
+    cursor.execute('DELETE FROM teams WHERE id = ?', (team_id,))
+
+    conn.commit()
+    conn.close()
+
+    broadcast_game_event(team['game_id'], {
+        'type': 'team_deleted',
+        'team_id': team_id,
+        'team_name': team['name']
+    })
+
+    return jsonify({'success': True})
+
 # Delete game (host can delete their own games)
 @app.route('/api/games/<game_id>', methods=['DELETE'])
 def delete_game(game_id):
