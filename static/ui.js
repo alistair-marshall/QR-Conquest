@@ -354,7 +354,7 @@ function loadQRCodeLibrary() {
 
     // Create script element to load QRCode.js
     const script = UIBuilder.createElement('script', {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+      src: '/libs/qrcode.min.js',
       onLoad: () => {
         console.log('QRCode library loaded successfully');
         resolve();

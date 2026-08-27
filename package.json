@@ -1,0 +1,16 @@
+{
+  "name": "qr-conquest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build tooling for QR Conquest's vendored front-end assets. The app itself is served straight from static/ and needs none of this at runtime.",
+  "scripts": {
+    "build:css": "tailwindcss -c tools/tailwind.config.js -i tools/tailwind.src.css -o static/libs/tailwind.css --minify",
+    "vendor": "node tools/vendor-assets.js && npm run build:css"
+  },
+  "devDependencies": {
+    "leaflet": "1.9.4",
+    "lucide": "1.34.0",
+    "qrcodejs": "1.0.0",
+    "tailwindcss": "3.4.19"
+  }
+}
