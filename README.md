@@ -63,6 +63,8 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Assign team names and colors
 - Each QR code becomes a unique team that players can join
 - Share team QR codes with players to let them join
+- Edit a team's name or colour at any time from the host panel
+- Delete a team that nobody has joined - during setup or mid-game, so a spare team doesn't sit on the scoreboard with zero points - and its QR code is freed to reuse for another team or base
 
 **Placing Bases:**
 - Visit each location where you want to place a base
@@ -89,6 +91,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 
 **Managing the Game:**
 - Start the game when teams are ready
+- Delete any team that ended up unused once players have arrived (only while it has no players)
 - Monitor all team activity in real-time
 - Watch live base captures and score changes
 - End the game and view final results

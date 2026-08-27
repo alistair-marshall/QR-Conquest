@@ -1142,6 +1142,12 @@ function handleGameSocketMessage(message) {
     }
 
     fetchGameUpdates();
+  } else if (message.type === 'team_deleted') {
+    console.log('Team deleted event:', message);
+
+    // The team had no players, so nobody is being kicked out - just drop it
+    // from the scoreboard everyone is looking at
+    fetchGameUpdates();
   } else if (message.type === 'base_returned') {
     console.log('Base returned event:', message);
 
@@ -2132,6 +2138,47 @@ async function updateTeam(teamId, name, color) {
   } catch (err) {
     console.error('Error updating team:', err);
     const userMessage = err.message || 'Unable to update team. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Delete a team (the server only allows this while the team has no players)
+async function deleteTeam(teamId) {
+  try {
+    setLoading(true);
+
+    const authState = getAuthState();
+    if (!authState.hasGame || !authState.isHost) {
+      throw new Error('Host authentication required to delete teams.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        host_id: authState.hostId
+      })
+    });
+
+    await handleApiResponse(response, 'Failed to delete team');
+
+    // Show success message - UI will handle this
+    if (window.showNotification) {
+      window.showNotification('Team deleted successfully!', 'success');
+    }
+
+    // Refresh game data
+    await fetchGameData(authState.gameId);
+  } catch (err) {
+    console.error('Error deleting team:', err);
+    const userMessage = err.message || 'Unable to delete team. Please try again.';
     if (window.showNotification) {
       window.showNotification(userMessage, 'error');
     }

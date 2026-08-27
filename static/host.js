@@ -433,11 +433,26 @@ function renderHostPanel() {
 
       teamHeader.appendChild(teamNameContainer);
 
+      // Action buttons container
+      const teamActionsContainer = UIBuilder.createElement('div', {
+        className: 'flex items-center space-x-2'
+      });
+
       // Edit button
       const editButton = UIBuilder.createButton('Edit', function() {
         renderTeamEditModal(team);
       }, 'bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors flex items-center', 'edit-2');
-      teamHeader.appendChild(editButton);
+      teamActionsContainer.appendChild(editButton);
+
+      // Delete button - only for empty teams, so no scores or players are lost
+      if (!(team.playerCount || 0)) {
+        const deleteTeamButton = UIBuilder.createButton('Delete', function() {
+          renderTeamDeleteModal(team);
+        }, 'bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors flex items-center', 'trash-2');
+        teamActionsContainer.appendChild(deleteTeamButton);
+      }
+
+      teamHeader.appendChild(teamActionsContainer);
 
       teamCard.appendChild(teamHeader);
 
@@ -3564,6 +3579,57 @@ function renderTeamEditModal(team) {
           modal.close();
         },
         className: 'bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+}
+
+// Function to confirm deleting a team
+function renderTeamDeleteModal(team) {
+  const formContent = UIBuilder.createElement('div', { className: 'space-y-4' });
+
+  const warningDiv = UIBuilder.createElement('div', {
+    className: 'bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg'
+  });
+
+  const warningTitle = UIBuilder.createElement('p', {
+    className: 'font-semibold mb-1',
+    textContent: `Delete team "${team.name}"?`
+  });
+  warningDiv.appendChild(warningTitle);
+
+  const warningText = UIBuilder.createElement('p', {
+    className: 'text-sm',
+    textContent: team.qrCode ?
+      'The team has no players, so no scores are lost. It disappears from the scoreboard and its QR code can be reused for a new team or base.' :
+      'The team has no players, so no scores are lost. It disappears from the scoreboard.'
+  });
+  warningDiv.appendChild(warningText);
+
+  formContent.appendChild(warningDiv);
+
+  const modal = UIBuilder.createModal({
+    title: 'Delete Team',
+    content: formContent,
+    actions: [
+      {
+        text: 'Cancel',
+        onClick: () => modal.close(),
+        className: 'bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      },
+      {
+        text: 'Delete Team',
+        onClick: async () => {
+          try {
+            await deleteTeam(team.id);
+            modal.close();
+          } catch (error) {
+            // Error handling is done in deleteTeam function
+          }
+        },
+        className: 'bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors'
       }
     ]
   });
