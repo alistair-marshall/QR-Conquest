@@ -395,6 +395,42 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 | **site-admin.js** | Admin UI | Admin login, host management, admin modals | Core.js API functions |
 | **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
 
+### Front-end libraries
+
+Tailwind, Leaflet, Lucide, jsQR and QRCode.js are served from `static/libs/`
+rather than a CDN. Players are usually outdoors on patchy mobile data, and a
+blocked or slow CDN previously took the styling, the map or the QR scanner
+down with it; serving the libraries from the app itself removes that failure
+mode. The only third-party request left in normal play is the OpenStreetMap
+tiles the map needs; the opt-in debug console (`DEBUG_FEATURES`) still pulls
+Eruda from a CDN when a developer asks for it. The vendored copies are
+committed, so running the app still takes nothing more than Python and
+`flask_app.py`.
+
+| Library | Vendored as | Version |
+|---------|-------------|---------|
+| Tailwind CSS | `static/libs/tailwind.css` (prebuilt) | 3.4.19 |
+| Leaflet | `static/libs/leaflet.js`, `leaflet.css`, `images/` | 1.9.4 |
+| Lucide icons | `static/libs/lucide.min.js` | 1.34.0 |
+| QRCode.js | `static/libs/qrcode.min.js` | 1.0.0 |
+| jsQR | `static/libs/jsQR.js` | vendored previously |
+
+Tailwind used to run from the Play CDN, which compiled the classes in the
+browser on every page load; it is now built ahead of time into a ~29 KB
+stylesheet. **After adding new Tailwind classes to the front end, rebuild it:**
+
+```bash
+npm install       # dev tooling only - not needed to run the game
+npm run build:css
+```
+
+The build scans `static/*.html`, `static/*.js` and
+`static/code-generator/*.html` for class names (see `tools/tailwind.config.js`),
+so a class must appear as a literal string somewhere in the source. Team
+colours are additionally safelisted, because they are stored per team in the
+database. To upgrade a library, bump its version in `package.json` and run
+`npm run vendor`, which recopies the files and rebuilds the stylesheet.
+
 ### QR Code System
 - **Host Authentication**: Unique secret links for host authentication
 - **Team QR**: Unique UUID linking to specific team in specific game

@@ -184,3 +184,7 @@ cython_debug/
 
 # VS Code
 *.code-workspace
+
+# Node (front-end asset build tooling only - see tools/)
+node_modules/
+package-lock.json
