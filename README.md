@@ -102,8 +102,10 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - End the game and view final results
 
 **Seeing Where Everyone Is:**
-- Your game map shows the last known position of every player, dotted in their team's colour - handy for spotting a team that's drifted out of the play area or a player who's gone quiet
-- Positions that haven't updated in the last five minutes are faded, and each dot's popup names the player, their team, and when they were last seen
+- Your game map shows the last known position of every player as a small pin in their team's colour - handy for spotting a team that's drifted out of the play area or a player who's gone quiet
+- Bases are circles and players are pins, so the two never get confused at a glance
+- Positions that haven't updated in the last five minutes are faded, and each pin's popup names the player, their team, and when they were last seen
+- Use the "Show players" tick box above the map to take the pins off it when a big group crowds the bases - the setting sticks between visits
 - Your own position shows as a black arrowhead, the same as it does for players
 
 **Game Control:**
@@ -396,7 +398,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ### Frontend (Vanilla JavaScript)
 - **PWA**: Installable Progressive Web App
 - **QR Scanning**: Camera-based QR code detection
-- **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts) each player's last known position in their team colour
+- **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
 - **Responsive Design**: Works on mobile phones and tablets
 

@@ -538,7 +538,7 @@ function renderHostPanel() {
   });
 
   const baseSectionHeader = UIBuilder.createElement('div', {
-    className: 'flex justify-between items-center mb-4'
+    className: 'flex flex-wrap justify-between items-center gap-2 mb-4'
   });
 
   const baseTitle = UIBuilder.createElement('h3', {
@@ -547,7 +547,12 @@ function renderHostPanel() {
   });
   baseSectionHeader.appendChild(baseTitle);
 
-  // Show deleted bases toggle (only for hosts)
+  // Map/list filters (only for hosts)
+  const toggleGroup = UIBuilder.createElement('div', {
+    className: 'flex items-center space-x-3'
+  });
+
+  // Show deleted bases toggle
   const showDeletedToggle = UIBuilder.createElement('label', {
     className: 'flex items-center text-sm cursor-pointer'
   });
@@ -572,7 +577,43 @@ function renderHostPanel() {
 
   showDeletedToggle.appendChild(toggleCheckbox);
   showDeletedToggle.appendChild(toggleText);
-  baseSectionHeader.appendChild(showDeletedToggle);
+  toggleGroup.appendChild(showDeletedToggle);
+
+  // Show player pins toggle - a big group all standing together can crowd the
+  // bases, so the host can take the players off the map without losing them
+  const showPlayersToggle = UIBuilder.createElement('label', {
+    className: 'flex items-center text-sm cursor-pointer'
+  });
+
+  const playersCheckbox = UIBuilder.createElement('input', {
+    type: 'checkbox',
+    id: 'show-player-positions',
+    className: 'mr-2'
+  });
+  playersCheckbox.checked = showPlayerPositions();
+
+  playersCheckbox.addEventListener('change', function() {
+    localStorage.setItem('showPlayerPositions', this.checked);
+
+    // Only the pins change, so redraw them in place rather than re-rendering
+    // the whole panel (which would tear the map down and rebuild it)
+    if (this.checked) {
+      startPlayerPositionPolling();
+    } else {
+      stopPlayerPositionPolling();
+    }
+    updatePlayerPositionMarkers();
+  });
+
+  const playersToggleText = UIBuilder.createElement('span', {
+    textContent: 'Show players'
+  });
+
+  showPlayersToggle.appendChild(playersCheckbox);
+  showPlayersToggle.appendChild(playersToggleText);
+  toggleGroup.appendChild(showPlayersToggle);
+
+  baseSectionHeader.appendChild(toggleGroup);
   baseSection.appendChild(baseSectionHeader);
 
   if (appState.gameData.bases && appState.gameData.bases.length > 0) {

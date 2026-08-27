@@ -1421,7 +1421,7 @@ function initGameMap() {
   updatePlayerPositionMarkers();
 
   // Hosts see where their players were last seen; keep it refreshed
-  if (getAuthState().isHost && appState.gameData.id) {
+  if (getAuthState().isHost && appState.gameData.id && showPlayerPositions()) {
     startPlayerPositionPolling();
   }
 
@@ -1729,6 +1729,36 @@ function buildPlayerPopup(entry) {
 // signal, closed the app, or stopped playing
 const STALE_POSITION_SECONDS = 300;
 
+// A player is a small pin standing at a point, rather than another filled
+// circle: bases are areas on this map, so shape - not colour or size - is what
+// tells the two apart at a glance. Kept deliberately small so a crowd of
+// players doesn't swamp the bases underneath.
+const PLAYER_PIN_WIDTH = 15;
+const PLAYER_PIN_HEIGHT = 20;
+
+function createPlayerPinIcon(teamColor, stale) {
+  const fill = getHexColorForTailwind(teamColor);
+
+  return L.divIcon({
+    className: 'player-position-marker',
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="${PLAYER_PIN_WIDTH}"
+        height="${PLAYER_PIN_HEIGHT}" viewBox="0 0 24 32"
+        style="opacity: ${stale ? 0.45 : 1};">
+        <path d="M12 1.5c-5.8 0-10.5 4.7-10.5 10.5 0 7.5 10.5 18.5 10.5 18.5S22.5 19.5 22.5 12c0-5.8-4.7-10.5-10.5-10.5z"
+              fill="${fill}" stroke="#111827" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="3.5" fill="#ffffff"/>
+      </svg>`,
+    iconSize: [PLAYER_PIN_WIDTH, PLAYER_PIN_HEIGHT],
+    // Anchored at the tip of the pin, which is the position itself
+    iconAnchor: [PLAYER_PIN_WIDTH / 2, PLAYER_PIN_HEIGHT]
+  });
+}
+
+// Whether the host has player pins switched on (default: shown)
+function showPlayerPositions() {
+  return localStorage.getItem('showPlayerPositions') !== 'false';
+}
+
 // Host view: each player's last known position, in their team's colour.
 // Players never see these - the server only serves them to the game's host.
 function updatePlayerPositionMarkers() {
@@ -1739,7 +1769,8 @@ function updatePlayerPositionMarkers() {
   }
 
   const authState = getAuthState();
-  const positions = (authState.isHost && appState.playerPositions) ? appState.playerPositions : [];
+  const show = authState.isHost && showPlayerPositions();
+  const positions = (show && appState.playerPositions) ? appState.playerPositions : [];
   const seenPlayerIds = new Set();
 
   positions.forEach(entry => {
@@ -1750,14 +1781,6 @@ function updatePlayerPositionMarkers() {
     const latLng = [entry.lat, entry.lng];
     const stale = !entry.timestamp ||
       (Math.floor(Date.now() / 1000) - entry.timestamp) > STALE_POSITION_SECONDS;
-    const style = {
-      radius: 7,
-      fillColor: getHexColorForTailwind(entry.teamColor),
-      color: '#111827',
-      weight: 2,
-      opacity: stale ? 0.4 : 1,
-      fillOpacity: stale ? 0.3 : 0.9
-    };
     const popupContent = buildPlayerPopup(entry);
 
     const existingMarker = gameMapInstance.playerPositionMarkers
@@ -1765,19 +1788,23 @@ function updatePlayerPositionMarkers() {
 
     if (existingMarker) {
       existingMarker.setLatLng(latLng);
-      existingMarker.setStyle(style);
+      existingMarker.setIcon(createPlayerPinIcon(entry.teamColor, stale));
       existingMarker.getPopup().setContent(popupContent);
     } else {
-      // circleMarker (pixel radius) rather than circle (metre radius), so a
-      // player reads as a dot at any zoom and never as a capture area
-      const marker = L.circleMarker(latLng, style).addTo(gameMapInstance);
+      const marker = L.marker(latLng, {
+        icon: createPlayerPinIcon(entry.teamColor, stale),
+        // Above the base circles, but below the viewer's own arrowhead
+        zIndexOffset: 500
+      }).addTo(gameMapInstance);
+
       marker.bindPopup(popupContent);
       marker.playerId = entry.playerId;
       gameMapInstance.playerPositionMarkers.push(marker);
     }
   });
 
-  // Drop markers for players who no longer have a shared position
+  // Drop markers for players who no longer have a shared position (or all of
+  // them, when the host has switched the pins off)
   gameMapInstance.playerPositionMarkers = gameMapInstance.playerPositionMarkers.filter(marker => {
     if (!seenPlayerIds.has(marker.playerId)) {
       gameMapInstance.removeLayer(marker);
@@ -3039,6 +3066,7 @@ window.renderApp = renderApp;
 window.updateMapMarkers = updateMapMarkers;
 window.updateOwnPositionMarker = updateOwnPositionMarker;
 window.updatePlayerPositionMarkers = updatePlayerPositionMarkers;
+window.showPlayerPositions = showPlayerPositions;
 window.updateScoreboard = updateScoreboard;
 window.updateBonusBanner = updateBonusBanner;
 window.updateGameStatusText = updateGameStatusText;
