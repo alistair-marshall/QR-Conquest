@@ -427,6 +427,10 @@ function navigateTo(page) {
     }
   }
 
+  // Announcements are not tied to one page - start polling as soon as there
+  // is a game to follow (no-ops when there isn't, or when already running)
+  startAnnouncementPolling();
+
   if (page === 'siteAdminPanel' && appState.siteAdmin.isAuthenticated) {
     // Trigger host data loading if not already loaded/loading
     if (!appState.siteAdmin.hostsLoaded && !appState.siteAdmin.hostsLoading) {
@@ -1955,6 +1959,11 @@ function renderApp() {
       rightSection.appendChild(adminBadge);
     } else {
       // Regular host button
+      // Host announcements, sent by the host and read by the players
+      if (getAnnouncementRole()) {
+        rightSection.appendChild(createAnnouncementButton());
+      }
+
       const hostButton = UIBuilder.createButton('Host Menu', function() {
         handleHostButtonClick();
       }, 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200', 'shield');
@@ -3057,6 +3066,229 @@ function startCooldownBannerMonitoring() {
 document.addEventListener('DOMContentLoaded', setupOnlineStatusMonitoring);
 
 // =============================================================================
+// ANNOUNCEMENTS PANEL
+// =============================================================================
+
+// The open panel, or null. Held so an arriving announcement can refresh the
+// list in place rather than reopening it under the reader.
+let announcementModalRef = null;
+
+function announcementPanelIsOpen() {
+  return !!announcementModalRef;
+}
+
+// Header button with an unread count, shown to the host of the loaded game
+// and to anyone playing in it
+function createAnnouncementButton() {
+  const button = UIBuilder.createElement('button', {
+    className: 'relative mr-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-3 rounded-lg transition-all duration-200',
+    title: 'Messages',
+    'aria-label': 'Messages',
+    onClick: showAnnouncementPanel
+  });
+
+  button.appendChild(UIBuilder.createElement('i', { 'data-lucide': 'megaphone' }));
+
+  button.appendChild(UIBuilder.createElement('span', {
+    id: 'announcement-unread-badge',
+    className: 'absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full px-1.5 hidden'
+  }));
+
+  setTimeout(function () {
+    updateAnnouncementBadge();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }, 0);
+
+  return button;
+}
+
+function updateAnnouncementBadge() {
+  const badge = document.getElementById('announcement-unread-badge');
+  if (!badge) return;
+
+  const unread = (appState.announcements && appState.announcements.unread) || 0;
+  badge.textContent = unread > 9 ? '9+' : String(unread);
+  badge.classList.toggle('hidden', unread === 0);
+}
+
+function formatAnnouncementTime(sentAt) {
+  if (!sentAt) return '';
+  return new Date(sentAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderAnnouncementList() {
+  const list = document.getElementById('announcement-list');
+  if (!list) return;
+
+  const isHost = getAnnouncementRole() === 'host';
+  const announcements = (appState.announcements && appState.announcements.items) || [];
+
+  // Rebuilding scrolls to the newest, unless the reader has scrolled back
+  // through the history and would be yanked away from it
+  const nearBottom = (list.scrollHeight - list.scrollTop - list.clientHeight) < 40;
+
+  list.innerHTML = '';
+
+  if (!announcements.length) {
+    const state = appState.announcements || {};
+    let placeholder;
+
+    if (!state.loaded && state.loading) {
+      placeholder = 'Loading messages...';
+    } else if (state.error) {
+      placeholder = state.error;
+    } else {
+      placeholder = isHost
+        ? 'Nothing sent yet. Anything you send here goes to every player in the game.'
+        : 'Nothing from the host yet.';
+    }
+
+    list.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm text-gray-500 text-center py-6',
+      textContent: placeholder
+    }));
+    return;
+  }
+
+  announcements.forEach(function (announcement) {
+    const card = UIBuilder.createElement('div', {
+      className: 'bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm'
+    });
+
+    card.appendChild(UIBuilder.createElement('div', {
+      className: 'text-xs text-gray-500 mb-1',
+      textContent: (isHost ? 'Sent to everyone at ' : 'From the host at ') +
+        formatAnnouncementTime(announcement.sentAt)
+    }));
+
+    card.appendChild(UIBuilder.createElement('p', {
+      className: 'text-sm text-gray-800 whitespace-pre-wrap break-words',
+      textContent: announcement.body
+    }));
+
+    list.appendChild(card);
+  });
+
+  if (nearBottom) {
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+function buildAnnouncementComposer() {
+  const composer = UIBuilder.createElement('div', { className: 'mt-4 space-y-2' });
+
+  composer.appendChild(UIBuilder.createElement('textarea', {
+    id: 'announcement-body',
+    className: 'w-full p-2 border border-gray-300 rounded-lg',
+    rows: '2',
+    maxlength: String(ANNOUNCEMENT_MAX_LENGTH),
+    placeholder: 'Message every player...'
+  }));
+
+  const sendButton = UIBuilder.createButton('Send to everyone', function () {
+    sendAnnouncementFromPanel(sendButton);
+  }, 'w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors', 'send');
+  composer.appendChild(sendButton);
+
+  return composer;
+}
+
+async function sendAnnouncementFromPanel(sendButton) {
+  const textarea = document.getElementById('announcement-body');
+  if (!textarea) return;
+
+  const body = textarea.value.trim();
+  if (!body) {
+    showNotification('Type a message before sending.', 'warning');
+    return;
+  }
+
+  sendButton.disabled = true;
+  sendButton.classList.add('opacity-60');
+
+  const sent = await sendAnnouncement(body);
+
+  sendButton.disabled = false;
+  sendButton.classList.remove('opacity-60');
+
+  if (sent) {
+    textarea.value = '';
+    // Always follow your own message down, wherever the list was scrolled
+    const list = document.getElementById('announcement-list');
+    if (list) list.scrollTop = list.scrollHeight;
+  }
+}
+
+function showAnnouncementPanel() {
+  const role = getAnnouncementRole();
+  if (!role) return;
+
+  if (announcementModalRef) {
+    announcementModalRef.close();
+  }
+
+  const isHost = role === 'host';
+  const content = UIBuilder.createElement('div');
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600 mb-3',
+    textContent: isHost
+      ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to.'
+      : 'Messages from your game host. You cannot reply here - contact your host the way they told you to.'
+  }));
+
+  content.appendChild(UIBuilder.createElement('div', {
+    id: 'announcement-list',
+    className: 'bg-gray-50 rounded-lg p-3 space-y-2 max-h-56 sm:max-h-72 overflow-y-auto'
+  }));
+
+  if (isHost) {
+    content.appendChild(buildAnnouncementComposer());
+  }
+
+  announcementModalRef = UIBuilder.createModal({
+    title: isHost ? 'Message all players' : 'Messages from the host',
+    content: content,
+    size: 'lg',
+    actions: [{
+      text: 'Close',
+      onClick: function () {
+        announcementModalRef.close();
+      },
+      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }],
+    onClose: function () {
+      announcementModalRef = null;
+    }
+  });
+
+  document.body.appendChild(announcementModalRef);
+  if (window.lucide) window.lucide.createIcons();
+
+  renderAnnouncementList();
+  const list = document.getElementById('announcement-list');
+  if (list) list.scrollTop = list.scrollHeight;
+
+  markAnnouncementsRead();
+
+  // Make sure the reader is looking at the latest, not the last poll
+  fetchAnnouncements();
+}
+
+// Called by core.js whenever the announcements change
+function refreshAnnouncementPanel() {
+  if (!announcementModalRef) return;
+
+  renderAnnouncementList();
+
+  // Anything that arrives while the panel is open has been seen
+  markAnnouncementsRead();
+}
+
+
+// =============================================================================
 // GLOBAL INTERFACE FUNCTIONS (exported to window for core.js)
 // =============================================================================
 
@@ -3079,3 +3311,7 @@ window.closeQuizModal = closeQuizModal;
 window.updateBaseViewInfo = updateBaseViewInfo;
 window.showBaseCaptureAnimation = showBaseCaptureAnimation;
 window.showBonusCollectPrompt = showBonusCollectPrompt;
+window.updateAnnouncementBadge = updateAnnouncementBadge;
+window.refreshAnnouncementPanel = refreshAnnouncementPanel;
+window.announcementPanelIsOpen = announcementPanelIsOpen;
+window.showAnnouncementPanel = showAnnouncementPanel;

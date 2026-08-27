@@ -34,6 +34,14 @@ const appState = {
   },
   // Last known position of each player, host-only (see fetchPlayerPositions)
   playerPositions: [],
+  // Announcements the host has broadcast to this game
+  announcements: {
+    items: [],
+    unread: 0,
+    loading: false,
+    loaded: false,
+    error: null
+  },
   // Authentication state
   hostId: null,
   siteAdmin: {
@@ -193,6 +201,10 @@ function clearGameState() {
   appState.quizSession = null;
   appState.baseViewBaseId = null;
   appState.baseViewPending = null;
+
+  // Announcements belong to the game that has just been left
+  stopAnnouncementPolling();
+  resetAnnouncementState();
 
   console.log('Game state cleared');
 }
@@ -986,6 +998,18 @@ function stopPlayerPositionPolling() {
 // GAME DATA MANAGEMENT
 // =============================================================================
 
+// Team rosters and QR codes are only served to the game's own host, so the
+// host identifies itself when reading a game. Players send nothing and get
+// the anonymous view.
+function gameDataUrl(gameId) {
+  const authState = getAuthState();
+  const url = `${API_BASE_URL}/games/${gameId}`;
+
+  return authState.isHost
+    ? `${url}?host_id=${encodeURIComponent(authState.hostId)}`
+    : url;
+}
+
 // Fetch game data
 async function fetchGameData(gameId) {
   try {
@@ -995,7 +1019,7 @@ async function fetchGameData(gameId) {
     let data = null;
 
     try {
-      const response = await fetch(API_BASE_URL + '/games/' + gameId);
+      const response = await fetch(gameDataUrl(gameId));
 
       if (response.ok) {
         data = await response.json();
@@ -1032,6 +1056,10 @@ async function fetchGameData(gameId) {
     appState.gameData.hostName = data.hostName;
     appState.gameData.settings = data.settings || {};
 
+    // Announcements belong to this game, so pick them up as soon as the game
+    // is known - not only once a particular page is opened
+    startAnnouncementPolling();
+
     // Re-render with new data - UI will handle this
     if (window.renderApp) {
       window.renderApp();
@@ -1054,7 +1082,7 @@ async function fetchGameUpdates() {
 
   try {
     // Fetch complete game data instead of just scores
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id);
+    const response = await fetch(gameDataUrl(appState.gameData.id));
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1176,6 +1204,255 @@ function stopScorePolling() {
 
   disconnectGameSocket();
 }
+
+// =============================================================================
+// ANNOUNCEMENTS - THE HOST BROADCASTS TO EVERYONE
+// =============================================================================
+
+// Matches ANNOUNCEMENT_MAX_LENGTH on the server
+const ANNOUNCEMENT_MAX_LENGTH = 500;
+
+// The live socket only runs on the game view, so announcements are polled as
+// well: that is what reaches a player sitting on any other page
+const ANNOUNCEMENT_POLL_INTERVAL_MS = 10000;
+
+let announcementPollingInterval = null;
+
+// Ids already shown, so a refresh only announces what is genuinely new
+let knownAnnouncementIds = new Set();
+
+// A host looking at a game that is not theirs is refused their own record of
+// what they sent; remember that rather than retrying it on every poll
+let hostAnnouncementsDenied = false;
+
+function resetAnnouncementState() {
+  appState.announcements = {
+    items: [],
+    unread: 0,
+    loading: false,
+    loaded: false,
+    error: null
+  };
+  knownAnnouncementIds = new Set();
+  hostAnnouncementsDenied = false;
+
+  if (window.updateAnnouncementBadge) {
+    window.updateAnnouncementBadge();
+  }
+}
+
+// Which side of the game this device is on, or null when it is neither the
+// host nor a player in the loaded game
+function getAnnouncementRole() {
+  if (!appState.gameData.id) return null;
+
+  const authState = getAuthState();
+
+  if (authState.isHost && !hostAnnouncementsDenied) return 'host';
+  if (authState.playerId) return 'player';
+
+  return null;
+}
+
+function announcementsUrl() {
+  const authState = getAuthState();
+
+  if (getAnnouncementRole() === 'host') {
+    return `${API_BASE_URL}/games/${appState.gameData.id}/announcements` +
+      `?host_id=${encodeURIComponent(authState.hostId)}`;
+  }
+
+  return `${API_BASE_URL}/players/${authState.playerId}/announcements`;
+}
+
+// Toast anything that arrived while the panel was closed. The first load only
+// records what is already there - reopening the app should not replay every
+// announcement as a notification.
+function announceNewAnnouncements(announcements, role) {
+  const isFirstLoad = !appState.announcements.loaded;
+  const panelOpen = !!(window.announcementPanelIsOpen && window.announcementPanelIsOpen());
+
+  announcements.forEach(function (announcement) {
+    const isNew = !knownAnnouncementIds.has(announcement.id);
+    knownAnnouncementIds.add(announcement.id);
+
+    // The host wrote these, so only players are told about them
+    if (isNew && !isFirstLoad && !panelOpen && role === 'player' && window.showNotification) {
+      const preview = announcement.body.length > 120
+        ? `${announcement.body.slice(0, 117)}...`
+        : announcement.body;
+      window.showNotification(`Message from the host: ${preview}`, 'info');
+    }
+  });
+}
+
+async function fetchAnnouncements() {
+  const role = getAnnouncementRole();
+  if (!role) return;
+
+  appState.announcements.loading = true;
+
+  try {
+    const response = await fetch(announcementsUrl());
+
+    // The stored host credentials do not own this game: carry on as a player
+    // if this device also joined one, and otherwise stop asking
+    if (response.status === 403 && role === 'host') {
+      hostAnnouncementsDenied = true;
+      appState.announcements.loading = false;
+
+      if (getAnnouncementRole()) {
+        return fetchAnnouncements();
+      }
+
+      // Nothing to show - the header button stops appearing on the next
+      // render, and the refusal stands until this game is left
+      stopAnnouncementPolling();
+      appState.announcements.items = [];
+      appState.announcements.unread = 0;
+      appState.announcements.loaded = false;
+      knownAnnouncementIds = new Set();
+
+      if (window.updateAnnouncementBadge) {
+        window.updateAnnouncementBadge();
+      }
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch announcements');
+    }
+
+    const data = await response.json();
+    const announcements = data.announcements || [];
+
+    announceNewAnnouncements(announcements, role);
+
+    // An announcement posted while this request was in flight is missing from
+    // the response; keep it on screen rather than letting it blink out until
+    // the next poll. Only ones at least as new as the newest fetched are kept,
+    // so nothing trimmed off the far end of the history comes back.
+    const newestFetched = announcements.reduce(function (latest, announcement) {
+      return Math.max(latest, announcement.sentAt || 0);
+    }, 0);
+
+    const pending = appState.announcements.items.filter(function (announcement) {
+      return (announcement.sentAt || 0) >= newestFetched &&
+        !announcements.some(function (fetched) { return fetched.id === announcement.id; });
+    });
+
+    appState.announcements.items = announcements.concat(pending);
+    appState.announcements.unread = data.unread || 0;
+    appState.announcements.loaded = true;
+    appState.announcements.error = null;
+  } catch (err) {
+    // Background refresh - stay quiet and try again on the next tick
+    console.warn('Error fetching announcements:', err);
+    appState.announcements.error = 'Unable to load messages.';
+  } finally {
+    appState.announcements.loading = false;
+  }
+
+  if (window.updateAnnouncementBadge) {
+    window.updateAnnouncementBadge();
+  }
+
+  if (window.refreshAnnouncementPanel) {
+    window.refreshAnnouncementPanel();
+  }
+}
+
+// Post an announcement to everyone in the game. Hosts only - there is no
+// reply channel for players. Resolves true once it is stored.
+async function sendAnnouncement(body) {
+  if (getAnnouncementRole() !== 'host') return false;
+
+  const text = (body || '').trim();
+  if (!text) return false;
+
+  const authState = getAuthState();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/announcements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host_id: authState.hostId, body: text })
+    });
+
+    const announcement = await handleApiResponse(response, 'Failed to send message');
+
+    // Show it straight away rather than waiting for the next poll
+    if (announcement && announcement.id && !knownAnnouncementIds.has(announcement.id)) {
+      knownAnnouncementIds.add(announcement.id);
+      appState.announcements.items = appState.announcements.items.concat(announcement);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error sending announcement:', err);
+    if (window.showNotification) {
+      window.showNotification(err.message || 'Unable to send message.', 'error');
+    }
+    return false;
+  } finally {
+    if (window.refreshAnnouncementPanel) {
+      window.refreshAnnouncementPanel();
+    }
+  }
+}
+
+// Clear the unread badge up to the newest announcement actually on screen, so
+// one that lands while the panel is open still counts as unread if it is
+// missed. Hosts have nothing to read - they wrote it.
+async function markAnnouncementsRead() {
+  if (getAnnouncementRole() !== 'player' || !appState.announcements.unread) return;
+
+  const readThrough = appState.announcements.items.reduce(function (latest, announcement) {
+    return Math.max(latest, announcement.sentAt || 0);
+  }, 0);
+
+  appState.announcements.unread = 0;
+  if (window.updateAnnouncementBadge) {
+    window.updateAnnouncementBadge();
+  }
+
+  try {
+    await fetch(`${API_BASE_URL}/players/${getAuthState().playerId}/announcements/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ read_through: readThrough })
+    });
+  } catch (err) {
+    // The badge is already clear locally; the next fetch settles the count
+    console.warn('Unable to mark announcements as read:', err);
+  }
+}
+
+// Announcements follow the player and the host around the app rather than
+// living on one page, so the poll runs for as long as there is a game to
+// follow. Safe to call on every navigation.
+function startAnnouncementPolling() {
+  if (announcementPollingInterval || !getAnnouncementRole()) return;
+
+  fetchAnnouncements();
+  announcementPollingInterval = setInterval(function () {
+    if (!getAnnouncementRole()) {
+      stopAnnouncementPolling();
+      return;
+    }
+    fetchAnnouncements();
+  }, ANNOUNCEMENT_POLL_INTERVAL_MS);
+  console.log('Announcement polling started');
+}
+
+function stopAnnouncementPolling() {
+  if (announcementPollingInterval) {
+    clearInterval(announcementPollingInterval);
+    announcementPollingInterval = null;
+    console.log('Announcement polling stopped');
+  }
+}
+
 
 // =============================================================================
 // WEBSOCKET - LIVE GAME EVENTS
@@ -1327,6 +1604,13 @@ function handleGameSocketMessage(message) {
     // The team had no players, so nobody is being kicked out - just drop it
     // from the scoreboard everyone is looking at
     fetchGameUpdates();
+  } else if (message.type === 'announcement_posted') {
+    console.log('Announcement posted event:', message);
+
+    // Deliberately no text on the wire - anyone who knows a game code can
+    // listen, so the text is fetched from an endpoint that checks who is
+    // asking
+    fetchAnnouncements();
   } else if (message.type === 'base_returned') {
     console.log('Base returned event:', message);
 
