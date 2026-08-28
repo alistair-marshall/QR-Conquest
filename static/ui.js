@@ -1707,8 +1707,8 @@ function formatTimeSince(timestamp) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
-// Popup for a player's dot. Built as DOM nodes rather than an HTML string:
-// players choose their own names, and this popup is rendered on the host's map.
+// Popup for a player's dot, on the host's map. Built as DOM nodes rather than
+// an HTML string, so nothing in the data can be read as markup.
 function buildPlayerPopup(entry) {
   const container = document.createElement('div');
 
@@ -1928,11 +1928,16 @@ function renderApp() {
       const needsTimer = updateGameStatusText(statusText);
       statusDiv.appendChild(statusText);
 
-      // Always show team info if player is on a team
+      // Always show team info if player is on a team, and the name the
+      // server gave them - it is what a host will call them by
       if (appState.gameData.currentTeam) {
         const teamText = document.createElement('p');
         teamText.className = 'text-sm';
-        teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
+        const playerName = getAuthState().playerName;
+        const teamName = getTeamName(appState.gameData.currentTeam);
+        teamText.textContent = playerName
+          ? `${playerName} - ${teamName}`
+          : 'Team: ' + teamName;
         statusDiv.appendChild(teamText);
       }
 
@@ -2901,7 +2906,7 @@ function closeQuizModal() {
 // Called by core.js when an answer comes back after the main game has rolled
 // into the bonus round - replaces the quiz with the collect prompt, since
 // the player is already standing at the base
-function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
+function showBonusCollectPrompt(baseId, baseName, wasCorrect, qrCode) {
   closeQuizModal();
 
   const content = UIBuilder.createElement('div', { className: 'text-center' });
@@ -2931,7 +2936,7 @@ function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
         text: 'Collect This Base',
         onClick: function () {
           modal.close();
-          collectBase(baseId);
+          collectBase(baseId, qrCode);
         },
         className: 'flex-1 bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors',
         icon: 'flag'
@@ -3167,11 +3172,34 @@ function renderAnnouncementList() {
       className: 'bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm'
     });
 
-    card.appendChild(UIBuilder.createElement('div', {
-      className: 'text-xs text-gray-500 mb-1',
+    const header = UIBuilder.createElement('div', {
+      className: 'flex items-start justify-between gap-2 mb-1'
+    });
+
+    header.appendChild(UIBuilder.createElement('div', {
+      className: 'text-xs text-gray-500',
       textContent: (isHost ? 'Sent to everyone at ' : 'From the host at ') +
         formatAnnouncementTime(announcement.sentAt)
     }));
+
+    // Only the host can take a message back down, and only their own game's
+    if (isHost) {
+      const deleteButton = UIBuilder.createElement('button', {
+        className: 'text-gray-400 hover:text-red-900 transition-colors flex-shrink-0',
+        title: 'Delete this message',
+        'aria-label': 'Delete this message',
+        onClick: function () {
+          deleteAnnouncementFromPanel(announcement, deleteButton);
+        }
+      });
+      deleteButton.appendChild(UIBuilder.createElement('i', {
+        'data-lucide': 'trash-2',
+        className: 'w-4 h-4'
+      }));
+      header.appendChild(deleteButton);
+    }
+
+    card.appendChild(header);
 
     card.appendChild(UIBuilder.createElement('p', {
       className: 'text-sm text-gray-800 whitespace-pre-wrap break-words',
@@ -3181,8 +3209,36 @@ function renderAnnouncementList() {
     list.appendChild(card);
   });
 
+  // The cards were just rebuilt, so any icon in them is still a placeholder
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
   if (nearBottom) {
     list.scrollTop = list.scrollHeight;
+  }
+}
+
+// Withdraw one message. It goes for the players too, so ask first - and say
+// what deleting does and does not undo, because a player who already read it
+// has read it.
+async function deleteAnnouncementFromPanel(announcement, deleteButton) {
+  const confirmed = confirm(
+    'Delete this message?\n\nIt disappears from every player\'s list and from ' +
+    'yours. Anyone who has already read it has still read it.'
+  );
+  if (!confirmed) return;
+
+  deleteButton.disabled = true;
+  deleteButton.classList.add('opacity-50');
+
+  const deleted = await deleteAnnouncement(announcement.id);
+
+  if (deleted) {
+    showNotification('Message deleted', 'success');
+  } else if (deleteButton.isConnected) {
+    deleteButton.disabled = false;
+    deleteButton.classList.remove('opacity-50');
   }
 }
 
@@ -3245,7 +3301,7 @@ function showAnnouncementPanel() {
   content.appendChild(UIBuilder.createElement('p', {
     className: 'text-sm text-gray-600 mb-3',
     textContent: isHost
-      ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to.'
+      ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to. Delete a message to take it off everyone\'s list.'
       : 'Messages from your game host. You cannot reply here - contact your host the way they told you to.'
   }));
 
@@ -3326,7 +3382,7 @@ function buildAbuseReportMailto(contact) {
     'What happened:',
     '',
     '',
-    'Where you saw it (a message from the host, a player name, something else):',
+    'Where you saw it (a message from the host, a game, team or base name, something else):',
     '',
     '',
     '---',
@@ -3347,7 +3403,7 @@ function showAbuseReportModal() {
   const content = UIBuilder.createElement('div', { className: 'space-y-3 text-sm text-gray-700' });
 
   content.appendChild(UIBuilder.createElement('p', {
-    textContent: 'Use this to report something a player or host has written - a message from your host, a player\'s name - or to complain about how a game is being run.'
+    textContent: 'Use this to report something a host has written - a message they sent, or a game, team or base name - or to complain about how a game is being run.'
   }));
 
   content.appendChild(UIBuilder.createElement('p', {

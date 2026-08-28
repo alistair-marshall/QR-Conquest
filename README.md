@@ -13,7 +13,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 
 **Joining Your Team:**
 - Scan your team's unique QR code 
-- Enter your name to join the team
+- Confirm the team to join it - you are given a game name like `quiet-badger`, so there is nothing to type
 - See your team's color and current score
 
 **Capturing Bases:**
@@ -52,7 +52,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
 
 **Reporting Something:**
-- If a message or a player's name is abusive, or you want to complain about how a game is being run, use the "Report abuse" link - in the footer of every page, and under the messages panel
+- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer of every page and under the messages panel
 - It gives you the address of the administrator who runs the site, not your game host, and opens your email app with the game already filled in
 - Whether it appears at all depends on the site publishing an address
 
@@ -123,6 +123,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
 - Messages reach players as a notification, and are kept in a list they can scroll back through
 - It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
+- Sent the wrong thing? Tap the bin icon on any message to delete it - it comes off every player's list and yours, though anyone who has already read it has read it
 - Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
 - Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
 
@@ -131,6 +132,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - **Live Updates**: Watch base ownership change as players capture them
 - **Score Monitoring**: Track which teams are leading throughout the game
 - **Game Timing**: Start and end games manually when appropriate
+- **Deleting a Game**: You can delete a game nobody has joined - a mis-scanned setup, or one that never ran. Once a player has joined, the game holds their data and its history, so it can only be removed by a site administrator; ending the game is what closes it down
 
 ### For Site Administrators - System Management
 
@@ -148,6 +150,9 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - Create, edit, and delete host accounts
 - Generate links for new hosts
 - Review host account status and expiry dates
+- Delete any game, including one players have joined - hosts cannot do that themselves
+- Export any game: one JSON file holding the whole record of it, for your files or to answer a complaint
+- Finished games clear themselves down. Every player's GPS position is deleted the moment a game ends, and thirty days after that the game and everything in it is deleted for good. Export anything you may need before then
 - Publish the address players and hosts use to report abuse (Site Settings)
 
 **Security Features:**
@@ -162,7 +167,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 1. **Receive your team QR code** from the game host or team captain
 2. **Scan the QR code** with your phone's camera
 3. **Install as PWA** when prompted for better GPS performance (optional but recommended)
-4. **Enter your name** to join the team
+4. **Confirm the team** to join it - the game names you `quiet-badger` or similar; you are never asked to type a name
 5. **Navigate to bases** using the map
 6. **Scan base QR codes** when you're close enough to capture them
 7. **Watch your team climb the scoreboard!**
@@ -187,8 +192,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 3. **Create your game**:
    - Visit your host secret link if not already authenticated
    - Click "Host a Game" or use "Host Menu" button
-   - Create new game with descriptive name
-   - Note the friendly game code generated
+   - Create new game with descriptive name - that name is how the game is identified everywhere you and your players see it
 
 4. **Set up teams**:
    - Use "Scan QR Code" to add teams
@@ -249,9 +253,19 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Generate host secret link
    - Share the secret link with the host (can be sent digitally or printed)
 
+5. **Keep what you need from finished games**:
+   - Under **Game Management**, an ended game shows when it will be deleted
+   - **Export** downloads the whole record of that game as one JSON file:
+     settings, teams and players, bases, the capture timeline, every
+     announcement including ones the host withdrew, and the quiz questions
+     players were served. Credentials are left out, so the file is safe to
+     file away
+   - Do this before the retention window runs out. After that the game is
+     gone, and the export is the only copy there will be
+
 #### Abuse Reporting
 
-5. **Publish a reporting address**:
+6. **Publish a reporting address**:
    - Open the "Site Settings" tab in the admin panel
    - Enter the address reports and complaints should reach you on, and save
    - Players and hosts then see a "Report abuse" link in the footer, and
@@ -428,10 +442,14 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
-- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
-- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game code can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
+- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Ending a game deletes every stored position outright - the server stops accepting updates and clears the last fix, so nothing is left saying where anybody was
+- **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
+- **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
+- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
 - **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag rather than served from an endpoint, so the reporting link renders with the first paint and needs no credential
-- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host passing their own `host_id` gets those fields for their own game
+- **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
+- **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
+- **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
@@ -493,6 +511,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 - **Team QR**: Unique UUID linking to specific team in specific game
 - **Base QR**: Unique UUID linking to physical location and game
 - **URL Format**: `https://yoursite.com/?id={qr_uuid}`
+- **Sent with the action, not just resolved once**: scanning a code looks up what it points at, and the code then travels with the join or capture request itself so the server can confirm the scan really happened - see [Security Features](#security-features)
 
 ## Installation & Deployment
 
@@ -577,6 +596,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
 | `ABUSE_CONTACT_EMAIL` | No | Address published to players and hosts as a "Report abuse" link, for reporting content or complaining. A site administrator can override it under Site Settings in the admin panel; with neither set, no reporting route is shown. | `safety@example.org` |
 | `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
+| `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. | `30` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
 | `FLASK_DEBUG` | No | Enable debug mode | `False` |
 
@@ -614,7 +634,45 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Secret link expiry**: Host permissions can be time-limited
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
-- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
+- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. A game's id is a random UUID rather than a guessable code, so the payload cannot be reached by walking the id space either - but it is still scoped as though it could be, because the id travels to every player device that scans in
+- **Credentials stay out of URLs**: a host identifies itself with an `X-Host-ID` header rather than a `?host_id=` query string or an id in the path, either of which would be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
+- **A host addresses only its own data**: the endpoints a host uses live under `/api/host/...` and carry no id at all - the header names whose question bank or games are being read, so there is no id in the path that could disagree with the credential, and nothing to guess but the credential itself. An unknown host id is refused exactly like a missing one, so the API cannot be used to test whether a host id is real. The remaining `/api/hosts/<host_id>/...` routes are the site admin's, authorised by the admin bearer token, where the id names which record to manage rather than who is asking
+- **A scan is proved by the code, not the id**: joining a team, capturing a base and collecting one in the bonus round are things a player earns by being handed a team sheet or finding a base marker, so those endpoints carry the scanned QR code and check it against the row the id in the path names. The id on its own proves nothing: a team id and a base id both travel in the game payload every player device reads, so an id-only endpoint can be driven from an armchair by anyone already in the game - one team's players could sign themselves onto another, and any base on the map could be taken without walking to it. A base capture needs the code **and** the GPS fix: the code proves the player found the marker, the location proves they are standing at it now, and neither substitutes for the other. Games set to let players pick their own team are the one exception on joining - choosing from a list is the intended way in there, so no code is required, though a code sent anyway is still checked. Bases the host scans back in during the bonus round are not covered, because the host can read every code from its own game payload and a check would add nothing
+- **Credentials can be rotated**: a host holds two secrets - the `qr_code` its device scans to enrol, and the `host_id` that device stores and sends afterwards. **Rotate** on the site admin's host list replaces *both*, because replacing only the QR code would leave a leaked `host_id` working forever. The host's games and question bank move across unchanged; every device signed in as that host is signed out and gets back in by scanning the new code. This is the remedy whenever a secret link is forwarded to the wrong person, a host's phone is lost, or a host leaves
+
+### Known Limitation: The Enrolment Link Is a URL
+
+A host enrols by opening `/?id=<qr_code>` - scanned from a printed code or
+followed from the secret link. The credential is therefore *in a URL*, which
+is exactly what the rules above avoid everywhere else. This is inherent to
+QR-based enrolment: with no usernames or passwords, the link has to carry the
+secret, because the link **is** the credential. It is a deliberate trade -
+hosts set up by pointing a camera at a poster instead of managing accounts -
+and it is worth knowing where that secret can end up:
+
+- **The host's browser history.** The app calls `history.replaceState` as soon
+  as it reads the parameter, so the `?id=` entry is replaced rather than left
+  behind, but a browser that syncs history across devices may still have taken
+  a copy
+- **Server and proxy access logs.** `GET /?id=<qr_code>` and the
+  `GET /api/qr-codes/<qr_code>/status` that follows it both appear in full in
+  ordinary access logs. Anyone who can read those logs can enrol as that host.
+  If you keep logs, treat them as holding credentials: restrict who can read
+  them, and keep them no longer than you need
+- **Wherever the link was sent.** A secret link pasted into email or a group
+  chat stays there, readable by anyone with access to that thread, long after
+  the game ends
+
+`Referrer-Policy: no-referrer` is set on the page, so the credential is never
+sent onward in a `Referer` header. Browsers already withhold it cross-origin
+by default; the explicit policy makes that a guarantee rather than a default.
+
+None of this is fixed by the routing changes above, and it cannot be while
+enrolment stays QR-only. What makes it survivable is that the exposure is
+**recoverable**: use **Rotate** to retire a link that has been over-shared or
+a host id that may have been read from a log, and set an expiry date on hosts
+so a forgotten link stops working on its own. Rotate on any suspicion - it
+costs the host one scan.
 
 ### Data Protection
 - **Input validation**: All API inputs validated
@@ -622,9 +680,11 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **HTTPS required**: Camera access requires secure connection
 
 ### Privacy Considerations
-- **Location data**: Only stored for base creation and capture verification
-- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text
-- **Player names and QR codes**: Never served to an anonymous caller, only to the game's own host
+- **Location data**: Only stored for base creation and capture verification, and only the newest fix per player - never a route. Every stored position is deleted the moment the game ends
+- **Retention**: A finished game deletes itself. Ending it clears the personal data play needed; thirty days later the game and everything in it is permanently deleted, sweeper-driven and automatic. Set `GAME_RETENTION_DAYS` to match your own retention schedule, and export anything you need to keep before the clock runs out
+- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database, so the deployment can still answer for what was sent, until the game is deleted or purged
+- **Player names**: Generated by the server as an `adjective-animal` handle - players never type one, so no player's real name is in the app. Served only to the game's own host, never to other players or an anonymous caller
+- **Team QR codes**: Never served to an anonymous caller, only to the game's own host
 - **Player data**: Minimal personal information collected
 - **QR codes**: Unique UUIDs with no personal information
 - **Game isolation**: Each game's data is completely separate
@@ -639,9 +699,9 @@ privacy notice, and a retention rule for finished games. If children will play,
 more applies again.
 
 The design keeps the risk low on purpose - no player-to-player messaging, no
-private channel between a host and a player, no free text from players beyond
-their display name, and no personal data in anonymous API responses - but it
-cannot do the paperwork for you.
+private channel between a host and a player, no free text from players at all,
+and no personal data in anonymous API responses - but it cannot do the
+paperwork for you.
 
 **Read [docs/COMPLIANCE.md](docs/COMPLIANCE.md) before running games for other
 people.** It sets out what is in scope and why, what the design already
@@ -713,7 +773,7 @@ This is a pre-beta project focused on functionality over backwards compatibility
 - Single server instance (no clustering support)
 - SQLite database (not suitable for high concurrency)
 - Basic error handling (needs improvement for production)
-- Abuse reporting is a published email address only - no in-app report form, no content moderation tooling, no retention purge - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+- Abuse reporting is a published email address only - no in-app report form - and limited moderation tooling for a site administrator: they can export a game and read everything in it, including withdrawn announcements, but the only thing they can take down is the whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - Limited game customization options
 - No game history or analytics
 

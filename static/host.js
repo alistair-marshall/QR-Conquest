@@ -132,18 +132,20 @@ function renderHostPanel() {
     className: 'grid grid-cols-1 sm:grid-cols-2 gap-4'
   });
 
-  const gameIdCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
-  const gameIdLabel = UIBuilder.createElement('div', {
+  // The game's id is a random UUID that nobody needs to read or repeat, so
+  // this card names the game the way the host named it
+  const gameNameCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
+  const gameNameLabel = UIBuilder.createElement('div', {
     className: 'text-sm text-gray-600 font-medium',
-    textContent: 'Game ID'
+    textContent: 'Game'
   });
-  gameIdCard.appendChild(gameIdLabel);
-  const gameIdValue = UIBuilder.createElement('div', {
+  gameNameCard.appendChild(gameNameLabel);
+  const gameNameValue = UIBuilder.createElement('div', {
     className: 'text-lg font-bold text-purple-600',
-    textContent: appState.gameData.id
+    textContent: appState.gameData.name
   });
-  gameIdCard.appendChild(gameIdValue);
-  gameInfoGrid.appendChild(gameIdCard);
+  gameNameCard.appendChild(gameNameValue);
+  gameInfoGrid.appendChild(gameNameCard);
 
   const statusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
   const statusLabel = UIBuilder.createElement('div', {
@@ -971,7 +973,7 @@ async function loadHostGames() {
     gamesListContainer.appendChild(UIBuilder.createLoadingDisplay('Loading your games...'));
 
     // Fetch games for this host
-    const games = await fetchHostGames(authState.hostId);
+    const games = await fetchHostGames();
 
     // Clear loading state
     gamesListContainer.innerHTML = '';
@@ -1004,12 +1006,6 @@ async function loadHostGames() {
           textContent: game.name
         });
         gameInfo.appendChild(gameName);
-
-        const gameId = UIBuilder.createElement('p', {
-          className: 'text-sm text-gray-600',
-          textContent: `ID: ${game.id}`
-        });
-        gameInfo.appendChild(gameId);
 
         gameHeader.appendChild(gameInfo);
 
@@ -1068,6 +1064,19 @@ async function loadHostGames() {
         }
 
         gameCard.appendChild(gameStats);
+
+        // Finished games are deleted automatically once the retention window
+        // is up. A host cannot stop that or take a copy - only a site
+        // administrator can export a game - so the card says when, in time
+        // for them to ask
+        const purgeNote = describePurge(game.purge_after);
+        if (purgeNote) {
+          const purgeLine = UIBuilder.createElement('div', {
+            className: 'text-xs text-gray-500 mb-3',
+            textContent: purgeNote
+          });
+          gameCard.appendChild(purgeLine);
+        }
 
         // Action button
         const actionButton = UIBuilder.createElement('div');
@@ -1615,7 +1624,7 @@ function buildGameSettingsForm(options = {}) {
   // Populate the category picker asynchronously from the host's bank
   const quizAuthState = getAuthState();
   if (quizAuthState.hostId) {
-    fetchHostCategories(quizAuthState.hostId).then(function(categories) {
+    fetchHostCategories().then(function(categories) {
       categoriesList.innerHTML = '';
       if (!categories.length) {
         categoriesList.appendChild(UIBuilder.createElement('p', {
@@ -2062,10 +2071,8 @@ async function loadQuestionBankList() {
   const listContainer = document.getElementById('question-bank-list');
   if (!listContainer) return;
 
-  const authState = getAuthState();
-
   try {
-    const questions = await fetchQuestions(authState.hostId);
+    const questions = await fetchQuestions();
     listContainer.innerHTML = '';
 
     if (!questions.length) {
@@ -2097,7 +2104,7 @@ async function loadQuestionBankList() {
         const count = byCategory[category].length;
         if (!confirm(`Permanently delete all ${count} question(s) in "${category}"? This cannot be undone.`)) return;
         try {
-          const result = await bulkDeleteQuestions(getAuthState().hostId, byCategory[category].map(q => q.id));
+          const result = await bulkDeleteQuestions(byCategory[category].map(q => q.id));
           if (result.in_use) {
             showNotification(`Deleted ${result.deleted} question(s); ${result.in_use} skipped because a running game is using this category`, 'warning');
           } else {
@@ -2165,7 +2172,7 @@ function buildQuestionCard(question) {
 
   const toggleBtn = UIBuilder.createButton(question.active ? 'Disable' : 'Enable', async function() {
     try {
-      await updateQuestion(getAuthState().hostId, question.id, { active: !question.active });
+      await updateQuestion(question.id, { active: !question.active });
       showNotification(question.active ? 'Question disabled' : 'Question enabled', 'success');
       loadQuestionBankList();
     } catch (err) {
@@ -2180,7 +2187,7 @@ function buildQuestionCard(question) {
   const deleteBtn = UIBuilder.createButton('Delete', async function() {
     if (!confirm('Permanently delete this question? This cannot be undone.')) return;
     try {
-      await deleteQuestion(getAuthState().hostId, question.id);
+      await deleteQuestion(question.id);
       showNotification('Question deleted', 'success');
       loadQuestionBankList();
     } catch (err) {
@@ -2378,12 +2385,11 @@ function renderQuestionFormModal(existingQuestion) {
     }
 
     try {
-      const hostId = getAuthState().hostId;
       if (isEditing) {
-        await updateQuestion(hostId, existingQuestion.id, payload);
+        await updateQuestion(existingQuestion.id, payload);
         showNotification('Question updated', 'success');
       } else {
-        await createQuestion(hostId, payload);
+        await createQuestion(payload);
         showNotification('Question added', 'success');
       }
       modal.close();
@@ -2456,7 +2462,7 @@ function renderBulkImportModal() {
     }
 
     try {
-      const result = await bulkImportQuestions(getAuthState().hostId, payload);
+      const result = await bulkImportQuestions(payload);
       resultsContainer.innerHTML = '';
       resultsContainer.appendChild(UIBuilder.createElement('p', {
         className: 'text-green-700 font-medium',
@@ -3813,6 +3819,7 @@ function renderPlayerRegistrationPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
   const teamId = sessionStorage.getItem('pendingTeamId');
+  const teamQrCode = sessionStorage.getItem('pendingTeamQrCode');
   const pendingJoinGameId = sessionStorage.getItem('pendingJoinGameId');
   const joinMethod = (appState.gameData.settings && appState.gameData.settings.join_method) || 'team_qr';
 
@@ -3880,28 +3887,15 @@ function renderPlayerRegistrationPage() {
     container.appendChild(autoInfo);
   }
 
-  // Player name form
+  // Join form. Players are never asked for a name - the server gives them one
+  // so that no player-written text ever reaches another user's screen.
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
-  const nameGroup = UIBuilder.createElement('div');
-
-  const nameLabel = UIBuilder.createElement('label', {
-    className: 'block text-gray-700 text-sm font-bold mb-2',
-    htmlFor: 'player-name',
-    textContent: 'Your Name'
+  const nameNote = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600 text-center',
+    textContent: 'You will be given a game name, like quiet-badger, when you join.'
   });
-  nameGroup.appendChild(nameLabel);
-
-  const nameInput = UIBuilder.createElement('input', {
-    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
-    id: 'player-name',
-    type: 'text',
-    placeholder: 'Enter your name',
-    required: true
-  });
-  nameGroup.appendChild(nameInput);
-
-  form.appendChild(nameGroup);
+  form.appendChild(nameNote);
 
   // Team picker for games where players choose their own team
   let selectedTeamId = null;
@@ -3962,15 +3956,12 @@ function renderPlayerRegistrationPage() {
   form.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const playerName = nameInput.value.trim();
-    if (!playerName) {
-      showNotification('Please enter your name', 'warning');
-      return;
-    }
-
     if (mode === 'team') {
-      joinTeam(teamId, playerName);
+      // The code scanned to get here proves the player was handed this team's
+      // sheet; without it the server will not take the join
+      joinTeam(teamId, teamQrCode);
       sessionStorage.removeItem('pendingTeamId');
+      sessionStorage.removeItem('pendingTeamQrCode');
       return;
     }
 
@@ -3981,9 +3972,9 @@ function renderPlayerRegistrationPage() {
 
     try {
       if (mode === 'choose') {
-        await joinTeam(selectedTeamId, playerName);
+        await joinTeam(selectedTeamId);
       } else {
-        await joinGameAuto(pendingJoinGameId, playerName);
+        await joinGameAuto(pendingJoinGameId);
       }
 
       // If they got here by scanning a base, try to capture it now
@@ -3999,8 +3990,10 @@ function renderPlayerRegistrationPage() {
   // Cancel button
   const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingTeamId');
+    sessionStorage.removeItem('pendingTeamQrCode');
     sessionStorage.removeItem('pendingJoinGameId');
     sessionStorage.removeItem('pendingCaptureBaseId');
+    sessionStorage.removeItem('pendingCaptureQrCode');
     navigateTo('landing');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);

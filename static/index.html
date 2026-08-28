@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- A host arrives on ?id=<qr_code>, so the landing URL carries a
+       credential. Browsers default to strict-origin-when-cross-origin, which
+       already withholds it; stating no-referrer makes that a guarantee rather
+       than a default, and costs nothing as the app links nowhere outbound. -->
+  <meta name="referrer" content="no-referrer">
   <title>QR Conquest</title>
   <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#a855f7">

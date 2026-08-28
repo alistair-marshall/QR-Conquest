@@ -480,18 +480,14 @@ function buildGameRow(game) {
       className: 'px-6 py-4 whitespace-nowrap'
     });
 
+    // A game's id is a random UUID and identifies nothing to a reader, so the
+    // host-given name and the Host column are what name a row here
     const nameContainer = UIBuilder.createElement('div');
     const gameName = UIBuilder.createElement('div', {
       className: 'text-sm font-medium text-gray-900',
       textContent: game.name
     });
     nameContainer.appendChild(gameName);
-
-    const gameId = UIBuilder.createElement('div', {
-      className: 'text-sm text-gray-500',
-      textContent: `ID: ${game.id}`
-    });
-    nameContainer.appendChild(gameId);
 
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);
@@ -539,6 +535,18 @@ function buildGameRow(game) {
       textContent: statusText
     });
     statusCell.appendChild(statusBadge);
+
+    // An ended game is deleted automatically once the retention window is up,
+    // so say when rather than leaving the admin to work it out. Export it
+    // first if the record is worth keeping
+    const purgeNote = describePurge(game.purge_after);
+    if (purgeNote) {
+        statusCell.appendChild(UIBuilder.createElement('div', {
+          className: 'text-xs text-gray-500 mt-1',
+          textContent: purgeNote
+        }));
+    }
+
     row.appendChild(statusCell);
 
     // Teams count cell
@@ -595,9 +603,17 @@ function buildGameRow(game) {
         actionsContainer.appendChild(completeButton);
     }
 
+    // Export button - the whole record of the game in one file, taken before
+    // it is deleted here or by the retention sweeper
+    const exportButton = UIBuilder.createButton('Export', function() {
+      exportGameAsAdmin(game);
+    }, 'text-blue-600 hover:text-blue-900 transition-colors');
+    exportButton.title = 'Download the full record of this game as a JSON file';
+    actionsContainer.appendChild(exportButton);
+
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
-      if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- All associated data\n\nThis action CANNOT be undone!`)) {
+      if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nOnce players have joined, this is the only way a game can be removed - the host cannot do it.\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- Every message the host sent\n- All associated data\n\nExport it first if you may need the record later.\n\nThis action CANNOT be undone!`)) {
           deleteGameAsAdmin(game);
       }
     }, 'text-red-600 hover:text-red-900 transition-colors');
@@ -810,6 +826,29 @@ function buildHostRow(host) {
       renderHostEditModal(host);
     }, 'text-blue-600 hover:text-blue-900 transition-colors');
     actionsContainer.appendChild(editButton);
+
+    // Rotate credentials button. The QR code alone is not the whole
+    // credential - the host id its device stores is too - so rotation
+    // replaces both and the host has to scan the new code to get back in.
+    const rotateButton = UIBuilder.createButton('Rotate', function() {
+      const warning = `Rotate credentials for host "${host.name}"?\n\n` +
+        'A new QR code and a new host id are issued. Any device currently ' +
+        'signed in as this host is signed out and must scan the new QR code. ' +
+        'Their games and question bank are kept.\n\nThis cannot be undone.';
+
+      if (!confirm(warning)) return;
+
+      rotateHostCredentials(host.id).then(function(newHost) {
+        if (newHost) {
+          // Show the new code straight away - it is the only way back in
+          renderHostQRModal(newHost);
+        }
+      }).catch(function() {
+        // rotateHostCredentials has already told the admin what went wrong
+      });
+    }, 'text-amber-600 hover:text-amber-900 transition-colors');
+    rotateButton.title = 'Issue a new QR code and host id, revoking the old ones';
+    actionsContainer.appendChild(rotateButton);
 
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
@@ -1038,6 +1077,7 @@ function renderHostQRModal(host) {
 
   const notes = [
     'Keep this QR code private - anyone who scans it can host games',
+    'If it is ever shared too widely, use "Rotate" on the host list to issue a new one - the old code and the old sign-in stop working immediately',
     'For best GPS performance, install the game as a PWA when prompted',
     'Players need to be close to bases (within 15m by default) to capture them'
   ];

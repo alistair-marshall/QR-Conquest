@@ -8,7 +8,7 @@ import time
 import json
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import math
 import random
@@ -35,75 +35,194 @@ if not SITE_ADMIN_PASSWORD:
 # hidden unless explicitly enabled on the server via this environment variable.
 DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
-# Address players and hosts can use to report abusive content (a display name,
-# a host's announcement) or complain about the service. Set the default here;
+# Address players and hosts can use to report abusive content (an announcement,
+# a game, team or base name) or complain about the service. Set the default here;
 # a site administrator can override it from the admin panel without a restart.
 # When neither is set, the app shows no reporting route at all.
 ABUSE_CONTACT_EMAIL = os.environ.get('ABUSE_CONTACT_EMAIL', '').strip()
+
+# ==========================================================
+# Retention
+# ==========================================================
+
+# How long a finished game is kept before every trace of it is deleted. A
+# deployment is the data controller for what it stores (see
+# docs/COMPLIANCE.md) and needs a retention rule it can point at; thirty days
+# is long enough for a complaint about a game to reach the deployment and be
+# answered from the record, and short enough that nothing accumulates.
+# Override only if your own retention schedule says something different.
+DEFAULT_GAME_RETENTION_DAYS = 30
+
+
+def _read_retention_days():
+    raw = os.environ.get('GAME_RETENTION_DAYS', '').strip()
+    if not raw:
+        return DEFAULT_GAME_RETENTION_DAYS
+
+    try:
+        days = int(raw)
+    except ValueError:
+        days = 0
+
+    if days < 1:
+        print(f'WARNING: ignoring GAME_RETENTION_DAYS={raw!r} - it must be a '
+              f'whole number of days, 1 or more. Using '
+              f'{DEFAULT_GAME_RETENTION_DAYS}.')
+        return DEFAULT_GAME_RETENTION_DAYS
+
+    return days
+
+
+GAME_RETENTION_DAYS = _read_retention_days()
+GAME_RETENTION_SECONDS = GAME_RETENTION_DAYS * 24 * 60 * 60
+
+# How often the background sweeper looks for games that have aged out. The
+# window is measured in days, so checking hourly is far more often than it
+# needs to be - it just means a restarted server never sits on expired data
+# waiting for a daily tick.
+RETENTION_SWEEP_INTERVAL_SECONDS = 60 * 60
+
+# True when the caller presented the site admin password as a bearer token.
+# Endpoints that are a host's own but need an admin escape hatch check this
+# themselves; everything admin-only uses the decorator below.
+def request_is_site_admin():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return False
+
+    token = auth_header.split(' ')[1]
+
+    return hmac.compare_digest(token, SITE_ADMIN_PASSWORD)
 
 # Admin authentication decorator
 def require_site_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Unauthorized'}), 401
-
-        token = auth_header.split(' ')[1]
-        if not hmac.compare_digest(token, SITE_ADMIN_PASSWORD):
+        if not request_is_site_admin():
             return jsonify({'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
     return decorated_function
 
 # ==========================================================
-# Word Lists for Game Code Generation
+# Host Authentication
 # ==========================================================
 
-ADJECTIVES = [
-    'brave', 'calm', 'dark', 'fast', 'green', 'happy', 'jolly', 'kind', 'loud', 'magic',
-    'new', 'orange', 'proud', 'quiet', 'red', 'shy', 'smart', 'strong', 'tall', 'tiny',
-    'vivid', 'wild', 'yellow', 'zealous', 'ancient', 'bold', 'clever', 'daring', 'eager',
-    'fancy', 'gentle', 'honest', 'icy', 'juicy', 'keen', 'lively', 'mighty', 'noble',
-    'polite', 'quick', 'radiant', 'silver', 'tidy', 'unique', 'vibrant', 'witty', 'exotic',
-    'young', 'zesty', 'blue', 'golden', 'royal', 'rustic', 'swift', 'lucky', 'merry', 'prime'
+# A host id is a bearer credential: whoever holds one can run that host's games.
+# URLs are recorded in places request bodies are not - server and proxy access
+# logs, browser history, and the Referer header sent to any third party the page
+# links out to - so a host identifies itself in this header rather than in a
+# query string. Writes carry their host id in the JSON body, which is not logged.
+HOST_ID_HEADER = 'X-Host-ID'
+
+
+def request_host_id():
+    """The host id the caller is identifying itself with, or None."""
+    host_id = request.headers.get(HOST_ID_HEADER)
+    host_id = host_id.strip() if host_id else ''
+
+    return host_id or None
+
+
+# Endpoints under /api/host serve a host its own data, so the header is the
+# whole of the authorisation: there is no id in the path that could disagree
+# with it, and nothing to guess but the credential itself. An unknown id is
+# answered the same way as a missing one, so the endpoint cannot be used to
+# test whether a host id exists.
+def require_host(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        host_id = request_host_id()
+        if not host_id:
+            return jsonify({'error': 'Host ID required'}), 401
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+        host = cursor.fetchone()
+        conn.close()
+
+        # Every unknown id gets this same answer, so the response cannot be
+        # used to tell a real host id from an invented one. It is also what a
+        # host whose credentials were rotated away sees, so it says what to do.
+        if not host:
+            return jsonify({'error': 'Host sign-in is no longer valid. Scan your host QR code again.'}), 401
+
+        return f(host_id, *args, **kwargs)
+    return decorated_function
+
+# ==========================================================
+# Game Identifiers
+# ==========================================================
+
+# A game's id is handed to every player device that scans into it, and it
+# names the game in API paths and on the game socket. Earlier versions used a
+# friendly "adjective-noun" code, which was short enough for anyone outside
+# the game to guess their way into its payload. Games are identified by a
+# random UUID instead; the host-chosen game name is what people read and say
+# out loud, so nothing is lost by the id being unmemorable.
+def generate_game_id():
+    """Generate an unguessable id for a new game"""
+    return str(uuid.uuid4())
+
+
+# ==========================================================
+# Player Names
+# ==========================================================
+
+# Players are never asked for a name. A name a player types is content one
+# user writes and another reads, which is the thing that pulls a deployment
+# into moderation duties, and in practice it is usually a child's real first
+# name sitting on a host's roster. Every player is handed an
+# "adjective-animal" name instead: memorable enough for a host to call out
+# across a field, and personal data about nobody.
+PLAYER_NAME_ADJECTIVES = [
+    'quiet', 'brave', 'swift', 'clever', 'sunny', 'jolly', 'keen', 'bold',
+    'calm', 'eager', 'gentle', 'happy', 'jaunty', 'lively', 'merry', 'nimble',
+    'plucky', 'proud', 'rapid', 'sharp', 'spry', 'sturdy', 'tidy', 'witty',
+    'cheery', 'breezy', 'chirpy', 'daring', 'dapper', 'fearless', 'fleet',
+    'hardy', 'mighty', 'noble', 'perky', 'polite', 'ready', 'sleek',
+    'steady', 'zesty'
 ]
 
-NOUNS = [
-    'apple', 'bear', 'cloud', 'door', 'eagle', 'forest', 'garden', 'hill', 'island', 'jungle',
-    'king', 'lake', 'mountain', 'night', 'ocean', 'planet', 'queen', 'river', 'star', 'tree',
-    'unicorn', 'valley', 'whale', 'xylophone', 'yeti', 'zebra', 'arrow', 'bell', 'castle', 'diamond',
-    'elephant', 'falcon', 'galaxy', 'harbor', 'igloo', 'jewel', 'knight', 'lantern', 'moon', 'ninja',
-    'oasis', 'panda', 'quest', 'rocket', 'sailor', 'tiger', 'umbrella', 'village', 'warrior', 'yacht',
-    'zeppelin', 'dragon', 'phoenix', 'treasure', 'wizard', 'crown', 'carnival', 'banana', 'compass', 'dolphin'
+PLAYER_NAME_ANIMALS = [
+    'badger', 'otter', 'heron', 'falcon', 'marten', 'weasel', 'hedgehog',
+    'squirrel', 'kestrel', 'puffin', 'seal', 'stoat', 'wren', 'robin',
+    'magpie', 'osprey', 'beaver', 'lynx', 'hare', 'fox', 'dormouse', 'shrew',
+    'newt', 'toad', 'adder', 'pike', 'salmon', 'trout', 'curlew', 'lapwing',
+    'skylark', 'raven', 'rook', 'jackdaw', 'buzzard', 'harrier', 'merlin',
+    'bittern', 'gannet', 'dolphin'
 ]
 
-# Helper function to generate game codes - add after the word lists
-def generate_game_code():
-    """Generate a friendly game code using an adjective and a noun"""
-    adjective = random.choice(ADJECTIVES)
-    noun = random.choice(NOUNS)
-    return f"{adjective}-{noun}"
+def generate_player_name(cursor, game_id):
+    """Give a joining player an adjective-animal name nobody else in the game
+    is using. Names only have to be unique within a game - one host reads them
+    off one roster, and that is the only place a clash would confuse anyone."""
+    cursor.execute('''
+    SELECT p.name FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE t.game_id = ?
+    ''', (game_id,))
+    taken = {row['name'] for row in cursor.fetchall()}
 
-# Helper function to generate a unique game code
-def generate_unique_game_code():
-    """Generate a unique friendly game code that doesn't exist in the database"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    combinations = [f'{adjective}-{animal}'
+                    for adjective in PLAYER_NAME_ADJECTIVES
+                    for animal in PLAYER_NAME_ANIMALS]
+    random.shuffle(combinations)
 
-    # Try up to 10 times to generate a unique code
-    for _ in range(10):
-        code = generate_game_code()
-        cursor.execute('SELECT id FROM games WHERE id = ?', (code,))
-        if not cursor.fetchone():
-            conn.close()
-            return code
+    for name in combinations:
+        if name not in taken:
+            return name
 
-    # If we couldn't generate a unique code after 10 attempts,
-    # add a random number suffix to ensure uniqueness
-    code = f"{generate_game_code()}-{random.randint(1, 999)}"
-    conn.close()
-    return code
+    # Every combination is in use - it would take a 1600-player game, but the
+    # join must not fail over it, so keep going with a numbered suffix
+    suffix = 2
+    while True:
+        for name in combinations:
+            numbered = f'{name}-{suffix}'
+            if numbered not in taken:
+                return numbered
+        suffix += 1
 
 
 # ==========================================================
@@ -261,6 +380,7 @@ def init_db():
         game_id TEXT NOT NULL,
         body TEXT NOT NULL,
         sent_at INTEGER NOT NULL,
+        deleted_at INTEGER DEFAULT NULL,
         FOREIGN KEY (game_id) REFERENCES games (id)
     )
     ''')
@@ -280,6 +400,12 @@ def init_db():
         updated_at INTEGER NOT NULL
     )
     ''')
+
+    # Migrate databases created before an announcement could be withdrawn
+    cursor.execute('PRAGMA table_info(announcements)')
+    announcement_columns = [row['name'] for row in cursor.fetchall()]
+    if 'deleted_at' not in announcement_columns:
+        cursor.execute('ALTER TABLE announcements ADD COLUMN deleted_at INTEGER DEFAULT NULL')
 
     # An unreleased first cut of this feature stored two-way host/player
     # messages. It never shipped, but drop the table so private messages are
@@ -443,6 +569,242 @@ if ABUSE_CONTACT_EMAIL and not is_valid_email(ABUSE_CONTACT_EMAIL):
     print('WARNING: ABUSE_CONTACT_EMAIL is not a valid email address - ignoring it')
     print('No abuse reporting route will be shown unless one is set in the admin panel')
     ABUSE_CONTACT_EMAIL = ''
+
+
+# ==========================================================
+# Retention - tidying an ended game, and purging an old one
+# ==========================================================
+
+# Two things happen to a game's personal data, at two different times.
+#
+# The moment a game ends, everything that only mattered while it was being
+# played is cleared: every player's last known GPS position, and the quiz
+# cooldown that was counting down when the whistle went. A position is the
+# sharpest piece of personal data the app holds - it says where an
+# identifiable person, quite possibly a child, was standing at a given minute
+# - and once nobody is playing there is no purpose left to keep it for. The
+# record of what happened is kept: generated player names, who was on which
+# team and when they joined, the capture timeline, the quiz sessions, and
+# every word of free text the host wrote, withdrawn announcements included.
+# That is what a complaint weeks later has to be answered from, and none of it
+# tracks anyone.
+#
+# Thirty days after the game ends, the rest goes too - see purge_game_data.
+
+# What an ended game stops needing. Written once here so the end-of-game path
+# and the sweeper below can never clear different sets of columns.
+_TIDY_PLAYER_COLUMNS = """
+    last_latitude = NULL,
+    last_longitude = NULL,
+    last_accuracy = NULL,
+    last_position_time = NULL,
+    cooldown_until = NULL
+"""
+
+_PLAYER_HAS_TIDYABLE_DATA = """
+    (last_latitude IS NOT NULL OR last_longitude IS NOT NULL
+     OR last_accuracy IS NOT NULL OR last_position_time IS NOT NULL
+     OR cooldown_until IS NOT NULL)
+"""
+
+
+def tidy_ended_game(cursor, game_id):
+    """Clear the personal data an ended game no longer needs.
+
+    Called on every path that takes a game to 'ended' - the host ending it,
+    the admin ending it on the host's behalf, and the scheduled end that fires
+    when someone next reads the game. Safe to run again on a game already
+    tidied: it matches nothing and reports 0.
+
+    Returns the number of players whose data was cleared.
+    """
+    cursor.execute(f"""
+    UPDATE players
+    SET {_TIDY_PLAYER_COLUMNS}
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+      AND {_PLAYER_HAS_TIDYABLE_DATA}
+    """, (game_id,))
+
+    return cursor.rowcount
+
+
+def purge_game_data(cursor, game_id):
+    """Delete a game and everything hanging off it. Caller owns the
+    transaction.
+
+    This is the only place the cascade is written down, so a table added to a
+    game cannot be forgotten by one caller and remembered by another. Both
+    ways a game is removed - a site admin deleting it, and the retention
+    sweeper reaching its purge date - come through here.
+
+    Returns a count per table for reporting.
+    """
+    counts = {}
+
+    # Counted before they are deleted; nothing here is used to decide what to
+    # delete, only to report what was
+    cursor.execute("""
+    SELECT COUNT(*) FROM answer_sessions
+    WHERE player_id IN (
+        SELECT id FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    )
+    """, (game_id,))
+    counts['answer_sessions'] = cursor.fetchone()[0]
+
+    cursor.execute("""
+    SELECT COUNT(*) FROM captures
+    WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)
+    """, (game_id,))
+    counts['captures'] = cursor.fetchone()[0]
+
+    cursor.execute("""
+    SELECT COUNT(*) FROM players
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    """, (game_id,))
+    counts['players'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
+    counts['bases'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
+    counts['teams'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM announcements WHERE game_id = ?', (game_id,))
+    counts['announcements'] = cursor.fetchone()[0]
+
+    # Children first, so a failure part-way through never leaves a row
+    # pointing at something that is gone
+    cursor.execute("""
+    DELETE FROM answer_sessions
+    WHERE player_id IN (
+        SELECT id FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    )
+    """, (game_id,))
+
+    cursor.execute('DELETE FROM announcements WHERE game_id = ?', (game_id,))
+
+    cursor.execute("""
+    DELETE FROM captures
+    WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)
+    """, (game_id,))
+
+    cursor.execute("""
+    DELETE FROM players
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    """, (game_id,))
+
+    cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
+    cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
+    cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
+
+    return counts
+
+
+def game_purge_time(end_time):
+    """When a game that ended at end_time is deleted, or None if it has not
+    ended yet."""
+    return end_time + GAME_RETENTION_SECONDS if end_time else None
+
+
+def sweep_retention():
+    """Enforce the retention rule across the whole database.
+
+    Runs on startup and hourly after that. Three passes:
+
+    1. Tidy any ended game still holding positions. The end-of-game path does
+       this already, so this catches games that ended before the tidy-up
+       existed, and anything a crash left half-done.
+    2. Tidy stale positions in a game that never ended. A game runs for hours;
+       a fix older than the whole retention window is not where anybody is now
+       under any reading, and a game left running forever must not be a way to
+       keep tracking data forever.
+    3. Purge games that ended longer ago than the retention window.
+
+    Returns (tidied_players, purged_games).
+    """
+    now = int(time.time())
+    cutoff = now - GAME_RETENTION_SECONDS
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('BEGIN')
+
+        cursor.execute(f"""
+        UPDATE players
+        SET {_TIDY_PLAYER_COLUMNS}
+        WHERE team_id IN (
+            SELECT t.id FROM teams t
+            JOIN games g ON t.game_id = g.id
+            WHERE g.status = 'ended'
+        )
+          AND {_PLAYER_HAS_TIDYABLE_DATA}
+        """)
+        tidied = cursor.rowcount
+
+        cursor.execute(f"""
+        UPDATE players
+        SET {_TIDY_PLAYER_COLUMNS}
+        WHERE last_position_time IS NOT NULL AND last_position_time < ?
+        """, (cutoff,))
+        tidied += cursor.rowcount
+
+        # A game with no end_time never ended, so its clock has not started.
+        # Those are the site admin's to end or delete; the sweeper only takes
+        # their positions away, above.
+        cursor.execute("""
+        SELECT id, name FROM games
+        WHERE status = 'ended' AND end_time IS NOT NULL AND end_time <= ?
+        """, (cutoff,))
+        expired = cursor.fetchall()
+
+        for game in expired:
+            counts = purge_game_data(cursor, game['id'])
+            print(f'Retention: purged game {game["id"]} ("{game["name"]}") - '
+                  f'ended more than {GAME_RETENTION_DAYS} days ago; removed '
+                  + ', '.join(f'{value} {table}' for table, value in sorted(counts.items())))
+
+        cursor.execute('COMMIT')
+    except sqlite3.Error as e:
+        cursor.execute('ROLLBACK')
+        conn.close()
+        # A sweep that fails is not fatal - the next one an hour from now
+        # tries again against the same unchanged data
+        print(f'WARNING: retention sweep failed: {e}')
+        return 0, 0
+
+    conn.close()
+
+    if tidied:
+        print(f'Retention: cleared stored positions for {tidied} player(s) in ended or stale games')
+
+    return tidied, len(expired)
+
+
+def retention_sweeper():
+    while True:
+        try:
+            sweep_retention()
+        except Exception as e:
+            # The sweeper is the only thing enforcing the retention rule, so
+            # it must not be the kind of thread that dies quietly once and
+            # leaves data sitting there for the life of the process
+            print(f'WARNING: retention sweep raised {type(e).__name__}: {e}')
+
+        time.sleep(RETENTION_SWEEP_INTERVAL_SECONDS)
+
+
+# Werkzeug's auto-reloader runs this module in two processes when the app is
+# started with `python flask_app.py`: a supervising parent that never serves a
+# request, and the child that does. Only the child sets WERKZEUG_RUN_MAIN, so
+# this skips the parent and starts one sweeper per serving process. Under
+# Gunicorn (__name__ is the module name, not '__main__') it always starts.
+if __name__ != '__main__' or os.environ.get('WERKZEUG_RUN_MAIN'):
+    threading.Thread(target=retention_sweeper, daemon=True,
+                     name='retention-sweeper').start()
 
 
 # ==========================================================
@@ -632,36 +994,57 @@ def delete_host(host_id):
 
     return jsonify({'success': True})
 
-# Host verification endpoint
-@app.route('/api/hosts/verify/<qr_code>', methods=['GET'])
-def verify_host(qr_code):
+# Rotate a host's credentials
+#
+# A host holds two secrets: the qr_code its device scans to enrol, and the
+# host_id that device stores and then sends on every request afterwards.
+# Replacing only the QR code would leave a leaked host_id working forever, so
+# rotation replaces both. Every device signed in as this host is signed out,
+# and the host gets back in by scanning the new QR code.
+#
+# The host's games and question bank are carried across rather than lost: the
+# new row is written first, the child rows are repointed at it, and only then
+# does the old row go, so nothing is ever orphaned mid-rotation.
+@app.route('/api/hosts/<host_id>/rotate-credentials', methods=['POST'])
+@require_site_admin
+def rotate_host_credentials(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM hosts WHERE qr_code = ?', (qr_code,))
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
 
     if not host:
         conn.close()
-        return jsonify({'error': 'Invalid host QR code'}), 404
+        return jsonify({'error': 'Host not found'}), 404
 
-    # Check expiry
-    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+    new_id = str(uuid.uuid4())
+    new_qr = str(uuid.uuid4())
+
+    try:
+        cursor.execute('''
+        INSERT INTO hosts (id, name, qr_code, expiry_date, creation_date)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (new_id, host['name'], new_qr, host['expiry_date'], host['creation_date']))
+
+        cursor.execute('UPDATE games SET host_id = ? WHERE host_id = ?', (new_id, host_id))
+        cursor.execute('UPDATE questions SET host_id = ? WHERE host_id = ?', (new_id, host_id))
+        cursor.execute('DELETE FROM hosts WHERE id = ?', (host_id,))
+
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
         conn.close()
-        return jsonify({
-            'status': 'expired',
-            'host_id': host['id'],
-            'name': host['name']
-        })
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
     conn.close()
 
     return jsonify({
-        'status': 'valid',
-        'host_id': host['id'],
+        'id': new_id,
         'name': host['name'],
-        'creation_date': host['creation_date'],
-        'expiry_date': host['expiry_date']
+        'qr_code': new_qr,
+        'expiry_date': host['expiry_date'],
+        'creation_date': host['creation_date']
     })
 
 # ==========================================================
@@ -768,7 +1151,7 @@ def create_game():
         conn.close()
         return jsonify({'error': 'Host account has expired'}), 400
 
-    game_id = generate_unique_game_code()
+    game_id = generate_game_id()
 
     # Extract game settings with defaults
     capture_radius = data.get('capture_radius_meters', 15)
@@ -980,10 +1363,11 @@ def update_game_settings(game_id):
 # credential. Game codes are short and guessable, so the anonymous view must
 # carry nothing that could be used or misused by someone who guessed one: no
 # player names or ids, and none of the QR codes that let a device join a team.
-# A host passing their own host_id gets those extra fields for their own game.
+# A host sending its own host id in the X-Host-ID header gets those extra
+# fields for its own game.
 @app.route('/api/games/<game_id>', methods=['GET'])
 def get_game(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1034,9 +1418,11 @@ def get_game(game_id):
                 WHERE id = ?
                 ''', (scheduled_end, game_id))
 
-                # Release QR codes for reuse, matching the manual end-game flow
+                # Release QR codes for reuse, and clear the personal data an
+                # ended game stops needing - matching the manual end-game flow
                 cursor.execute('UPDATE bases SET qr_code = NULL WHERE game_id = ?', (game_id,))
                 cursor.execute('UPDATE teams SET qr_code = NULL WHERE game_id = ?', (game_id,))
+                tidy_ended_game(cursor, game_id)
             game_state_changed = True
 
     if game_state_changed:
@@ -1335,14 +1721,44 @@ def end_game(game_id):
 
     team_count = cursor.rowcount
 
+    # Nobody is playing any more, so nothing needs to know where anybody is
+    tidied_players = tidy_ended_game(cursor, game_id)
+
     conn.commit()
     conn.close()
 
     return jsonify({
         'success': True,
         'released_bases': base_count,
-        'released_teams': team_count
+        'released_teams': team_count,
+        'tidied_players': tidied_players,
+        'purge_after': game_purge_time(current_time),
+        'retention_days': GAME_RETENTION_DAYS
     })
+
+# ==========================================================
+# Scanned QR codes - proof the player was actually there
+# ==========================================================
+
+# A base id and a team id both travel in the game payload that every player
+# device reads, so an endpoint that trusts the id alone can be driven from an
+# armchair: any player can read another team's id and join it, or read a base
+# id and capture a base they never walked to. The QR code is what the ids are
+# not - a secret printed on the sign-up sheet or the base marker, served only
+# to the game's own host - so scan-backed actions carry the scanned code and
+# check it against the row it claims to be. Ids stay in the path; they say
+# which row, not that the caller was there.
+#
+# For a base this sits alongside the GPS check rather than replacing it: the
+# code proves the player found the marker, the location proves they are at it
+# now, and a base capture needs both.
+def scanned_code_matches(assigned_code, submitted_code):
+    if not assigned_code or not isinstance(submitted_code, str) or not submitted_code:
+        return False
+    # Compared as bytes: compare_digest refuses str holding non-ASCII, so a
+    # crafted code would raise rather than simply not match
+    return hmac.compare_digest(assigned_code.encode('utf-8'),
+                               submitted_code.encode('utf-8'))
 
 # ==========================================================
 # Bonus Round - collect the bases in after the main game
@@ -1419,7 +1835,8 @@ def start_bonus_round(game_id):
 @app.route('/api/bases/<base_id>/collect', methods=['POST'])
 def collect_base(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -1447,6 +1864,10 @@ def collect_base(base_id):
     if base_data['game_status'] != 'bonus':
         conn.close()
         return jsonify({'error': 'Bases can only be collected during the bonus round'}), 403
+
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     cursor.execute('''
     SELECT p.team_id, t.game_id, t.name AS team_name, t.color AS team_color FROM players p
@@ -1578,12 +1999,16 @@ def return_base(base_id):
         'points': points
     })
 
-# Join team
+# Join team. A team's id is public to everyone already in the game, so joining
+# by id alone would let any player walk onto any team; the scanned team QR code
+# is what proves they were handed it. The one exception is a choose_team game,
+# where picking a team off a list is the intended way in and there is no code
+# to scan - a code is still checked there if one is sent.
 @app.route('/api/teams/<team_id>/join', methods=['POST'])
 def join_team(team_id):
     data = request.json
     player_id = data.get('player_id') if data else None
-    player_name = data.get('player_name', 'Anonymous Player') if data else 'Anonymous Player'
+    submitted_qr = data.get('qr_code') if data else None
     current_time = int(time.time())
 
     conn = get_db_connection()
@@ -1591,7 +2016,7 @@ def join_team(team_id):
 
     # Check if team exists and get game info
     cursor.execute('''
-    SELECT t.*, g.status FROM teams t
+    SELECT t.*, g.status, g.join_method FROM teams t
     JOIN games g ON t.game_id = g.id
     WHERE t.id = ?
     ''', (team_id,))
@@ -1604,6 +2029,14 @@ def join_team(team_id):
     if team['status'] == 'ended':
         conn.close()
         return jsonify({'error': 'This game has already ended'}), 400
+
+    if submitted_qr is not None:
+        if not scanned_code_matches(team['qr_code'], submitted_qr):
+            conn.close()
+            return jsonify({'error': 'That QR code does not belong to this team.'}), 403
+    elif (team['join_method'] or 'team_qr') != 'choose_team':
+        conn.close()
+        return jsonify({'error': 'Scan the team QR code to join this team.'}), 403
 
     # If player_id is provided, check if they're already in a team for this game
     if player_id:
@@ -1632,13 +2065,14 @@ def join_team(team_id):
 
             conn.commit()
             conn.close()
-            return jsonify({'player_id': player_id})
+            return jsonify({'player_id': player_id, 'player_name': existing_player['name']})
 
     # Generate new player ID if not provided (new player joining)
     if not player_id:
         player_id = str(uuid.uuid4())
 
-    # Add player to the new team
+    # Add player to the new team under a name the server picks for them
+    player_name = generate_player_name(cursor, team['game_id'])
     cursor.execute('''
     INSERT INTO players (id, team_id, name, join_time)
     VALUES (?, ?, ?, ?)
@@ -1647,14 +2081,13 @@ def join_team(team_id):
     conn.commit()
     conn.close()
 
-    return jsonify({'player_id': player_id})
+    return jsonify({'player_id': player_id, 'player_name': player_name})
 
 # Join a game with automatic team assignment (fewest_players / lowest_points)
 @app.route('/api/games/<game_id>/join', methods=['POST'])
 def join_game(game_id):
     data = request.json or {}
     player_id = data.get('player_id')
-    player_name = data.get('player_name', 'Anonymous Player')
     current_time = int(time.time())
 
     conn = get_db_connection()
@@ -1679,7 +2112,7 @@ def join_game(game_id):
     # If the player is already in a team for this game, keep them there
     if player_id:
         cursor.execute('''
-        SELECT p.team_id, t.name FROM players p
+        SELECT p.team_id, p.name AS player_name, t.name AS team_name FROM players p
         JOIN teams t ON p.team_id = t.id
         WHERE p.id = ? AND t.game_id = ?
         ''', (player_id, game_id))
@@ -1689,8 +2122,9 @@ def join_game(game_id):
             conn.close()
             return jsonify({
                 'player_id': player_id,
+                'player_name': existing_player['player_name'],
                 'team_id': existing_player['team_id'],
-                'team_name': existing_player['name']
+                'team_name': existing_player['team_name']
             })
 
     cursor.execute('SELECT * FROM teams WHERE game_id = ?', (game_id,))
@@ -1716,6 +2150,7 @@ def join_game(game_id):
     if not player_id:
         player_id = str(uuid.uuid4())
 
+    player_name = generate_player_name(cursor, game_id)
     cursor.execute('''
     INSERT INTO players (id, team_id, name, join_time)
     VALUES (?, ?, ?, ?)
@@ -1726,6 +2161,7 @@ def join_game(game_id):
 
     return jsonify({
         'player_id': player_id,
+        'player_name': player_name,
         'team_id': chosen_team['id'],
         'team_name': chosen_team['name']
     })
@@ -1734,7 +2170,8 @@ def join_game(game_id):
 @app.route('/api/bases/<base_id>/capture', methods=['POST'])
 def capture_base(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -1769,6 +2206,12 @@ def capture_base(base_id):
     if base_data['quiz_enabled']:
         conn.close()
         return jsonify({'error': 'This game uses quiz capture. Start a scan session instead.'}), 400
+
+    # The scanned code proves the player found the marker; the distance check
+    # below proves they are standing at it. A capture needs both.
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     # Get player's team and confirm they belong to this base's game
     cursor.execute('''
@@ -1890,7 +2333,7 @@ def update_player_position(player_id):
 # exposed through the shared game payload, so one team can't track another.
 @app.route('/api/games/<game_id>/positions', methods=['GET'])
 def get_player_positions(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
     if not host_id:
         return jsonify({'error': 'Host ID required'}), 400
 
@@ -1976,10 +2419,15 @@ def read_announcement_body(data):
 
 
 def fetch_announcements(cursor, game_id):
-    """Read a game's most recent announcements, oldest first."""
+    """Read a game's most recent live announcements, oldest first.
+
+    A withdrawn announcement is gone for everyone, host included: the row is
+    kept so the deployment can still answer for what was sent (see
+    docs/COMPLIANCE.md), but nothing serves it again.
+    """
     cursor.execute("""
     SELECT id, body, sent_at FROM announcements
-    WHERE game_id = ?
+    WHERE game_id = ? AND deleted_at IS NULL
     ORDER BY sent_at DESC, rowid DESC
     LIMIT ?
     """, (game_id, ANNOUNCEMENT_HISTORY_LIMIT))
@@ -2031,10 +2479,61 @@ def send_announcement(game_id):
     return jsonify({'id': announcement_id, 'body': body, 'sentAt': sent_at}), 201
 
 
+# Host withdraws something they sent - a typo, a wrong instruction, or content
+# that has to come down. The row is kept with a deletion time rather than
+# removed: the deployment can still answer for what was sent if someone
+# complains about it, while nothing serves it to a player again.
+@app.route('/api/games/<game_id>/announcements/<announcement_id>', methods=['DELETE'])
+def delete_announcement(game_id, announcement_id):
+    data = request.get_json(silent=True) or {}
+    host_id = data.get('host_id')
+    if not host_id:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT host_id FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != host_id:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    cursor.execute("""
+    SELECT deleted_at FROM announcements WHERE id = ? AND game_id = ?
+    """, (announcement_id, game_id))
+    announcement = cursor.fetchone()
+
+    if not announcement:
+        conn.close()
+        return jsonify({'error': 'Announcement not found'}), 404
+
+    if announcement['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'Announcement is already deleted'}), 400
+
+    deleted_at = int(time.time())
+    cursor.execute('UPDATE announcements SET deleted_at = ? WHERE id = ?',
+                   (deleted_at, announcement_id))
+
+    conn.commit()
+    conn.close()
+
+    # Same reasoning as posting: the event says only that the list changed
+    broadcast_game_event(game_id, {'type': 'announcement_deleted'})
+
+    return jsonify({'success': True, 'id': announcement_id, 'deletedAt': deleted_at})
+
+
 # The host's own record of what they have already sent
 @app.route('/api/games/<game_id>/announcements', methods=['GET'])
 def get_host_announcements(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
     if not host_id:
         return jsonify({'error': 'Host ID required'}), 400
 
@@ -2080,7 +2579,8 @@ def get_player_announcements(player_id):
 
     read_at = player['announcements_read_at'] or 0
     cursor.execute("""
-    SELECT COUNT(*) FROM announcements WHERE game_id = ? AND sent_at > ?
+    SELECT COUNT(*) FROM announcements
+    WHERE game_id = ? AND sent_at > ? AND deleted_at IS NULL
     """, (player['game_id'], read_at))
     unread = cursor.fetchone()[0]
 
@@ -2681,15 +3181,11 @@ def build_question_row(payload, host_id, existing=None):
             'category': str(category).strip()
         }, None
 
-@app.route('/api/hosts/<host_id>/questions', methods=['GET'])
+@app.route('/api/host/questions', methods=['GET'])
+@require_host
 def get_questions(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     cursor.execute('SELECT * FROM questions WHERE host_id = ? ORDER BY category, text', (host_id,))
     questions = [question_row_to_dict(row) for row in cursor.fetchall()]
@@ -2697,15 +3193,11 @@ def get_questions(host_id):
 
     return jsonify(questions)
 
-@app.route('/api/hosts/<host_id>/categories', methods=['GET'])
+@app.route('/api/host/categories', methods=['GET'])
+@require_host
 def get_host_categories(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     cursor.execute('SELECT DISTINCT category FROM questions WHERE host_id = ? ORDER BY category', (host_id,))
     categories = [row['category'] for row in cursor.fetchall()]
@@ -2713,7 +3205,8 @@ def get_host_categories(host_id):
 
     return jsonify(categories)
 
-@app.route('/api/hosts/<host_id>/questions', methods=['POST'])
+@app.route('/api/host/questions', methods=['POST'])
+@require_host
 def create_question(host_id):
     data = request.json
     if not data:
@@ -2721,11 +3214,6 @@ def create_question(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     row, error = build_question_row(data, host_id)
     if error:
@@ -2747,7 +3235,8 @@ def create_question(host_id):
 
     return jsonify(result), 201
 
-@app.route('/api/hosts/<host_id>/questions/<question_id>', methods=['PUT'])
+@app.route('/api/host/questions/<question_id>', methods=['PUT'])
+@require_host
 def update_question(host_id, question_id):
     data = request.json
     if not data:
@@ -2797,7 +3286,8 @@ def categories_in_running_games(cursor, host_id):
         used.update(json.loads(row['active_categories'] or '[]'))
     return used
 
-@app.route('/api/hosts/<host_id>/questions/<question_id>', methods=['DELETE'])
+@app.route('/api/host/questions/<question_id>', methods=['DELETE'])
+@require_host
 def delete_question(host_id, question_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2820,7 +3310,8 @@ def delete_question(host_id, question_id):
 
     return jsonify({'success': True})
 
-@app.route('/api/hosts/<host_id>/questions/bulk-delete', methods=['POST'])
+@app.route('/api/host/questions/bulk-delete', methods=['POST'])
+@require_host
 def bulk_delete_questions(host_id):
     data = request.json
     if not data or not isinstance(data.get('question_ids'), list) or not data['question_ids']:
@@ -2830,11 +3321,6 @@ def bulk_delete_questions(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     used_categories = categories_in_running_games(cursor, host_id)
 
@@ -2857,7 +3343,8 @@ def bulk_delete_questions(host_id):
         'not_found': len(question_ids) - len(found)
     })
 
-@app.route('/api/hosts/<host_id>/questions/bulk', methods=['POST'])
+@app.route('/api/host/questions/bulk', methods=['POST'])
+@require_host
 def bulk_import_questions(host_id):
     data = request.json
     if not data:
@@ -2865,11 +3352,6 @@ def bulk_import_questions(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     rows = data.get('questions')
     if rows is None and 'csv' in data:
@@ -2959,7 +3441,8 @@ def serialize_question_for_client(question):
 @app.route('/api/bases/<base_id>/session/start', methods=['POST'])
 def start_session(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -2994,6 +3477,12 @@ def start_session(base_id):
         if base_data['game_status'] == 'bonus':
             return jsonify({'error': 'The main game has ended. Bases can no longer be captured - collect them in for bonus points instead.'}), 403
         return jsonify({'error': 'Bases can only be captured while the game is active'}), 403
+
+    # As in capture_base: the scanned code proves the player found the marker,
+    # the distance check below proves they are at it.
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     cursor.execute('''
     SELECT p.*, t.game_id, t.name AS team_name FROM players p
@@ -3332,17 +3821,25 @@ def delete_team(team_id):
 
     return jsonify({'success': True})
 
-# Delete game (host can delete their own games)
+# Delete a game and everything in it. A host can clear away a game nobody
+# joined - a mis-scanned setup, a game that never ran. Once a player has
+# joined, the game holds other people's data and its history is what a
+# complaint or an erasure request would be answered from, so deleting it is
+# the site administrator's call: the host ends the game instead.
 @app.route('/api/games/<game_id>', methods=['DELETE'])
 def delete_game(game_id):
-    data = request.json
-    if not data or 'host_id' not in data:
+    # A site admin deleting from the admin panel has no host id to send, so
+    # the body is optional for them - and may not be there at all
+    data = request.get_json(silent=True) or {}
+    is_admin = request_is_site_admin()
+
+    if not is_admin and 'host_id' not in data:
         return jsonify({'error': 'Host ID required'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify game exists and host is authorized
+    # Verify game exists and the caller is allowed to delete it
     cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
@@ -3350,51 +3847,31 @@ def delete_game(game_id):
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['host_id'] != data['host_id']:
-        conn.close()
-        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+    if not is_admin:
+        if game['host_id'] != data['host_id']:
+            conn.close()
+            return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+        cursor.execute("""
+        SELECT COUNT(*) FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+        """, (game_id,))
+
+        if cursor.fetchone()[0] > 0:
+            conn.close()
+            return jsonify({
+                'error': 'Players have joined this game, so it can no longer be deleted. '
+                         'End the game instead, or ask a site administrator to remove it.'
+            }), 403
 
     try:
         # Begin transaction for cascade deletion
         cursor.execute('BEGIN')
 
-        # Get all teams for this game to delete their QR code mappings
-        cursor.execute('SELECT id FROM teams WHERE game_id = ?', (game_id,))
-        team_ids = [row[0] for row in cursor.fetchall()]
-
-        # Count what we're about to delete for reporting
-        cursor.execute('SELECT COUNT(*) FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
-        captures_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
-        players_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
-        bases_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
-        teams_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM announcements WHERE game_id = ?', (game_id,))
-        announcements_count = cursor.fetchone()[0]
-
-        # Delete announcements (they reference the game)
-        cursor.execute('DELETE FROM announcements WHERE game_id = ?', (game_id,))
-
-        # Delete captures (must be deleted before bases and teams due to foreign keys)
-        cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
-
-        # Delete players (must be deleted before teams due to foreign keys)
-        cursor.execute('DELETE FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
-
-        # Delete teams
-        cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
-
-        # Delete bases (this will also clear their QR codes)
-        cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
-
-        # Finally delete the game itself
-        cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
+        # The cascade itself lives with the retention sweeper, so deleting a
+        # game by hand and purging one that has aged out clear exactly the
+        # same set of tables
+        deleted = purge_game_data(cursor, game_id)
 
         # Commit the transaction
         cursor.execute('COMMIT')
@@ -3410,42 +3887,311 @@ def delete_game(game_id):
     return jsonify({
         'success': True,
         'message': 'Game and all associated data deleted successfully',
-        'deleted': {
-            'teams': teams_count,
-            'bases': bases_count,
-            'players': players_count,
-            'captures': captures_count,
-            'announcements': announcements_count
-        }
+        'deleted': deleted
     })
 
-# generate QR code for a host
-@app.route('/api/hosts/<host_id>/qr-code', methods=['GET'])
+# ==========================================================
+# Game Export - the whole record of one game, in one file
+# ==========================================================
+
+# A deployment is the data controller for what it stores, and thirty days
+# after a game ends the purge takes the lot (see docs/COMPLIANCE.md). This is
+# how a site administrator gets the record out before that happens, or answers
+# a complaint or a subject access request from it afterwards: everything the
+# database holds about one game, in one JSON file, in one request.
+#
+# It is the site administrator's, not the host's. The host already sees its
+# own game live; this exists for the person who has to answer for the
+# deployment, and it is a file of other people's data leaving the system, so
+# it takes the admin bearer token.
+#
+# Credentials are left out. Host ids and QR codes are bearer secrets - anyone
+# holding one can act as that host, or join that team - and an export is a
+# file that gets saved, emailed and forwarded. Nothing here needs them: the
+# host is named, and a base or team is identified by its id.
+
+EXPORT_FORMAT = 'qr-conquest-game-export'
+EXPORT_FORMAT_VERSION = 1
+
+_FILENAME_SAFE = set('abcdefghijklmnopqrstuvwxyz0123456789')
+
+
+def iso_time(timestamp):
+    """A unix timestamp as UTC ISO 8601, or None. Every time in the export is
+    given twice - the raw number the database holds, and this, so a human
+    reading the file does not have to convert anything."""
+    if not timestamp:
+        return None
+    return datetime.fromtimestamp(timestamp, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def export_filename(game_name, when):
+    """A download name built from the game's name and the export date. Only
+    ASCII letters, digits and dashes survive, so the name is safe both as a
+    filename and in the Content-Disposition header."""
+    slug = ''.join(ch if ch in _FILENAME_SAFE else '-' for ch in (game_name or '').lower())
+    slug = '-'.join(part for part in slug.split('-') if part)[:60].strip('-')
+    stamp = datetime.fromtimestamp(when, timezone.utc).strftime('%Y%m%d')
+
+    return f'qr-conquest-{slug or "game"}-{stamp}.json'
+
+
+def build_game_export(cursor, game):
+    """Assemble the full record of one game."""
+    game_id = game['id']
+    now = int(time.time())
+
+    cursor.execute('SELECT name FROM hosts WHERE id = ?', (game['host_id'],))
+    host = cursor.fetchone()
+
+    # Players, keyed by team, so the export reads the way the roster does
+    cursor.execute("""
+    SELECT p.*, t.game_id FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE t.game_id = ?
+    ORDER BY p.join_time ASC
+    """, (game_id,))
+    players_by_team = {}
+    player_ids = []
+
+    for player in cursor.fetchall():
+        player_ids.append(player['id'])
+
+        # Normally None: positions are cleared the moment a game ends. They
+        # are still here for a game exported mid-play, because an export is
+        # meant to say what the database actually holds
+        last_position = None
+        if player['last_latitude'] is not None and player['last_longitude'] is not None:
+            last_position = {
+                'lat': player['last_latitude'],
+                'lng': player['last_longitude'],
+                'accuracy': player['last_accuracy'],
+                'recorded_at': player['last_position_time'],
+                'recorded_at_iso': iso_time(player['last_position_time'])
+            }
+
+        players_by_team.setdefault(player['team_id'], []).append({
+            'id': player['id'],
+            'name': player['name'],
+            'join_time': player['join_time'],
+            'join_time_iso': iso_time(player['join_time']),
+            'announcements_read_at': player['announcements_read_at'],
+            'announcements_read_at_iso': iso_time(player['announcements_read_at']),
+            'last_position': last_position
+        })
+
+    cursor.execute('SELECT * FROM teams WHERE game_id = ? ORDER BY name ASC', (game_id,))
+    teams = []
+    for team in cursor.fetchall():
+        teams.append({
+            'id': team['id'],
+            'name': team['name'],
+            'color': team['color'],
+            'final_score': calculate_team_score(cursor, team['id'], game),
+            'players': players_by_team.get(team['id'], [])
+        })
+
+    cursor.execute('SELECT * FROM bases WHERE game_id = ? ORDER BY name ASC', (game_id,))
+    bases = []
+    for base in cursor.fetchall():
+        bases.append({
+            'id': base['id'],
+            'name': base['name'],
+            'lat': base['latitude'],
+            'lng': base['longitude'],
+            'shield': base['shield'] or 0,
+            'owner_team_id': base['owner_team_id'],
+            'deleted_at': base['deleted_at'],
+            'deleted_at_iso': iso_time(base['deleted_at']),
+            'collected_by_team_id': base['collected_by_team_id'],
+            'collected_at': base['collected_at'],
+            'collected_at_iso': iso_time(base['collected_at']),
+            'returned_at': base['returned_at'],
+            'returned_at_iso': iso_time(base['returned_at'])
+        })
+
+    # The ownership timeline. A NULL team_id is a neutralisation - the base
+    # stopped scoring for anyone until the next capture
+    cursor.execute("""
+    SELECT c.* FROM captures c
+    JOIN bases b ON c.base_id = b.id
+    WHERE b.game_id = ?
+    ORDER BY c.capture_time ASC
+    """, (game_id,))
+    captures = [{
+        'id': row['id'],
+        'base_id': row['base_id'],
+        'team_id': row['team_id'],
+        'neutralised': row['team_id'] is None,
+        'capture_time': row['capture_time'],
+        'capture_time_iso': iso_time(row['capture_time'])
+    } for row in cursor.fetchall()]
+
+    # Withdrawn announcements are in here too, with the time they were pulled.
+    # An announcement somebody complains about is usually one that was taken
+    # back down, so an export without them would be missing the thing it was
+    # asked for
+    cursor.execute("""
+    SELECT * FROM announcements WHERE game_id = ?
+    ORDER BY sent_at ASC, rowid ASC
+    """, (game_id,))
+    announcements = [{
+        'id': row['id'],
+        'body': row['body'],
+        'sent_at': row['sent_at'],
+        'sent_at_iso': iso_time(row['sent_at']),
+        'withdrawn_at': row['deleted_at'],
+        'withdrawn_at_iso': iso_time(row['deleted_at'])
+    } for row in cursor.fetchall()]
+
+    # Quiz sessions, and the questions they served. The question bank belongs
+    # to the host and outlives the game, so the questions this game actually
+    # put in front of players are copied in - otherwise the record of what a
+    # player was asked disappears the moment the host edits their bank
+    answer_sessions = []
+    served_question_ids = []
+
+    if player_ids:
+        placeholders = ','.join('?' * len(player_ids))
+        cursor.execute(f"""
+        SELECT * FROM answer_sessions WHERE player_id IN ({placeholders})
+        ORDER BY started_at ASC
+        """, player_ids)
+
+        for row in cursor.fetchall():
+            served = json.loads(row['served_question_ids'] or '[]')
+            served_question_ids.extend(served)
+            answer_sessions.append({
+                'id': row['id'],
+                'player_id': row['player_id'],
+                'base_id': row['base_id'],
+                'started_at': row['started_at'],
+                'started_at_iso': iso_time(row['started_at']),
+                'still_open': bool(row['active']),
+                'served_question_ids': served
+            })
+
+    questions = []
+    unique_question_ids = sorted(set(served_question_ids))
+    if unique_question_ids:
+        placeholders = ','.join('?' * len(unique_question_ids))
+        cursor.execute(f'SELECT * FROM questions WHERE id IN ({placeholders})',
+                       unique_question_ids)
+        for row in cursor.fetchall():
+            question = question_row_to_dict(row)
+            # The bank-management shape carries the host id, which is a bearer
+            # credential and has no business in a file that leaves the system
+            question.pop('host_id', None)
+            questions.append(question)
+
+    # A host can delete a question from their bank once the game that served
+    # it has ended, and then its text is simply gone. Saying which ids could
+    # not be resolved is more honest than a file that quietly omits them
+    found_ids = {question['id'] for question in questions}
+    missing_question_ids = [qid for qid in unique_question_ids if qid not in found_ids]
+
+    end_time = game['end_time']
+    purge_after = game_purge_time(end_time)
+
+    return {
+        'export': {
+            'format': EXPORT_FORMAT,
+            'version': EXPORT_FORMAT_VERSION,
+            'exported_at': now,
+            'exported_at_iso': iso_time(now),
+            'contains': [
+                'Every row the database holds about this game, other than '
+                'credentials: host ids and the QR codes that enrol a host, '
+                'join a team or mark a base are bearer secrets and are '
+                'deliberately left out.',
+                'Player names are generated by the server as an '
+                'adjective-animal handle. No player types anything, so no '
+                'player-written text exists anywhere in this file.',
+                'Announcements include ones the host withdrew, with the time '
+                'they were withdrawn.',
+                'Questions are copied from the host\'s bank as it stands now. '
+                'A question the host has already deleted cannot be recovered '
+                '- its id is listed under questions_missing instead. Export '
+                'soon after a game if what players were asked matters.',
+                'GPS positions are cleared when a game ends, so an ended '
+                'game exports none. A game exported mid-play carries each '
+                'player\'s last known fix.'
+            ],
+            'retention_days': GAME_RETENTION_DAYS,
+            'purge_after': purge_after,
+            'purge_after_iso': iso_time(purge_after)
+        },
+        'game': {
+            'id': game_id,
+            'name': game['name'],
+            'status': game['status'],
+            'host_name': host['name'] if host else None,
+            'created_time': game['created_time'],
+            'created_time_iso': iso_time(game['created_time']),
+            'start_time': game['start_time'],
+            'start_time_iso': iso_time(game['start_time']),
+            'end_time': end_time,
+            'end_time_iso': iso_time(end_time),
+            'settings': {
+                'capture_radius_meters': game['capture_radius_meters'],
+                'points_interval_seconds': game['points_interval_seconds'],
+                'auto_start_time': game['auto_start_time'],
+                'auto_start_time_iso': iso_time(game['auto_start_time']),
+                'game_duration_minutes': game['game_duration_minutes'],
+                'join_method': game['join_method'] or 'team_qr',
+                'quiz_enabled': bool(game['quiz_enabled']),
+                'active_categories': json.loads(game['active_categories'] or '[]'),
+                'max_shield': game['max_shield'],
+                'cooldown_seconds': game['cooldown_seconds'],
+                'bonus_round_enabled': bool(game['bonus_round_enabled']),
+                'bonus_points_per_base': game['bonus_points_per_base'],
+                'bonus_start_time': game['bonus_start_time'],
+                'bonus_start_time_iso': iso_time(game['bonus_start_time'])
+            }
+        },
+        'teams': teams,
+        'bases': bases,
+        'captures': captures,
+        'announcements': announcements,
+        'answer_sessions': answer_sessions,
+        'questions_served': questions,
+        'questions_missing': missing_question_ids
+    }
+
+
+@app.route('/api/games/<game_id>/export', methods=['GET'])
 @require_site_admin
-def get_host_qr_code(host_id):
+def export_game(game_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('SELECT qr_code FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
 
-    if not host:
+    if not game:
         conn.close()
-        return jsonify({'error': 'Host not found'}), 404
+        return jsonify({'error': 'Game not found'}), 404
 
+    export = build_game_export(cursor, game)
     conn.close()
 
-    base_url = request.host_url.rstrip('/')
-    qr_url = f"{base_url}/?id={host['qr_code']}"
+    # Sent as a download rather than a JSON body: this is a file to file away,
+    # and the point of it is that it survives the purge
+    filename = export_filename(game['name'], export['export']['exported_at'])
 
-    return jsonify({
-        'qr_code': host['qr_code'],
-        'url': qr_url
-    })
+    return Response(
+        json.dumps(export, indent=2, ensure_ascii=False),
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
 
-#list all games for a specific host
-@app.route('/api/hosts/<host_id>/games', methods=['GET'])
-def get_host_games(host_id):
+
+def list_host_games(host_id):
+    """One host's games, newest and most alive first.
+
+    Shared by the host reading its own list and the site admin reading
+    anyone's, so the two can never drift apart.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -3488,81 +4234,33 @@ def get_host_games(host_id):
             'status': game['status'],
             'start_time': game['start_time'],
             'end_time': game['end_time'],
-            'team_count': team_count
+            'team_count': team_count,
+            # When the retention sweeper will delete this game, so a host or
+            # an admin can see the clock rather than having to know the rule.
+            # Null until the game ends - the clock starts then
+            'purge_after': game_purge_time(game['end_time']),
+            'retention_days': GAME_RETENTION_DAYS
         })
 
     conn.close()
 
     return jsonify(games)
 
-# Get host details
-@app.route('/api/hosts/<host_id>', methods=['GET'])
-def get_host(host_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
+# A host's own games, identified by its header credential
+@app.route('/api/host/games', methods=['GET'])
+@require_host
+def get_host_games(host_id):
+    return list_host_games(host_id)
 
-    if not host:
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
-    # Count games for this host
-    cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
-    game_count = cursor.fetchone()[0]
-
-    # Check if expired
-    expired = False
-    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
-        expired = True
-
-    conn.close()
-
-    return jsonify({
-        'id': host['id'],
-        'name': host['name'],
-        'qr_code': host['qr_code'],
-        'expiry_date': host['expiry_date'],
-        'creation_date': host['creation_date'],
-        'game_count': game_count,
-        'expired': expired
-    })
-
-# Regenerate a host's QR code
-@app.route('/api/hosts/<host_id>/regenerate-qr', methods=['POST'])
+# The same list for the site admin, who reads it for every host in turn to
+# build the cross-system games view. The host id here identifies whose games
+# to read; the admin's own bearer token is what authorises the request.
+@app.route('/api/hosts/<host_id>/games', methods=['GET'])
 @require_site_admin
-def regenerate_host_qr(host_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check if host exists
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
-
-    if not host:
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
-
-    # Generate new QR code
-    new_qr = str(uuid.uuid4())
-
-    try:
-        cursor.execute('''
-        UPDATE hosts SET qr_code = ? WHERE id = ?
-        ''', (new_qr, host_id))
-
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.close()
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
-
-    conn.close()
-
-    return jsonify({
-        'id': host_id,
-        'qr_code': new_qr
-    })
+def get_host_games_as_admin(host_id):
+    return list_host_games(host_id)
 
 # ==========================================================
 # API Routes - Site Settings (Site Admin)
@@ -3626,6 +4324,17 @@ def render_index():
             'window.QRC_ABUSE_CONTACT = %s;' % json.dumps(contact).replace('<', '\\u003c')
         )
     return Response(html, mimetype='text/html')
+
+# Anything under /api that matched no route above is a client error, not a
+# page. Without this the SPA catch-all below answers 200 with the HTML shell,
+# so a client calling a mistyped or withdrawn endpoint gets a page where it
+# expects JSON instead of a clean 404.
+@app.route('/api/', defaults={'path': ''},
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@app.route('/api/<path:path>',
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+def api_not_found(path):
+    return jsonify({'error': 'Not found'}), 404
 
 # Serve static files
 @app.route('/', defaults={'path': ''})

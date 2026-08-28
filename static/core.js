@@ -121,8 +121,20 @@ function getAuthState() {
     gameId: localStorage.getItem('gameId'),
     hasTeam: !!localStorage.getItem('teamId'),
     teamId: localStorage.getItem('teamId'),
-    playerId: localStorage.getItem('playerId')
+    playerId: localStorage.getItem('playerId'),
+    playerName: localStorage.getItem('playerName')
   };
+}
+
+// The host id is a credential, so it is sent in a header rather than in the
+// query string, which would leave it in server logs, browser history and the
+// Referer header of anything the page links out to.
+function hostAuthHeaders() {
+  const authState = getAuthState();
+
+  return authState.isHost && authState.hostId
+    ? { 'X-Host-ID': authState.hostId }
+    : {};
 }
 
 // Update authentication state
@@ -149,9 +161,14 @@ function updateAuthState(authData) {
     if (authData.teamId) {
       localStorage.setItem('teamId', authData.teamId);
       localStorage.setItem('playerId', authData.playerId || '');
+      // The server names the player; keep it so they can be told who they are
+      if (authData.playerName) {
+        localStorage.setItem('playerName', authData.playerName);
+      }
     } else {
       localStorage.removeItem('teamId');
       localStorage.removeItem('playerId');
+      localStorage.removeItem('playerName');
     }
   }
 
@@ -172,6 +189,7 @@ function clearGameState() {
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
+  localStorage.removeItem('playerName');
   // Only remove hostName if we're not a host
   if (!appState.hostId) {
     localStorage.removeItem('hostName'); 
@@ -180,8 +198,10 @@ function clearGameState() {
   // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
   sessionStorage.removeItem('pendingTeamId');
+  sessionStorage.removeItem('pendingTeamQrCode');
   sessionStorage.removeItem('pendingJoinGameId');
   sessionStorage.removeItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingCaptureQrCode');
 
   // Stop any active polling
   stopScorePolling();
@@ -402,13 +422,16 @@ async function handleTeamQR(qrCode, statusData) {
     const teamId = statusData.team_id;
     const gameId = statusData.game_id;
 
-    console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
+    console.log('Team QR scanned:', teamId);
 
     // Helper function to start registration flow
     const startRegistration = async () => {
       updateAuthState({ gameId: gameId });
       await fetchGameData(gameId);
+      // The scanned code travels with the pending team: the server only takes
+      // the join as proof of a scan if the code comes back with it
       sessionStorage.setItem('pendingTeamId', teamId);
+      sessionStorage.setItem('pendingTeamQrCode', qrCode);
       if (window.navigateTo) {
         window.navigateTo('playerRegistration');
       }
@@ -440,7 +463,7 @@ async function handleTeamQR(qrCode, statusData) {
         
         if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
           console.log('Player confirmed team change within same game');
-          await joinTeam(teamId);
+          await joinTeam(teamId, qrCode);
         } else {
           if (window.navigateTo) {
             window.navigateTo('gameView');
@@ -450,6 +473,7 @@ async function handleTeamQR(qrCode, statusData) {
         // Same game, no team yet
         console.log('Same game, no team - go to registration');
         sessionStorage.setItem('pendingTeamId', teamId);
+        sessionStorage.setItem('pendingTeamQrCode', qrCode);
         if (window.navigateTo) {
           window.navigateTo('playerRegistration');
         }
@@ -545,7 +569,7 @@ async function handleBaseQR(qrCode, statusData) {
 
     // Check if user is on a team
     if (!authState.hasTeam) {
-      await handleBaseScanWithoutTeam(baseId, gameId);
+      await handleBaseScanWithoutTeam(baseId, gameId, qrCode);
       return;
     }
 
@@ -559,7 +583,7 @@ async function handleBaseQR(qrCode, statusData) {
       if (!navigator.onLine) {
         throw new Error('A connection is needed to collect this base.');
       }
-      await collectBase(baseId);
+      await collectBase(baseId, qrCode);
       // Leave the scanner: it would otherwise restart and collect the same
       // base again, which the server rejects as already collected
       leaveScannerPage();
@@ -590,12 +614,12 @@ async function handleBaseQR(qrCode, statusData) {
         }
         return;
       }
-      await startQuizSession(baseId);
+      await startQuizSession(baseId, qrCode);
     } else {
       // Attempt to capture the base (legacy instantaneous capture). This
       // moves to the base view for the attack animation, leaving the
       // scanner page so it can't rescan the base just captured.
-      await captureBase(baseId);
+      await captureBase(baseId, qrCode);
     }
   } catch (err) {
     // Navigate appropriately based on error context
@@ -623,7 +647,7 @@ function leaveScannerPage() {
 
 // Handle a base scan by a player who is not yet on a team.
 // What happens depends on the game's join method setting.
-async function handleBaseScanWithoutTeam(baseId, gameId) {
+async function handleBaseScanWithoutTeam(baseId, gameId, qrCode) {
   const response = await fetch(`${API_BASE_URL}/games/${gameId}`);
   if (!response.ok) {
     throw new Error('Unable to load game information. Please try again.');
@@ -645,6 +669,7 @@ async function handleBaseScanWithoutTeam(baseId, gameId) {
   await fetchGameData(gameId);
   sessionStorage.setItem('pendingJoinGameId', gameId);
   sessionStorage.setItem('pendingCaptureBaseId', baseId);
+  sessionStorage.setItem('pendingCaptureQrCode', qrCode);
   if (window.navigateTo) {
     window.navigateTo('playerRegistration');
   }
@@ -653,10 +678,13 @@ async function handleBaseScanWithoutTeam(baseId, gameId) {
 // After joining via a base scan, try to capture the base that was scanned
 async function attemptPendingCapture() {
   const baseId = sessionStorage.getItem('pendingCaptureBaseId');
+  const qrCode = sessionStorage.getItem('pendingCaptureQrCode');
   sessionStorage.removeItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingCaptureQrCode');
   sessionStorage.removeItem('pendingJoinGameId');
 
-  if (!baseId || (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
+  if (!baseId || !qrCode ||
+      (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
     return;
   }
 
@@ -666,7 +694,7 @@ async function attemptPendingCapture() {
     }
 
     if (appState.gameData.status === 'bonus') {
-      await collectBase(baseId);
+      await collectBase(baseId, qrCode);
       return;
     }
 
@@ -680,9 +708,9 @@ async function attemptPendingCapture() {
         }
         return;
       }
-      await startQuizSession(baseId);
+      await startQuizSession(baseId, qrCode);
     } else {
-      await captureBase(baseId);
+      await captureBase(baseId, qrCode);
     }
   } catch (err) {
     // capture/session functions already notify the user; joining still succeeded
@@ -958,7 +986,8 @@ async function fetchPlayerPositions() {
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/games/${appState.gameData.id}/positions?host_id=${encodeURIComponent(authState.hostId)}`
+      `${API_BASE_URL}/games/${appState.gameData.id}/positions`,
+      { headers: hostAuthHeaders() }
     );
 
     if (!response.ok) {
@@ -1005,13 +1034,8 @@ function stopPlayerPositionPolling() {
 // Team rosters and QR codes are only served to the game's own host, so the
 // host identifies itself when reading a game. Players send nothing and get
 // the anonymous view.
-function gameDataUrl(gameId) {
-  const authState = getAuthState();
-  const url = `${API_BASE_URL}/games/${gameId}`;
-
-  return authState.isHost
-    ? `${url}?host_id=${encodeURIComponent(authState.hostId)}`
-    : url;
+function fetchGame(gameId) {
+  return fetch(`${API_BASE_URL}/games/${gameId}`, { headers: hostAuthHeaders() });
 }
 
 // Fetch game data
@@ -1023,7 +1047,7 @@ async function fetchGameData(gameId) {
     let data = null;
 
     try {
-      const response = await fetch(gameDataUrl(gameId));
+      const response = await fetchGame(gameId);
 
       if (response.ok) {
         data = await response.json();
@@ -1086,7 +1110,7 @@ async function fetchGameUpdates() {
 
   try {
     // Fetch complete game data instead of just scores
-    const response = await fetch(gameDataUrl(appState.gameData.id));
+    const response = await fetchGame(appState.gameData.id);
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1220,10 +1244,20 @@ const ANNOUNCEMENT_MAX_LENGTH = 500;
 // well: that is what reaches a player sitting on any other page
 const ANNOUNCEMENT_POLL_INTERVAL_MS = 10000;
 
+// How long an announcement the server did not return is held on screen as one
+// that landed while the request was in flight. Past that it is treated as one
+// the host has deleted, so a withdrawn message clears itself.
+const ANNOUNCEMENT_PENDING_GRACE_SECONDS = 5;
+
 let announcementPollingInterval = null;
 
 // Ids already shown, so a refresh only announces what is genuinely new
 let knownAnnouncementIds = new Set();
+
+// Ids this device has deleted. A poll already in flight when the host deletes
+// one still carries it, so it is filtered out rather than blinking back onto
+// the list until the next poll settles it.
+let deletedAnnouncementIds = new Set();
 
 // A host looking at a game that is not theirs is refused their own record of
 // what they sent; remember that rather than retrying it on every poll
@@ -1238,6 +1272,7 @@ function resetAnnouncementState() {
     error: null
   };
   knownAnnouncementIds = new Set();
+  deletedAnnouncementIds = new Set();
   hostAnnouncementsDenied = false;
 
   if (window.updateAnnouncementBadge) {
@@ -1258,15 +1293,19 @@ function getAnnouncementRole() {
   return null;
 }
 
-function announcementsUrl() {
+// A host reads its own record of what it has sent, identifying itself in a
+// header; a player reads what has been sent to them.
+function fetchAnnouncementsForRole(role) {
   const authState = getAuthState();
 
-  if (getAnnouncementRole() === 'host') {
-    return `${API_BASE_URL}/games/${appState.gameData.id}/announcements` +
-      `?host_id=${encodeURIComponent(authState.hostId)}`;
+  if (role === 'host') {
+    return fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/announcements`,
+      { headers: hostAuthHeaders() }
+    );
   }
 
-  return `${API_BASE_URL}/players/${authState.playerId}/announcements`;
+  return fetch(`${API_BASE_URL}/players/${authState.playerId}/announcements`);
 }
 
 // Toast anything that arrived while the panel was closed. The first load only
@@ -1297,7 +1336,7 @@ async function fetchAnnouncements() {
   appState.announcements.loading = true;
 
   try {
-    const response = await fetch(announcementsUrl());
+    const response = await fetchAnnouncementsForRole(role);
 
     // The stored host credentials do not own this game: carry on as a player
     // if this device also joined one, and otherwise stop asking
@@ -1328,20 +1367,28 @@ async function fetchAnnouncements() {
     }
 
     const data = await response.json();
-    const announcements = data.announcements || [];
+    const announcements = (data.announcements || []).filter(function (announcement) {
+      return !deletedAnnouncementIds.has(announcement.id);
+    });
 
     announceNewAnnouncements(announcements, role);
 
     // An announcement posted while this request was in flight is missing from
     // the response; keep it on screen rather than letting it blink out until
     // the next poll. Only ones at least as new as the newest fetched are kept,
-    // so nothing trimmed off the far end of the history comes back.
+    // so nothing trimmed off the far end of the history comes back - and only
+    // while they are new enough to have raced this request, because anything
+    // else missing from the response is one the host has deleted. Both times
+    // come from the server, so a client clock cannot skew the comparison.
     const newestFetched = announcements.reduce(function (latest, announcement) {
       return Math.max(latest, announcement.sentAt || 0);
     }, 0);
 
+    const oldestPending = (data.serverTime || 0) - ANNOUNCEMENT_PENDING_GRACE_SECONDS;
+
     const pending = appState.announcements.items.filter(function (announcement) {
-      return (announcement.sentAt || 0) >= newestFetched &&
+      const sentAt = announcement.sentAt || 0;
+      return sentAt >= newestFetched && sentAt >= oldestPending &&
         !announcements.some(function (fetched) { return fetched.id === announcement.id; });
     });
 
@@ -1396,6 +1443,47 @@ async function sendAnnouncement(body) {
     console.error('Error sending announcement:', err);
     if (window.showNotification) {
       window.showNotification(err.message || 'Unable to send message.', 'error');
+    }
+    return false;
+  } finally {
+    if (window.refreshAnnouncementPanel) {
+      window.refreshAnnouncementPanel();
+    }
+  }
+}
+
+// Withdraw something the host sent. The server keeps the row with a deletion
+// time, so the deployment can still answer for what was posted, but it stops
+// being served to anyone - the host's own list included. Resolves true once it
+// is gone.
+async function deleteAnnouncement(announcementId) {
+  if (getAnnouncementRole() !== 'host' || !announcementId) return false;
+
+  const authState = getAuthState();
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/announcements/${announcementId}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host_id: authState.hostId })
+      }
+    );
+
+    await handleApiResponse(response, 'Failed to delete message');
+
+    // Take it off the list now rather than waiting for the next poll
+    deletedAnnouncementIds.add(announcementId);
+    appState.announcements.items = appState.announcements.items.filter(function (announcement) {
+      return announcement.id !== announcementId;
+    });
+
+    return true;
+  } catch (err) {
+    console.error('Error deleting announcement:', err);
+    if (window.showNotification) {
+      window.showNotification(err.message || 'Unable to delete message.', 'error');
     }
     return false;
   } finally {
@@ -1615,6 +1703,12 @@ function handleGameSocketMessage(message) {
     // listen, so the text is fetched from an endpoint that checks who is
     // asking
     fetchAnnouncements();
+  } else if (message.type === 'announcement_deleted') {
+    console.log('Announcement deleted event:', message);
+
+    // Refetching is what takes it off the reader's screen; the event names
+    // nothing, for the same reason as above
+    fetchAnnouncements();
   } else if (message.type === 'base_returned') {
     console.log('Base returned event:', message);
 
@@ -1691,7 +1785,7 @@ async function createGame(gameSettings) {
 
     const data = await handleApiResponse(response, 'Failed to create game');
     const gameId = data.game_id;
-    console.log('Game created successfully, game ID:', gameId);
+    console.log('Game created successfully:', gameSettings.name);
 
     // Update authentication state
     updateAuthState({ gameId: gameId });
@@ -1701,7 +1795,7 @@ async function createGame(gameSettings) {
     await fetchGameData(gameId);
 
     // Show success message with settings info
-    let successMessage = `Game created successfully! Game ID: ${gameId}`;
+    let successMessage = `Game "${gameSettings.name}" created successfully!`;
 
     if (gameSettings.auto_start_time) {
       const startTime = new Date(gameSettings.auto_start_time * 1000);
@@ -1834,7 +1928,9 @@ async function endGame() {
   }
 }
 
-// Delete game
+// Delete a game the host set up but nobody joined. The server refuses this
+// once a player has joined - that game's history is a site administrator's to
+// remove - so the host's way out of a running game is to end it.
 async function deleteGame() {
   if (!appState.gameData.id) {
     throw new Error('No game loaded to delete.');
@@ -1890,16 +1986,20 @@ async function deleteGame() {
 // PLAYER ACTIONS
 // =============================================================================
 
-// Join team
-async function joinTeam(teamId, playerName = 'Anonymous Player') {
+// Join team. teamQrCode is the code just scanned off the team's sheet; the
+// server insists on it unless the game lets players pick a team from a list.
+// The player is not asked for a name - the server issues one and sends it back.
+async function joinTeam(teamId, teamQrCode) {
   try {
     setLoading(true);
-    console.log('Joining team:', teamId, 'with name:', playerName);
+    console.log('Joining team:', teamId);
 
     const authState = getAuthState();
-    const requestBody = {
-      player_name: playerName
-    };
+    const requestBody = {};
+
+    if (teamQrCode) {
+      requestBody.qr_code = teamQrCode;
+    }
 
     // If player already has an ID (team change), include it to preserve identity
     if (authState.playerId) {
@@ -1917,19 +2017,26 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
 
     const data = await handleApiResponse(response, 'Failed to join team');
     const playerId = data.player_id;
+    const playerName = data.player_name;
     console.log('Joined team, player ID:', playerId);
 
     // Update authentication state
     updateAuthState({
       teamId: teamId,
-      playerId: playerId
+      playerId: playerId,
+      playerName: playerName
     });
 
     const teamName = getTeamName(teamId);
 
     // Show success message and navigate - UI will handle this
     if (window.showNotification) {
-      window.showNotification(`You have successfully joined ${teamName}!`, 'success');
+      window.showNotification(
+        playerName
+          ? `You have joined ${teamName} as ${playerName}!`
+          : `You have successfully joined ${teamName}!`,
+        'success'
+      );
     }
     if (window.navigateTo) {
       window.navigateTo('gameView');
@@ -1946,16 +2053,15 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
   }
 }
 
-// Join a game that auto-assigns teams (fewest_players / lowest_points)
-async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
+// Join a game that auto-assigns teams (fewest_players / lowest_points).
+// As with joinTeam, the server picks the player's name and returns it.
+async function joinGameAuto(gameId) {
   try {
     setLoading(true);
-    console.log('Joining game with auto team assignment:', gameId, 'name:', playerName);
+    console.log('Joining game with auto team assignment:', gameId);
 
     const authState = getAuthState();
-    const requestBody = {
-      player_name: playerName
-    };
+    const requestBody = {};
 
     if (authState.playerId) {
       requestBody.player_id = authState.playerId;
@@ -1975,14 +2081,20 @@ async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
     // Update authentication state
     updateAuthState({
       teamId: data.team_id,
-      playerId: data.player_id
+      playerId: data.player_id,
+      playerName: data.player_name
     });
 
     // Refresh so team player counts and membership are up to date
     await fetchGameData(gameId);
 
     if (window.showNotification) {
-      window.showNotification(`You have been assigned to ${data.team_name}!`, 'success');
+      window.showNotification(
+        data.player_name
+          ? `You have been assigned to ${data.team_name} as ${data.player_name}!`
+          : `You have been assigned to ${data.team_name}!`,
+        'success'
+      );
     }
     if (window.navigateTo) {
       window.navigateTo('gameView');
@@ -2055,10 +2167,14 @@ async function getCurrentGPSCoordinates() {
 
 // Handle base capture with GPS location verification (legacy, instantaneous
 // capture - used only when the game does not have quiz capture enabled)
-async function captureBase(baseId) {
+async function captureBase(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to capture it.");
   }
 
   const { latitude, longitude, accuracy, usingFreshGPS } = await getCurrentGPSCoordinates();
@@ -2091,7 +2207,8 @@ async function captureBase(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2155,10 +2272,14 @@ function snapshotBaseForView(baseId) {
 
 // Player collects a base during the bonus round. GPS-verified server-side so
 // the base is marked collected at its map location, not wherever it ends up.
-async function collectBase(baseId) {
+async function collectBase(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must be on a team to collect bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to collect it.");
   }
 
   const { latitude, longitude, accuracy } = await getCurrentGPSCoordinates();
@@ -2185,7 +2306,8 @@ async function collectBase(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2350,10 +2472,14 @@ function clearQuizSession() {
 }
 
 // Begin a scan session against a base (quiz-enabled games only)
-async function startQuizSession(baseId) {
+async function startQuizSession(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to capture it.");
   }
 
   const { latitude, longitude } = await getCurrentGPSCoordinates();
@@ -2369,7 +2495,8 @@ async function startQuizSession(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2392,6 +2519,9 @@ async function startQuizSession(baseId) {
       active: true,
       sessionId: data.session_id,
       baseId: baseId,
+      // Held so the bonus-round collect prompt below can reuse the scan
+      // rather than sending the player back to the marker for another
+      qrCode: qrCode,
       baseName: data.base.name,
       shield: data.base.shield,
       ownerTeamId: data.base.owner_team_id,
@@ -2454,7 +2584,7 @@ async function submitQuizAnswer(optionId) {
       session.active = false;
       clearQuizSession();
       if (data.bonus_round && window.showBonusCollectPrompt) {
-        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct);
+        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct, session.qrCode);
       } else {
         if (window.closeQuizModal) window.closeQuizModal();
         if (window.showNotification) {
@@ -2852,16 +2982,19 @@ async function restoreBase(baseId, qrCode) {
   }
 }
 
-// Fetch games for a specific host
-async function fetchHostGames(hostId) {
-  if (!hostId) {
+// Fetch the signed-in host's own games
+async function fetchHostGames() {
+  const authState = getAuthState();
+  if (!authState.hostId) {
     throw new Error('Host ID is required to fetch games.');
   }
 
   try {
-    console.log('Fetching games for host:', hostId);
+    console.log('Fetching games for the signed-in host');
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
+    const response = await fetch(`${API_BASE_URL}/host/games`, {
+      headers: hostAuthHeaders()
+    });
     const data = await handleApiResponse(response, 'Failed to fetch host games');
 
     console.log('Host games received:', data);
@@ -2880,54 +3013,62 @@ async function fetchHostGames(hostId) {
 // QUESTION BANK FUNCTIONS (host-level, reusable across games)
 // =============================================================================
 
-async function fetchHostCategories(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/categories`);
+// The question bank belongs to whichever host the header names, so none of
+// these take a host id: there is no id in the URL to leak, and no way to ask
+// for a bank other than your own.
+async function fetchHostCategories() {
+  const response = await fetch(`${API_BASE_URL}/host/categories`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch categories');
 }
 
-async function fetchQuestions(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`);
+async function fetchQuestions() {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch questions');
 }
 
-async function createQuestion(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`, {
+async function createQuestion(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to create question');
 }
 
-async function updateQuestion(hostId, questionId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
+async function updateQuestion(questionId, payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to update question');
 }
 
-async function deleteQuestion(hostId, questionId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
-    method: 'DELETE'
+async function deleteQuestion(questionId) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
+    method: 'DELETE',
+    headers: hostAuthHeaders()
   });
   return handleApiResponse(response, 'Failed to delete question');
 }
 
-async function bulkDeleteQuestions(hostId, questionIds) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk-delete`, {
+async function bulkDeleteQuestions(questionIds) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk-delete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify({ question_ids: questionIds })
   });
   return handleApiResponse(response, 'Failed to delete questions');
 }
 
-async function bulkImportQuestions(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk`, {
+async function bulkImportQuestions(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to import questions');
@@ -3172,6 +3313,50 @@ async function deleteHost(hostId) {
   }
 }
 
+// Issue a host a fresh QR code and a fresh host id, so a credential that has
+// leaked stops working. The host's games and question bank move across with
+// them; every device signed in as this host is signed out.
+async function rotateHostCredentials(hostId) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to rotate credentials.');
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/rotate-credentials`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      }
+    });
+
+    if (response.status === 401) {
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+
+    const result = await handleApiResponse(response, 'Unable to rotate host credentials');
+
+    if (window.showNotification) {
+      window.showNotification('New credentials issued. The host must scan the new QR code.', 'success');
+    }
+
+    refreshSiteAdminHosts();
+    return result;
+  } catch (err) {
+    console.error('Error rotating host credentials:', err);
+    const userMessage = err.message || 'Unable to rotate host credentials. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function loadSiteAdminHosts() {
   // Prevent duplicate loading
   if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
@@ -3341,7 +3526,9 @@ async function loadSiteAdminGames() {
     // For each host, get their games using existing API
     for (const host of hosts) {
       try {
-        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`);
+        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`, {
+          headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+        });
         if (response.ok) {
           const hostGames = await response.json();
 
@@ -3463,7 +3650,9 @@ async function completeGameAsAdmin(game) {
   }
 }
 
-// Delete game as admin by impersonating the host
+// Delete a game as the site admin. A host can only clear away a game nobody
+// joined, so the admin token - not the host id - is what carries this past a
+// game with players in it.
 async function deleteGameAsAdmin(game) {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
     throw new Error('Admin authentication required to delete games.');
@@ -3472,11 +3661,11 @@ async function deleteGameAsAdmin(game) {
   try {
     setLoading(true);
 
-    // Use the host endpoint by providing the host_id (admin knows all host IDs)
     const response = await fetch(`${API_BASE_URL}/games/${game.id}`, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
       },
       body: JSON.stringify({
         host_id: game.host_id
@@ -3502,6 +3691,108 @@ async function deleteGameAsAdmin(game) {
     }
     throw err;
   } finally {
+    setLoading(false);
+  }
+}
+
+// =============================================================================
+// RETENTION AND GAME EXPORT
+// =============================================================================
+
+// A game is deleted for good once it has been over for the deployment's
+// retention window, so the game lists say when that will be rather than
+// leaving people to know the rule. Null until the game ends - the clock
+// starts then.
+function formatPurgeDate(purgeAfter) {
+  if (!purgeAfter) return null;
+
+  return new Date(purgeAfter * 1000).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric'
+  });
+}
+
+// "Deletes in 12 days (14 Sep 2026)", or the past-tense version for a game
+// the sweeper has not got to yet
+function describePurge(purgeAfter) {
+  const date = formatPurgeDate(purgeAfter);
+  if (!date) return null;
+
+  const days = Math.ceil((purgeAfter * 1000 - Date.now()) / 86400000);
+
+  if (days <= 0) return `Due for deletion (${date})`;
+  if (days === 1) return `Deletes tomorrow (${date})`;
+
+  return `Deletes in ${days} days (${date})`;
+}
+
+// Download the whole record of one game as a JSON file.
+//
+// The export is the site admin's tool for getting a game's record out before
+// the purge takes it, and for answering a complaint or a subject access
+// request afterwards. It carries the admin bearer token, so it cannot be a
+// plain link - the file comes back through fetch and is saved from a blob.
+async function exportGameAsAdmin(game) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to export games.');
+  }
+
+  let objectUrl = null;
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/games/${game.id}/export`, {
+      headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+    });
+
+    if (!response.ok) {
+      // The error body is JSON even though the success body is a file
+      let message = `Failed to export game: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          message = errorData.error;
+        }
+      } catch (parseError) {
+        // No JSON body - keep the status-based message
+      }
+      throw new Error(message);
+    }
+
+    // The server names the file; fall back to naming it here if a proxy has
+    // stripped the header
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `qr-conquest-game-${game.id}.json`;
+
+    const blob = await response.blob();
+    objectUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (window.showNotification) {
+      window.showNotification(`Exported "${game.name}" to ${filename}`, 'success');
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error exporting game:', err);
+    const userMessage = err.message || 'Unable to export game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    if (objectUrl) {
+      // Revoked on a later tick: some browsers cancel a download that is
+      // still starting if the blob it points at is released synchronously
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    }
     setLoading(false);
   }
 }
