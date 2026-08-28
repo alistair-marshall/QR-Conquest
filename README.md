@@ -593,6 +593,17 @@ database. To upgrade a library, bump its version in `package.json` and run
    gunicorn -w 1 --threads 100 -b 0.0.0.0:5000 flask_app:app
    ```
 
+4. **On a host that serves one request at a time**: shared hosting often runs
+   the app under uWSGI as a single process with a single core (PythonAnywhere
+   does), which means exactly one request is answered at a time and everything
+   else waits its turn. The game still works - players poll rather than hold a
+   connection - but the app's own request volume is the whole budget, so keep
+   an eye on it: the site admin panel reads its games table in one request, and
+   a live game costs roughly one request per player every five seconds. The
+   live-events WebSocket cannot connect there at all (the socket the handshake
+   needs is not in uWSGI's WSGI environment), so clients fall back to polling,
+   which is what keeps everything up to date anyway.
+
 ## Configuration Options
 
 ### Environment Variables

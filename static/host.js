@@ -1972,7 +1972,7 @@ function renderGameSettingsModal() {
       try {
         // Call API to update settings
         const authState = getAuthState();
-        const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/settings`, {
+        const response = await apiFetch(`${API_BASE_URL}/games/${appState.gameData.id}/settings`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'

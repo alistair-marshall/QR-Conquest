@@ -4254,13 +4254,71 @@ def get_host_games(host_id):
     return list_host_games(host_id)
 
 
-# The same list for the site admin, who reads it for every host in turn to
-# build the cross-system games view. The host id here identifies whose games
-# to read; the admin's own bearer token is what authorises the request.
+# The same list for one host, read with the site admin's own token. The panel
+# builds its cross-system view from the whole-system route below now, so this
+# stands for reading a single host's games; the id names whose games to read,
+# the bearer token is what authorises the request.
 @app.route('/api/hosts/<host_id>/games', methods=['GET'])
 @require_site_admin
 def get_host_games_as_admin(host_id):
     return list_host_games(host_id)
+
+
+# Every game in the system, with the counts the admin's games table shows.
+#
+# The panel used to assemble this itself: one request for the hosts, then one
+# per host for their games, then one more for every game in the system to count
+# its teams, bases and players - and that last one is the full game payload,
+# the same heavy read every player polls. A deployment serving one request at a
+# time (uWSGI with a single worker, which is what a small host gives you) spends
+# minutes working through that, with everything else - a live game's players,
+# and the admin's own next request - queued behind it. This answers the whole
+# table in one request instead.
+@app.route('/api/admin/games', methods=['GET'])
+@require_site_admin
+def get_all_games_as_admin():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT g.id, g.name, g.status, g.start_time, g.end_time,
+           g.host_id, h.name AS host_name,
+           (SELECT COUNT(*) FROM teams t WHERE t.game_id = g.id) AS teams_count,
+           (SELECT COUNT(*) FROM bases b WHERE b.game_id = g.id) AS bases_count,
+           (SELECT COUNT(*) FROM players p
+              JOIN teams t ON p.team_id = t.id
+            WHERE t.game_id = g.id) AS players_count
+    FROM games g
+    JOIN hosts h ON g.host_id = h.id
+    ORDER BY
+        CASE
+            WHEN g.status = 'active' THEN 1
+            WHEN g.status = 'setup' THEN 2
+            ELSE 3
+        END,
+        COALESCE(g.start_time, 0) DESC
+    ''')
+
+    games = [{
+        'id': row['id'],
+        'name': row['name'],
+        'status': row['status'],
+        'start_time': row['start_time'],
+        'end_time': row['end_time'],
+        'host_id': row['host_id'],
+        'host_name': row['host_name'],
+        'teams_count': row['teams_count'],
+        'bases_count': row['bases_count'],
+        'players_count': row['players_count'],
+        # When the retention sweeper will delete this game; null until it ends
+        'purge_after': game_purge_time(row['end_time']),
+        'retention_days': GAME_RETENTION_DAYS
+    } for row in cursor.fetchall()]
+
+    conn.close()
+
+    return jsonify(games)
+
 
 # ==========================================================
 # API Routes - Site Settings (Site Admin)
