@@ -2859,16 +2859,19 @@ async function restoreBase(baseId, qrCode) {
   }
 }
 
-// Fetch games for a specific host
-async function fetchHostGames(hostId) {
-  if (!hostId) {
+// Fetch the signed-in host's own games
+async function fetchHostGames() {
+  const authState = getAuthState();
+  if (!authState.hostId) {
     throw new Error('Host ID is required to fetch games.');
   }
 
   try {
-    console.log('Fetching games for host:', hostId);
+    console.log('Fetching games for the signed-in host');
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
+    const response = await fetch(`${API_BASE_URL}/host/games`, {
+      headers: hostAuthHeaders()
+    });
     const data = await handleApiResponse(response, 'Failed to fetch host games');
 
     console.log('Host games received:', data);
@@ -2887,54 +2890,62 @@ async function fetchHostGames(hostId) {
 // QUESTION BANK FUNCTIONS (host-level, reusable across games)
 // =============================================================================
 
-async function fetchHostCategories(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/categories`);
+// The question bank belongs to whichever host the header names, so none of
+// these take a host id: there is no id in the URL to leak, and no way to ask
+// for a bank other than your own.
+async function fetchHostCategories() {
+  const response = await fetch(`${API_BASE_URL}/host/categories`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch categories');
 }
 
-async function fetchQuestions(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`);
+async function fetchQuestions() {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch questions');
 }
 
-async function createQuestion(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`, {
+async function createQuestion(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to create question');
 }
 
-async function updateQuestion(hostId, questionId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
+async function updateQuestion(questionId, payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to update question');
 }
 
-async function deleteQuestion(hostId, questionId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
-    method: 'DELETE'
+async function deleteQuestion(questionId) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
+    method: 'DELETE',
+    headers: hostAuthHeaders()
   });
   return handleApiResponse(response, 'Failed to delete question');
 }
 
-async function bulkDeleteQuestions(hostId, questionIds) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk-delete`, {
+async function bulkDeleteQuestions(questionIds) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk-delete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify({ question_ids: questionIds })
   });
   return handleApiResponse(response, 'Failed to delete questions');
 }
 
-async function bulkImportQuestions(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk`, {
+async function bulkImportQuestions(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to import questions');
@@ -3254,7 +3265,9 @@ async function loadSiteAdminGames() {
     // For each host, get their games using existing API
     for (const host of hosts) {
       try {
-        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`);
+        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`, {
+          headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+        });
         if (response.ok) {
           const hostGames = await response.json();
 

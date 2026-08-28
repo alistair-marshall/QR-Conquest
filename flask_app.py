@@ -68,6 +68,31 @@ def request_host_id():
 
     return host_id or None
 
+
+# Endpoints under /api/host serve a host its own data, so the header is the
+# whole of the authorisation: there is no id in the path that could disagree
+# with it, and nothing to guess but the credential itself. An unknown id is
+# answered the same way as a missing one, so the endpoint cannot be used to
+# test whether a host id exists.
+def require_host(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        host_id = request_host_id()
+        if not host_id:
+            return jsonify({'error': 'Host ID required'}), 401
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
+        host = cursor.fetchone()
+        conn.close()
+
+        if not host:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        return f(host_id, *args, **kwargs)
+    return decorated_function
+
 # ==========================================================
 # Word Lists for Game Code Generation
 # ==========================================================
@@ -2619,15 +2644,11 @@ def build_question_row(payload, host_id, existing=None):
             'category': str(category).strip()
         }, None
 
-@app.route('/api/hosts/<host_id>/questions', methods=['GET'])
+@app.route('/api/host/questions', methods=['GET'])
+@require_host
 def get_questions(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     cursor.execute('SELECT * FROM questions WHERE host_id = ? ORDER BY category, text', (host_id,))
     questions = [question_row_to_dict(row) for row in cursor.fetchall()]
@@ -2635,15 +2656,11 @@ def get_questions(host_id):
 
     return jsonify(questions)
 
-@app.route('/api/hosts/<host_id>/categories', methods=['GET'])
+@app.route('/api/host/categories', methods=['GET'])
+@require_host
 def get_host_categories(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     cursor.execute('SELECT DISTINCT category FROM questions WHERE host_id = ? ORDER BY category', (host_id,))
     categories = [row['category'] for row in cursor.fetchall()]
@@ -2651,7 +2668,8 @@ def get_host_categories(host_id):
 
     return jsonify(categories)
 
-@app.route('/api/hosts/<host_id>/questions', methods=['POST'])
+@app.route('/api/host/questions', methods=['POST'])
+@require_host
 def create_question(host_id):
     data = request.json
     if not data:
@@ -2659,11 +2677,6 @@ def create_question(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     row, error = build_question_row(data, host_id)
     if error:
@@ -2685,7 +2698,8 @@ def create_question(host_id):
 
     return jsonify(result), 201
 
-@app.route('/api/hosts/<host_id>/questions/<question_id>', methods=['PUT'])
+@app.route('/api/host/questions/<question_id>', methods=['PUT'])
+@require_host
 def update_question(host_id, question_id):
     data = request.json
     if not data:
@@ -2735,7 +2749,8 @@ def categories_in_running_games(cursor, host_id):
         used.update(json.loads(row['active_categories'] or '[]'))
     return used
 
-@app.route('/api/hosts/<host_id>/questions/<question_id>', methods=['DELETE'])
+@app.route('/api/host/questions/<question_id>', methods=['DELETE'])
+@require_host
 def delete_question(host_id, question_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2758,7 +2773,8 @@ def delete_question(host_id, question_id):
 
     return jsonify({'success': True})
 
-@app.route('/api/hosts/<host_id>/questions/bulk-delete', methods=['POST'])
+@app.route('/api/host/questions/bulk-delete', methods=['POST'])
+@require_host
 def bulk_delete_questions(host_id):
     data = request.json
     if not data or not isinstance(data.get('question_ids'), list) or not data['question_ids']:
@@ -2768,11 +2784,6 @@ def bulk_delete_questions(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     used_categories = categories_in_running_games(cursor, host_id)
 
@@ -2795,7 +2806,8 @@ def bulk_delete_questions(host_id):
         'not_found': len(question_ids) - len(found)
     })
 
-@app.route('/api/hosts/<host_id>/questions/bulk', methods=['POST'])
+@app.route('/api/host/questions/bulk', methods=['POST'])
+@require_host
 def bulk_import_questions(host_id):
     data = request.json
     if not data:
@@ -2803,11 +2815,6 @@ def bulk_import_questions(host_id):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    if not cursor.fetchone():
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
     rows = data.get('questions')
     if rows is None and 'csv' in data:
@@ -3357,33 +3364,12 @@ def delete_game(game_id):
         }
     })
 
-# generate QR code for a host
-@app.route('/api/hosts/<host_id>/qr-code', methods=['GET'])
-@require_site_admin
-def get_host_qr_code(host_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+def list_host_games(host_id):
+    """One host's games, newest and most alive first.
 
-    cursor.execute('SELECT qr_code FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
-
-    if not host:
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
-
-    conn.close()
-
-    base_url = request.host_url.rstrip('/')
-    qr_url = f"{base_url}/?id={host['qr_code']}"
-
-    return jsonify({
-        'qr_code': host['qr_code'],
-        'url': qr_url
-    })
-
-#list all games for a specific host
-@app.route('/api/hosts/<host_id>/games', methods=['GET'])
-def get_host_games(host_id):
+    Shared by the host reading its own list and the site admin reading
+    anyone's, so the two can never drift apart.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -3433,74 +3419,21 @@ def get_host_games(host_id):
 
     return jsonify(games)
 
-# Get host details
-@app.route('/api/hosts/<host_id>', methods=['GET'])
-def get_host(host_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
+# A host's own games, identified by its header credential
+@app.route('/api/host/games', methods=['GET'])
+@require_host
+def get_host_games(host_id):
+    return list_host_games(host_id)
 
-    if not host:
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
 
-    # Count games for this host
-    cursor.execute('SELECT COUNT(*) FROM games WHERE host_id = ?', (host_id,))
-    game_count = cursor.fetchone()[0]
-
-    # Check if expired
-    expired = False
-    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
-        expired = True
-
-    conn.close()
-
-    return jsonify({
-        'id': host['id'],
-        'name': host['name'],
-        'qr_code': host['qr_code'],
-        'expiry_date': host['expiry_date'],
-        'creation_date': host['creation_date'],
-        'game_count': game_count,
-        'expired': expired
-    })
-
-# Regenerate a host's QR code
-@app.route('/api/hosts/<host_id>/regenerate-qr', methods=['POST'])
+# The same list for the site admin, who reads it for every host in turn to
+# build the cross-system games view. The host id here identifies whose games
+# to read; the admin's own bearer token is what authorises the request.
+@app.route('/api/hosts/<host_id>/games', methods=['GET'])
 @require_site_admin
-def regenerate_host_qr(host_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check if host exists
-    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
-    host = cursor.fetchone()
-
-    if not host:
-        conn.close()
-        return jsonify({'error': 'Host not found'}), 404
-
-    # Generate new QR code
-    new_qr = str(uuid.uuid4())
-
-    try:
-        cursor.execute('''
-        UPDATE hosts SET qr_code = ? WHERE id = ?
-        ''', (new_qr, host_id))
-
-        conn.commit()
-    except sqlite3.Error as e:
-        conn.close()
-        return jsonify({'error': f'Database error: {str(e)}'}), 500
-
-    conn.close()
-
-    return jsonify({
-        'id': host_id,
-        'qr_code': new_qr
-    })
+def get_host_games_as_admin(host_id):
+    return list_host_games(host_id)
 
 # Serve the SPA shell, injecting the debug-features flag so the client can
 # decide whether to expose the mobile console and manual GPS entry tools.
@@ -3514,6 +3447,17 @@ def render_index():
             'window.QRC_DEBUG_FEATURES = true;'
         )
     return Response(html, mimetype='text/html')
+
+# Anything under /api that matched no route above is a client error, not a
+# page. Without this the SPA catch-all below answers 200 with the HTML shell,
+# so a client calling a mistyped or withdrawn endpoint gets a page where it
+# expects JSON instead of a clean 404.
+@app.route('/api/', defaults={'path': ''},
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@app.route('/api/<path:path>',
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+def api_not_found(path):
+    return jsonify({'error': 'Not found'}), 404
 
 # Serve static files
 @app.route('/', defaults={'path': ''})

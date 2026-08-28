@@ -591,7 +591,8 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
 - **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
-- **Credentials stay out of URLs**: a host identifies itself on `GET` requests with an `X-Host-ID` header rather than a `?host_id=` query string, which would otherwise be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
+- **Credentials stay out of URLs**: a host identifies itself with an `X-Host-ID` header rather than a `?host_id=` query string or an id in the path, either of which would be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
+- **A host addresses only its own data**: the endpoints a host uses live under `/api/host/...` and carry no id at all - the header names whose question bank or games are being read, so there is no id in the path that could disagree with the credential, and nothing to guess but the credential itself. An unknown host id is refused exactly like a missing one, so the API cannot be used to test whether a host id is real. The remaining `/api/hosts/<host_id>/...` routes are the site admin's, authorised by the admin bearer token, where the id names which record to manage rather than who is asking
 
 ### Data Protection
 - **Input validation**: All API inputs validated
