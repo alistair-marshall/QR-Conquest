@@ -409,7 +409,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game code can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
-- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host passing their own `host_id` gets those fields for their own game
+- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
@@ -591,6 +591,7 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
 - **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
+- **Credentials stay out of URLs**: a host identifies itself on `GET` requests with an `X-Host-ID` header rather than a `?host_id=` query string, which would otherwise be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
 
 ### Data Protection
 - **Input validation**: All API inputs validated

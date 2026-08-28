@@ -121,6 +121,17 @@ function getAuthState() {
   };
 }
 
+// The host id is a credential, so it is sent in a header rather than in the
+// query string, which would leave it in server logs, browser history and the
+// Referer header of anything the page links out to.
+function hostAuthHeaders() {
+  const authState = getAuthState();
+
+  return authState.isHost && authState.hostId
+    ? { 'X-Host-ID': authState.hostId }
+    : {};
+}
+
 // Update authentication state
 function updateAuthState(authData) {
   // Update localStorage for persistent data
@@ -954,7 +965,8 @@ async function fetchPlayerPositions() {
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/games/${appState.gameData.id}/positions?host_id=${encodeURIComponent(authState.hostId)}`
+      `${API_BASE_URL}/games/${appState.gameData.id}/positions`,
+      { headers: hostAuthHeaders() }
     );
 
     if (!response.ok) {
@@ -1001,13 +1013,8 @@ function stopPlayerPositionPolling() {
 // Team rosters and QR codes are only served to the game's own host, so the
 // host identifies itself when reading a game. Players send nothing and get
 // the anonymous view.
-function gameDataUrl(gameId) {
-  const authState = getAuthState();
-  const url = `${API_BASE_URL}/games/${gameId}`;
-
-  return authState.isHost
-    ? `${url}?host_id=${encodeURIComponent(authState.hostId)}`
-    : url;
+function fetchGame(gameId) {
+  return fetch(`${API_BASE_URL}/games/${gameId}`, { headers: hostAuthHeaders() });
 }
 
 // Fetch game data
@@ -1019,7 +1026,7 @@ async function fetchGameData(gameId) {
     let data = null;
 
     try {
-      const response = await fetch(gameDataUrl(gameId));
+      const response = await fetchGame(gameId);
 
       if (response.ok) {
         data = await response.json();
@@ -1082,7 +1089,7 @@ async function fetchGameUpdates() {
 
   try {
     // Fetch complete game data instead of just scores
-    const response = await fetch(gameDataUrl(appState.gameData.id));
+    const response = await fetchGame(appState.gameData.id);
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1254,15 +1261,19 @@ function getAnnouncementRole() {
   return null;
 }
 
-function announcementsUrl() {
+// A host reads its own record of what it has sent, identifying itself in a
+// header; a player reads what has been sent to them.
+function fetchAnnouncementsForRole(role) {
   const authState = getAuthState();
 
-  if (getAnnouncementRole() === 'host') {
-    return `${API_BASE_URL}/games/${appState.gameData.id}/announcements` +
-      `?host_id=${encodeURIComponent(authState.hostId)}`;
+  if (role === 'host') {
+    return fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/announcements`,
+      { headers: hostAuthHeaders() }
+    );
   }
 
-  return `${API_BASE_URL}/players/${authState.playerId}/announcements`;
+  return fetch(`${API_BASE_URL}/players/${authState.playerId}/announcements`);
 }
 
 // Toast anything that arrived while the panel was closed. The first load only
@@ -1293,7 +1304,7 @@ async function fetchAnnouncements() {
   appState.announcements.loading = true;
 
   try {
-    const response = await fetch(announcementsUrl());
+    const response = await fetchAnnouncementsForRole(role);
 
     // The stored host credentials do not own this game: carry on as a player
     // if this device also joined one, and otherwise stop asking

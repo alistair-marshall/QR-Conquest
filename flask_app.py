@@ -50,6 +50,25 @@ def require_site_admin(f):
     return decorated_function
 
 # ==========================================================
+# Host Authentication
+# ==========================================================
+
+# A host id is a bearer credential: whoever holds one can run that host's games.
+# URLs are recorded in places request bodies are not - server and proxy access
+# logs, browser history, and the Referer header sent to any third party the page
+# links out to - so a host identifies itself in this header rather than in a
+# query string. Writes carry their host id in the JSON body, which is not logged.
+HOST_ID_HEADER = 'X-Host-ID'
+
+
+def request_host_id():
+    """The host id the caller is identifying itself with, or None."""
+    host_id = request.headers.get(HOST_ID_HEADER)
+    host_id = host_id.strip() if host_id else ''
+
+    return host_id or None
+
+# ==========================================================
 # Word Lists for Game Code Generation
 # ==========================================================
 
@@ -898,10 +917,11 @@ def update_game_settings(game_id):
 # credential. Game codes are short and guessable, so the anonymous view must
 # carry nothing that could be used or misused by someone who guessed one: no
 # player names or ids, and none of the QR codes that let a device join a team.
-# A host passing their own host_id gets those extra fields for their own game.
+# A host sending its own host id in the X-Host-ID header gets those extra
+# fields for its own game.
 @app.route('/api/games/<game_id>', methods=['GET'])
 def get_game(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1808,7 +1828,7 @@ def update_player_position(player_id):
 # exposed through the shared game payload, so one team can't track another.
 @app.route('/api/games/<game_id>/positions', methods=['GET'])
 def get_player_positions(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
     if not host_id:
         return jsonify({'error': 'Host ID required'}), 400
 
@@ -1952,7 +1972,7 @@ def send_announcement(game_id):
 # The host's own record of what they have already sent
 @app.route('/api/games/<game_id>/announcements', methods=['GET'])
 def get_host_announcements(game_id):
-    host_id = request.args.get('host_id')
+    host_id = request_host_id()
     if not host_id:
         return jsonify({'error': 'Host ID required'}), 400
 
