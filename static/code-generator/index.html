@@ -321,9 +321,18 @@
 
         function generateRandomID() {
             const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+            // Largest multiple of the alphabet size that fits in a byte, so values
+            // at or above it can be discarded to keep every character equally likely
+            const limit = 256 - (256 % characters.length);
+            const bytes = new Uint8Array(11);
             let result = '';
-            for (let i = 0; i < 11; i++) {
-                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            while (result.length < 11) {
+                crypto.getRandomValues(bytes);
+                for (let i = 0; i < bytes.length && result.length < 11; i++) {
+                    if (bytes[i] < limit) {
+                        result += characters.charAt(bytes[i] % characters.length);
+                    }
+                }
             }
             return result;
         }
