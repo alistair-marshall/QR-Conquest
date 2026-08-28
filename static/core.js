@@ -409,7 +409,7 @@ async function handleTeamQR(qrCode, statusData) {
     const teamId = statusData.team_id;
     const gameId = statusData.game_id;
 
-    console.log('Team QR scanned:', teamId, 'Game ID:', gameId);
+    console.log('Team QR scanned:', teamId);
 
     // Helper function to start registration flow
     const startRegistration = async () => {
@@ -1698,7 +1698,7 @@ async function createGame(gameSettings) {
 
     const data = await handleApiResponse(response, 'Failed to create game');
     const gameId = data.game_id;
-    console.log('Game created successfully, game ID:', gameId);
+    console.log('Game created successfully:', gameSettings.name);
 
     // Update authentication state
     updateAuthState({ gameId: gameId });
@@ -1708,7 +1708,7 @@ async function createGame(gameSettings) {
     await fetchGameData(gameId);
 
     // Show success message with settings info
-    let successMessage = `Game created successfully! Game ID: ${gameId}`;
+    let successMessage = `Game "${gameSettings.name}" created successfully!`;
 
     if (gameSettings.auto_start_time) {
       const startTime = new Date(gameSettings.auto_start_time * 1000);

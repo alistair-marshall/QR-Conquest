@@ -97,53 +97,18 @@ def require_host(f):
     return decorated_function
 
 # ==========================================================
-# Word Lists for Game Code Generation
+# Game Identifiers
 # ==========================================================
 
-ADJECTIVES = [
-    'brave', 'calm', 'dark', 'fast', 'green', 'happy', 'jolly', 'kind', 'loud', 'magic',
-    'new', 'orange', 'proud', 'quiet', 'red', 'shy', 'smart', 'strong', 'tall', 'tiny',
-    'vivid', 'wild', 'yellow', 'zealous', 'ancient', 'bold', 'clever', 'daring', 'eager',
-    'fancy', 'gentle', 'honest', 'icy', 'juicy', 'keen', 'lively', 'mighty', 'noble',
-    'polite', 'quick', 'radiant', 'silver', 'tidy', 'unique', 'vibrant', 'witty', 'exotic',
-    'young', 'zesty', 'blue', 'golden', 'royal', 'rustic', 'swift', 'lucky', 'merry', 'prime'
-]
-
-NOUNS = [
-    'apple', 'bear', 'cloud', 'door', 'eagle', 'forest', 'garden', 'hill', 'island', 'jungle',
-    'king', 'lake', 'mountain', 'night', 'ocean', 'planet', 'queen', 'river', 'star', 'tree',
-    'unicorn', 'valley', 'whale', 'xylophone', 'yeti', 'zebra', 'arrow', 'bell', 'castle', 'diamond',
-    'elephant', 'falcon', 'galaxy', 'harbor', 'igloo', 'jewel', 'knight', 'lantern', 'moon', 'ninja',
-    'oasis', 'panda', 'quest', 'rocket', 'sailor', 'tiger', 'umbrella', 'village', 'warrior', 'yacht',
-    'zeppelin', 'dragon', 'phoenix', 'treasure', 'wizard', 'crown', 'carnival', 'banana', 'compass', 'dolphin'
-]
-
-# Helper function to generate game codes - add after the word lists
-def generate_game_code():
-    """Generate a friendly game code using an adjective and a noun"""
-    adjective = random.choice(ADJECTIVES)
-    noun = random.choice(NOUNS)
-    return f"{adjective}-{noun}"
-
-# Helper function to generate a unique game code
-def generate_unique_game_code():
-    """Generate a unique friendly game code that doesn't exist in the database"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Try up to 10 times to generate a unique code
-    for _ in range(10):
-        code = generate_game_code()
-        cursor.execute('SELECT id FROM games WHERE id = ?', (code,))
-        if not cursor.fetchone():
-            conn.close()
-            return code
-
-    # If we couldn't generate a unique code after 10 attempts,
-    # add a random number suffix to ensure uniqueness
-    code = f"{generate_game_code()}-{random.randint(1, 999)}"
-    conn.close()
-    return code
+# A game's id is handed to every player device that scans into it, and it
+# names the game in API paths and on the game socket. Earlier versions used a
+# friendly "adjective-noun" code, which was short enough for anyone outside
+# the game to guess their way into its payload. Games are identified by a
+# random UUID instead; the host-chosen game name is what people read and say
+# out loud, so nothing is lost by the id being unmemorable.
+def generate_game_id():
+    """Generate an unguessable id for a new game"""
+    return str(uuid.uuid4())
 
 
 # ==========================================================
@@ -754,7 +719,7 @@ def create_game():
         conn.close()
         return jsonify({'error': 'Host account has expired'}), 400
 
-    game_id = generate_unique_game_code()
+    game_id = generate_game_id()
 
     # Extract game settings with defaults
     capture_radius = data.get('capture_radius_meters', 15)

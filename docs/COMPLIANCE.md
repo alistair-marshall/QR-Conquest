@@ -57,7 +57,7 @@ assessment. Record them:
   in the product.
 - **No free text from players** beyond their display name.
 - **Announcement text is not broadcast on the game socket**, which anyone
-  knowing a game code could listen to; players fetch it from an endpoint that
+  knowing a game's id could listen to; players fetch it from an endpoint that
   checks who is asking.
 - **Player names and team QR codes are never served anonymously** - only to the
   game's own host.
@@ -136,9 +136,11 @@ the software, not oversights it hides:
 - No automatic retention purge
 - No privacy notice or terms shown in the app
 - No rate limiting on any endpoint
-- Game codes are two dictionary words, so they can be guessed. A guesser sees
-  team names, scores and base locations for that game. They cannot see player
-  names, join a team, or read anything a host sent to players
+- A game's id is a random UUID, so it cannot be guessed, but it is not a
+  secret either: every player device that scans into a game holds it, and it
+  appears in request paths that a server or proxy may log. Anyone who obtains
+  one sees team names, scores and base locations for that game. They cannot
+  see player names, join a team, or read anything a host sent to players
 - Single server, SQLite, no clustering - see "Known Limitations" in the README
 
 ## Documents worth holding
