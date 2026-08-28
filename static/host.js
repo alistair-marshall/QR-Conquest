@@ -3806,6 +3806,7 @@ function renderPlayerRegistrationPage() {
   const container = UIBuilder.createElement('div', { className: 'max-w-md mx-auto py-8' });
 
   const teamId = sessionStorage.getItem('pendingTeamId');
+  const teamQrCode = sessionStorage.getItem('pendingTeamQrCode');
   const pendingJoinGameId = sessionStorage.getItem('pendingJoinGameId');
   const joinMethod = (appState.gameData.settings && appState.gameData.settings.join_method) || 'team_qr';
 
@@ -3962,8 +3963,11 @@ function renderPlayerRegistrationPage() {
     }
 
     if (mode === 'team') {
-      joinTeam(teamId, playerName);
+      // The code scanned to get here proves the player was handed this team's
+      // sheet; without it the server will not take the join
+      joinTeam(teamId, playerName, teamQrCode);
       sessionStorage.removeItem('pendingTeamId');
+      sessionStorage.removeItem('pendingTeamQrCode');
       return;
     }
 
@@ -3992,8 +3996,10 @@ function renderPlayerRegistrationPage() {
   // Cancel button
   const cancelButton = UIBuilder.createButton('Cancel', function() {
     sessionStorage.removeItem('pendingTeamId');
+    sessionStorage.removeItem('pendingTeamQrCode');
     sessionStorage.removeItem('pendingJoinGameId');
     sessionStorage.removeItem('pendingCaptureBaseId');
+    sessionStorage.removeItem('pendingCaptureQrCode');
     navigateTo('landing');
   }, 'mt-4 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full');
   container.appendChild(cancelButton);
