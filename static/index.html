@@ -22,6 +22,10 @@
      route entirely; the server rewrites this with the address configured by
      the ABUSE_CONTACT_EMAIL environment variable or the site admin panel. -->
 <script>window.QRC_ABUSE_CONTACT = "";</script>
+<!-- Live-events WebSocket. Defaults to true; the server rewrites this to false
+     when LIVE_EVENT_SOCKET is switched off, on a host that cannot carry one.
+     Either way the same events reach the app on its poll of the game. -->
+<script>window.QRC_LIVE_EVENT_SOCKET = true;</script>
 <!-- How many days after a game ends before it is deleted. Defaults to the
      server's own default; the server rewrites this with the value the
      GAME_RETENTION_DAYS environment variable actually set, so the privacy

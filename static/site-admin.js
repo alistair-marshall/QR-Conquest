@@ -226,8 +226,13 @@ function renderSiteAdminPanel() {
         const gameListContainer = buildGameListSection();
         contentArea.appendChild(gameListContainer);
 
-        // Trigger games loading if not already loaded/loading
-        if (!appState.siteAdmin.gamesLoaded && !appState.siteAdmin.gamesLoading) {
+        // Trigger games loading if not already loaded/loading. Not after a
+        // failure: loading finishes with a re-render, which rebuilds this
+        // section, which would ask again - a request loop as fast as the
+        // server can refuse, for as long as the tab is open. The error the
+        // section is showing carries a Retry button instead.
+        if (!appState.siteAdmin.gamesLoaded && !appState.siteAdmin.gamesLoading &&
+            !appState.siteAdmin.gamesError) {
             loadSiteAdminGames();
         }
     }
@@ -242,7 +247,9 @@ function renderSiteAdminPanel() {
         contentArea.innerHTML = '';
         contentArea.appendChild(buildSiteSettingsSection());
 
-        if (!appState.siteAdmin.settingsLoaded && !appState.siteAdmin.settingsLoading) {
+        // Not after a failure - see the note in showGamesSection
+        if (!appState.siteAdmin.settingsLoaded && !appState.siteAdmin.settingsLoading &&
+            !appState.siteAdmin.settingsError) {
             loadSiteAdminSettings();
         }
     }
@@ -655,7 +662,7 @@ function buildHostListSection() {
     hostListContainer.appendChild(UIBuilder.createLoadingDisplay('Loading hosts...'));
   } else if (appState.siteAdmin.hostsError) {
     // Show error state
-    hostListContainer.appendChild(UIBuilder.createErrorDisplay(appState.siteAdmin.hostsError, () => renderApp()));
+    hostListContainer.appendChild(UIBuilder.createErrorDisplay(appState.siteAdmin.hostsError, () => refreshSiteAdminHosts()));
   } else if (appState.siteAdmin.hosts.length > 0) {
     // Show hosts table
     buildHostsTable(hostListContainer, appState.siteAdmin.hosts);

@@ -65,6 +65,51 @@ const appState = {
 // API endpoint
 const API_BASE_URL = '/api';
 
+// How long to wait for an answer before giving up on a request.
+//
+// fetch() waits for as long as the server holds the connection open, which is
+// forever as far as anyone looking at the screen is concerned: a deployment
+// that serves one request at a time (uWSGI with a single worker, which is what
+// a small host gives you) can leave a request queued behind a busy game for
+// minutes, and the app sat on a loading spinner with nothing to say for itself.
+// Long enough for a slow phone on a busy server, short enough to report the
+// problem rather than hang on it.
+const API_TIMEOUT_MS = 20000;
+
+// Whole-game downloads and bulk question uploads are legitimately slower, so
+// they pass this instead
+const API_LONG_TIMEOUT_MS = 60000;
+
+// fetch() with a deadline. Same signature, plus an optional timeoutMs; a
+// request that runs out of time rejects with a message worth showing a user.
+async function apiFetch(url, options = {}) {
+  const { timeoutMs = API_TIMEOUT_MS, ...fetchOptions } = options;
+
+  // Ancient browsers without AbortController still get the request, just
+  // without the deadline
+  if (typeof AbortController === 'undefined') {
+    return window.fetch(url, fetchOptions);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(function () {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await window.fetch(url, Object.assign({}, fetchOptions, {
+      signal: controller.signal
+    }));
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('The server took too long to answer. Check your connection and try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Enhanced API error handling function
 async function handleApiResponse(response, errorMessage) {
   if (!response.ok) {
@@ -270,7 +315,7 @@ async function handleQRCode(qrCode, context = 'scan') {
       setLoading(true);
       
       // Check if this QR code is already assigned
-      const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
+      const statusResponse = await apiFetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
       
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
@@ -320,7 +365,7 @@ async function handleQRCode(qrCode, context = 'scan') {
     setLoading(true);
 
     // Check what this QR code corresponds to
-    const statusResponse = await fetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
+    const statusResponse = await apiFetch(`${API_BASE_URL}/qr-codes/${qrCode}/status`);
 
     if (!statusResponse.ok) {
       throw new Error(`Unable to verify QR code. Please check your connection and try again.`);
@@ -485,7 +530,7 @@ async function handleTeamQR(qrCode, statusData) {
     console.log('User in different game, checking previous game status');
     
     try {
-      const previousGameResponse = await fetch(`${API_BASE_URL}/games/${authState.gameId}`);
+      const previousGameResponse = await apiFetch(`${API_BASE_URL}/games/${authState.gameId}`);
       
       // Previous game deleted/not found or ended - auto-switch
       if (!previousGameResponse.ok) {
@@ -648,7 +693,7 @@ function leaveScannerPage() {
 // Handle a base scan by a player who is not yet on a team.
 // What happens depends on the game's join method setting.
 async function handleBaseScanWithoutTeam(baseId, gameId, qrCode) {
-  const response = await fetch(`${API_BASE_URL}/games/${gameId}`);
+  const response = await apiFetch(`${API_BASE_URL}/games/${gameId}`);
   if (!response.ok) {
     throw new Error('Unable to load game information. Please try again.');
   }
@@ -975,7 +1020,7 @@ async function reportPositionToServer() {
   lastPositionReport = now;
 
   try {
-    await fetch(`${API_BASE_URL}/players/${authState.playerId}/position`, {
+    await apiFetch(`${API_BASE_URL}/players/${authState.playerId}/position`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1001,7 +1046,7 @@ async function fetchPlayerPositions() {
   if (!authState.isHost || !appState.gameData.id) return;
 
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/games/${appState.gameData.id}/positions`,
       { headers: hostAuthHeaders() }
     );
@@ -1050,8 +1095,36 @@ function stopPlayerPositionPolling() {
 // Team rosters and QR codes are only served to the game's own host, so the
 // host identifies itself when reading a game. Players send nothing and get
 // the anonymous view.
-function fetchGame(gameId) {
-  return fetch(`${API_BASE_URL}/games/${gameId}`, { headers: hostAuthHeaders() });
+function fetchGame(gameId, options = {}) {
+  // The poll asks for the events it has not seen; everything else just wants
+  // the game, and asking without a cursor returns none
+  const query = options.eventsSince != null
+    ? `?events_since=${encodeURIComponent(options.eventsSince)}`
+    : '';
+
+  return apiFetch(`${API_BASE_URL}/games/${gameId}${query}`, { headers: hostAuthHeaders() });
+}
+
+// The last event this device has acted on, and the game it belongs to. Both
+// routes an event can arrive by - the socket and the poll - move this forward,
+// which is what stops one event being announced twice when both are working.
+let lastGameEventSeq = null;
+let gameEventSeqGameId = null;
+
+function gameEventCursorFor(gameId) {
+  if (gameEventSeqGameId !== gameId) {
+    // A different game: nothing seen here yet, so start from where it is now
+    gameEventSeqGameId = gameId;
+    lastGameEventSeq = null;
+  }
+
+  return lastGameEventSeq;
+}
+
+function noteGameEventSeq(seq) {
+  if (typeof seq === 'number' && (lastGameEventSeq === null || seq > lastGameEventSeq)) {
+    lastGameEventSeq = seq;
+  }
 }
 
 // Fetch game data
@@ -1125,8 +1198,11 @@ async function fetchGameUpdates() {
   if (!appState.gameData.id) return;
 
   try {
-    // Fetch complete game data instead of just scores
-    const response = await fetchGame(appState.gameData.id);
+    // Fetch complete game data instead of just scores, along with anything
+    // that has happened since the last poll
+    const gameId = appState.gameData.id;
+    const eventsSince = gameEventCursorFor(gameId);
+    const response = await fetchGame(gameId, { eventsSince });
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1211,6 +1287,12 @@ async function fetchGameUpdates() {
         window.renderApp();
       }
     }
+
+    // Say what happened while this was in flight - a capture, a quiz outcome,
+    // a base collected. The socket announces these the moment they happen
+    // where it works; this is the same list, up to one poll later, and is
+    // what a player hears on a deployment that cannot carry a socket
+    applyPolledGameEvents(gameId, gameData.events, gameData.event_cursor);
   } catch (err) {
     console.error('Error fetching game updates:', err);
     // Don't show error notification for background updates to avoid spam
@@ -1315,13 +1397,13 @@ function fetchAnnouncementsForRole(role) {
   const authState = getAuthState();
 
   if (role === 'host') {
-    return fetch(
+    return apiFetch(
       `${API_BASE_URL}/games/${appState.gameData.id}/announcements`,
       { headers: hostAuthHeaders() }
     );
   }
 
-  return fetch(`${API_BASE_URL}/players/${authState.playerId}/announcements`);
+  return apiFetch(`${API_BASE_URL}/players/${authState.playerId}/announcements`);
 }
 
 // Toast anything that arrived while the panel was closed. The first load only
@@ -1440,7 +1522,7 @@ async function sendAnnouncement(body) {
   const authState = getAuthState();
 
   try {
-    const response = await fetch(`${API_BASE_URL}/games/${appState.gameData.id}/announcements`, {
+    const response = await apiFetch(`${API_BASE_URL}/games/${appState.gameData.id}/announcements`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ host_id: authState.hostId, body: text })
@@ -1478,7 +1560,7 @@ async function deleteAnnouncement(announcementId) {
   const authState = getAuthState();
 
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/games/${appState.gameData.id}/announcements/${announcementId}`,
       {
         method: 'DELETE',
@@ -1525,7 +1607,7 @@ async function markAnnouncementsRead() {
   }
 
   try {
-    await fetch(`${API_BASE_URL}/players/${getAuthState().playerId}/announcements/read`, {
+    await apiFetch(`${API_BASE_URL}/players/${getAuthState().playerId}/announcements/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ read_through: readThrough })
@@ -1571,8 +1653,24 @@ let gameSocketGameId = null;
 let gameSocketReconnectTimer = null;
 let gameSocketReconnectDelay = 1000;
 
+// A socket that has never once opened on this page load is treated as a
+// socket this deployment cannot carry - uWSGI hosts cannot, and there the
+// attempt fails, retries, and fails again for as long as the page is open,
+// on a server that may be answering one request at a time. Give up after a
+// few tries and let the poll carry the events; it delivers the same ones.
+let gameSocketEverConnected = false;
+let gameSocketFailedAttempts = 0;
+let gameSocketUnavailable = false;
+const GAME_SOCKET_MAX_FAILED_ATTEMPTS = 4;
+
+// Switched off by the server on a deployment where the socket cannot work
+function liveEventSocketEnabled() {
+  return window.QRC_LIVE_EVENT_SOCKET !== false;
+}
+
 function connectGameSocket(gameId) {
   if (!gameId || !('WebSocket' in window)) return;
+  if (!liveEventSocketEnabled() || gameSocketUnavailable) return;
 
   // Already connected (or connecting) to this game
   if (gameSocket && gameSocketGameId === gameId &&
@@ -1590,11 +1688,18 @@ function connectGameSocket(gameId) {
   socket.onopen = function () {
     console.log('Game event socket connected for game:', gameId);
     gameSocketReconnectDelay = 1000;
+    gameSocketEverConnected = true;
+    gameSocketFailedAttempts = 0;
   };
 
   socket.onmessage = function (event) {
     try {
-      handleGameSocketMessage(JSON.parse(event.data));
+      const message = JSON.parse(event.data);
+
+      // A poll may have carried this one already
+      if (claimGameEvent(gameId, message.seq)) {
+        handleGameEvent(message);
+      }
     } catch (err) {
       console.warn('Ignoring malformed game event:', err);
     }
@@ -1604,6 +1709,19 @@ function connectGameSocket(gameId) {
     if (gameSocket !== socket) return; // Superseded by a newer connection
 
     gameSocket = null;
+
+    if (!gameSocketEverConnected) {
+      gameSocketFailedAttempts += 1;
+
+      if (gameSocketFailedAttempts >= GAME_SOCKET_MAX_FAILED_ATTEMPTS) {
+        gameSocketUnavailable = true;
+        gameSocketGameId = null;
+        console.log('Game event socket never connected - this deployment ' +
+                    'looks like one that cannot carry it. Falling back to ' +
+                    'the game poll, which carries the same events.');
+        return;
+      }
+    }
 
     // Reconnect with backoff while this game is still being watched
     if (gameSocketGameId === gameId) {
@@ -1653,7 +1771,17 @@ const QUIZ_OUTCOME_VERBS = {
   reinforced: 'reinforced'
 };
 
-function handleGameSocketMessage(message) {
+// One game event, however it reached this device. refreshGame is false when
+// it came in on a poll, which has just refreshed the game itself - asking for
+// it again per event would turn a busy minute into a burst of requests.
+function handleGameEvent(message, options = {}) {
+  const refreshGame = options.refreshGame !== false;
+  const refresh = function () {
+    if (refreshGame) {
+      fetchGameUpdates();
+    }
+  };
+
   if (message.type === 'base_captured') {
     console.log('Base captured event:', message);
 
@@ -1669,7 +1797,7 @@ function handleGameSocketMessage(message) {
     }
 
     // Refresh scores and base ownership straight away
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'base_state_changed') {
     console.log('Base state changed event:', message);
 
@@ -1685,12 +1813,12 @@ function handleGameSocketMessage(message) {
       );
     }
 
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'bonus_round_started') {
     console.log('Bonus round started event:', message);
 
     // fetchGameUpdates detects the status change and shows the announcement
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'base_collected') {
     console.log('Base collected event:', message);
 
@@ -1705,13 +1833,13 @@ function handleGameSocketMessage(message) {
       );
     }
 
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'team_deleted') {
     console.log('Team deleted event:', message);
 
     // The team had no players, so nobody is being kicked out - just drop it
     // from the scoreboard everyone is looking at
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'announcement_posted') {
     console.log('Announcement posted event:', message);
 
@@ -1744,8 +1872,36 @@ function handleGameSocketMessage(message) {
       }
     }
 
-    fetchGameUpdates();
+    refresh();
   }
+}
+
+
+// True when this event has not been acted on yet, and claims it if so. Both
+// the socket and the poll can carry the same event; whichever arrives first
+// is the one that announces it.
+function claimGameEvent(gameId, seq) {
+  const cursor = gameEventCursorFor(gameId);
+
+  if (typeof seq !== 'number') return true;
+  if (cursor !== null && seq <= cursor) return false;
+
+  noteGameEventSeq(seq);
+  return true;
+}
+
+// Events a poll of the game came back with, oldest first
+function applyPolledGameEvents(gameId, events, cursor) {
+  if (Array.isArray(events)) {
+    events.forEach(function (event) {
+      if (claimGameEvent(gameId, event.seq)) {
+        handleGameEvent(event, { refreshGame: false });
+      }
+    });
+  }
+
+  // Move past anything the server left out as too old to be news
+  noteGameEventSeq(cursor);
 }
 
 // =============================================================================
@@ -1791,7 +1947,7 @@ async function createGame(gameSettings) {
       requestBody.bonus_points_per_base = gameSettings.bonus_points_per_base;
     }
 
-    const response = await fetch(API_BASE_URL + '/games', {
+    const response = await apiFetch(API_BASE_URL + '/games', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1865,7 +2021,7 @@ async function startGame() {
       throw new Error('Only the game host can start the game.');
     }
 
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/start', {
+    const response = await apiFetch(API_BASE_URL + '/games/' + appState.gameData.id + '/start', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1913,7 +2069,7 @@ async function endGame() {
       throw new Error('Only the game host can end the game.');
     }
 
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/end', {
+    const response = await apiFetch(API_BASE_URL + '/games/' + appState.gameData.id + '/end', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1960,7 +2116,7 @@ async function deleteGame() {
       throw new Error('Only the game host can delete the game.');
     }
 
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id, {
+    const response = await apiFetch(API_BASE_URL + '/games/' + appState.gameData.id, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
@@ -2023,7 +2179,7 @@ async function joinTeam(teamId, teamQrCode) {
       console.log('Including existing player ID for team change:', authState.playerId);
     }
 
-    const response = await fetch(API_BASE_URL + '/teams/' + teamId + '/join', {
+    const response = await apiFetch(API_BASE_URL + '/teams/' + teamId + '/join', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2083,7 +2239,7 @@ async function joinGameAuto(gameId) {
       requestBody.player_id = authState.playerId;
     }
 
-    const response = await fetch(API_BASE_URL + '/games/' + gameId + '/join', {
+    const response = await apiFetch(API_BASE_URL + '/games/' + gameId + '/join', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2226,7 +2382,7 @@ async function captureBase(baseId, qrCode) {
     // arrive before the HTTP response does
     lastOwnCapture = { baseId: baseId, time: Date.now() };
 
-    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
+    const response = await apiFetch(API_BASE_URL + '/bases/' + baseId + '/capture', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2325,7 +2481,7 @@ async function collectBase(baseId, qrCode) {
     // can arrive before the HTTP response does
     lastOwnCollect = { baseId: baseId, time: Date.now() };
 
-    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/collect', {
+    const response = await apiFetch(API_BASE_URL + '/bases/' + baseId + '/collect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2373,7 +2529,7 @@ async function returnBaseAsHost(baseId) {
   try {
     setLoading(true);
 
-    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/return', {
+    const response = await apiFetch(API_BASE_URL + '/bases/' + baseId + '/return', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2431,7 +2587,7 @@ async function startBonusRound() {
       throw new Error('Only the game host can start the bonus round.');
     }
 
-    const response = await fetch(API_BASE_URL + '/games/' + appState.gameData.id + '/bonus/start', {
+    const response = await apiFetch(API_BASE_URL + '/games/' + appState.gameData.id + '/bonus/start', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2514,7 +2670,7 @@ async function startQuizSession(baseId, qrCode) {
   try {
     setLoading(true);
 
-    const response = await fetch(API_BASE_URL + '/bases/' + baseId + '/session/start', {
+    const response = await apiFetch(API_BASE_URL + '/bases/' + baseId + '/session/start', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2592,7 +2748,7 @@ async function submitQuizAnswer(optionId) {
     // arrive before the HTTP response does
     lastOwnQuizAction = { baseId: session.baseId, time: Date.now() };
 
-    const response = await fetch(API_BASE_URL + '/sessions/' + session.sessionId + '/answer', {
+    const response = await apiFetch(API_BASE_URL + '/sessions/' + session.sessionId + '/answer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2686,7 +2842,7 @@ async function createTeam(qrId, name, color) {
       throw new Error('Host authentication required to create teams.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/games/${authState.gameId}/teams`, {
+    const response = await apiFetch(`${API_BASE_URL}/games/${authState.gameId}/teams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2738,7 +2894,7 @@ async function updateTeam(teamId, name, color) {
       throw new Error('Host authentication required to update teams.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/teams/${teamId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -2781,7 +2937,7 @@ async function deleteTeam(teamId) {
       throw new Error('Host authentication required to delete teams.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/teams/${teamId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/teams/${teamId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
@@ -2826,7 +2982,7 @@ async function createBase(qrId, name, latitude, longitude) {
       throw new Error('Host authentication required to create bases.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/games/${authState.gameId}/bases`, {
+    const response = await apiFetch(`${API_BASE_URL}/games/${authState.gameId}/bases`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2879,7 +3035,7 @@ async function updateBase(baseId, name, latitude, longitude) {
       throw new Error('Host authentication required to update bases.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/bases/${baseId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/bases/${baseId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -2924,7 +3080,7 @@ async function deleteBase(baseId, deletedAt) {
       throw new Error('Host authentication required to delete bases.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/bases/${baseId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/bases/${baseId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
@@ -2971,7 +3127,7 @@ async function restoreBase(baseId, qrCode) {
       throw new Error('Host authentication required to restore bases.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/bases/${baseId}/restore`, {
+    const response = await apiFetch(`${API_BASE_URL}/bases/${baseId}/restore`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -3019,7 +3175,7 @@ async function fetchHostGames() {
   try {
     console.log('Fetching games for the signed-in host');
 
-    const response = await fetch(`${API_BASE_URL}/host/games`, {
+    const response = await apiFetch(`${API_BASE_URL}/host/games`, {
       headers: hostAuthHeaders()
     });
     const data = await handleApiResponse(response, 'Failed to fetch host games');
@@ -3044,21 +3200,21 @@ async function fetchHostGames() {
 // these take a host id: there is no id in the URL to leak, and no way to ask
 // for a bank other than your own.
 async function fetchHostCategories() {
-  const response = await fetch(`${API_BASE_URL}/host/categories`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/categories`, {
     headers: hostAuthHeaders()
   });
   return handleApiResponse(response, 'Failed to fetch categories');
 }
 
 async function fetchQuestions() {
-  const response = await fetch(`${API_BASE_URL}/host/questions`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions`, {
     headers: hostAuthHeaders()
   });
   return handleApiResponse(response, 'Failed to fetch questions');
 }
 
 async function createQuestion(payload) {
-  const response = await fetch(`${API_BASE_URL}/host/questions`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
@@ -3067,7 +3223,7 @@ async function createQuestion(payload) {
 }
 
 async function updateQuestion(questionId, payload) {
-  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions/${questionId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
@@ -3076,7 +3232,7 @@ async function updateQuestion(questionId, payload) {
 }
 
 async function deleteQuestion(questionId) {
-  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions/${questionId}`, {
     method: 'DELETE',
     headers: hostAuthHeaders()
   });
@@ -3084,7 +3240,7 @@ async function deleteQuestion(questionId) {
 }
 
 async function bulkDeleteQuestions(questionIds) {
-  const response = await fetch(`${API_BASE_URL}/host/questions/bulk-delete`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions/bulk-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify({ question_ids: questionIds })
@@ -3093,10 +3249,11 @@ async function bulkDeleteQuestions(questionIds) {
 }
 
 async function bulkImportQuestions(payload) {
-  const response = await fetch(`${API_BASE_URL}/host/questions/bulk`, {
+  const response = await apiFetch(`${API_BASE_URL}/host/questions/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    timeoutMs: API_LONG_TIMEOUT_MS
   });
   return handleApiResponse(response, 'Failed to import questions');
 }
@@ -3111,7 +3268,7 @@ async function authenticateSiteAdmin(password) {
     setLoading(true);
 
     // Test authentication with a request to the hosts endpoint
-    const response = await fetch(`${API_BASE_URL}/hosts`, {
+    const response = await apiFetch(`${API_BASE_URL}/hosts`, {
       headers: {
         'Authorization': `Bearer ${password}`
       }
@@ -3125,6 +3282,8 @@ async function authenticateSiteAdmin(password) {
       }
     }
 
+    const hosts = await response.json();
+
     // Only store the verified token in memory (not in localStorage for security)
     appState.siteAdmin.token = password;
     appState.siteAdmin.isAuthenticated = true;
@@ -3134,8 +3293,12 @@ async function authenticateSiteAdmin(password) {
       window.showNotification('Site admin authenticated successfully', 'success');
     }
 
-    // Clear any existing admin data to force fresh load
+    // Drop anything left from a previous session, then keep the host list this
+    // request already carries: the panel opens on it, and asking for the very
+    // same list again is a round trip an admin waits through for nothing
     clearSiteAdminData();
+    appState.siteAdmin.hosts = hosts;
+    appState.siteAdmin.hostsLoaded = true;
 
     return true;
   } catch (err) {
@@ -3154,42 +3317,32 @@ async function authenticateSiteAdmin(password) {
 
 
 // Site admin host management functions
+//
+// No whole-page loading state: the host list has its own, and covering the
+// panel with the full-screen spinner is what left an admin looking at a bare
+// "Loading..." with no way back if the request never came home
 async function fetchHosts() {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
     throw new Error('Admin authentication required to fetch hosts.');
   }
 
-  try {
-    setLoading(true);
-
-    const response = await fetch(`${API_BASE_URL}/hosts`, {
-      headers: {
-        'Authorization': `Bearer ${appState.siteAdmin.token}`
-      }
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        // Reset admin auth if unauthorized
-        appState.siteAdmin.isAuthenticated = false;
-        appState.siteAdmin.token = null;
-        throw new Error('Admin session expired. Please login again.');
-      }
-      throw new Error('Unable to load hosts. Please try again.');
+  const response = await apiFetch(`${API_BASE_URL}/hosts`, {
+    headers: {
+      'Authorization': `Bearer ${appState.siteAdmin.token}`
     }
+  });
 
-    const hosts = await response.json();
-    return hosts;
-  } catch (err) {
-    console.error('Error fetching hosts:', err);
-    const userMessage = err.message || 'Unable to load hosts. Please try again.';
-    if (window.showNotification) {
-      window.showNotification(userMessage, 'error');
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Reset admin auth if unauthorized
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
     }
-    throw err;
-  } finally {
-    setLoading(false);
+    throw new Error('Unable to load hosts. Please try again.');
   }
+
+  return response.json();
 }
 
 async function createHost(hostData) {
@@ -3200,7 +3353,7 @@ async function createHost(hostData) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/hosts`, {
+    const response = await apiFetch(`${API_BASE_URL}/hosts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3248,7 +3401,7 @@ async function updateHost(hostId, hostData) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/hosts/${hostId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -3296,7 +3449,7 @@ async function deleteHost(hostId) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/hosts/${hostId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${appState.siteAdmin.token}`
@@ -3351,7 +3504,7 @@ async function rotateHostCredentials(hostId) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/rotate-credentials`, {
+    const response = await apiFetch(`${API_BASE_URL}/hosts/${hostId}/rotate-credentials`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${appState.siteAdmin.token}`
@@ -3440,7 +3593,7 @@ async function fetchSiteSettings() {
     throw new Error('Admin authentication required to read site settings.');
   }
 
-  const response = await fetch(`${API_BASE_URL}/site-settings`, {
+  const response = await apiFetch(`${API_BASE_URL}/site-settings`, {
     headers: {
       'Authorization': `Bearer ${appState.siteAdmin.token}`
     }
@@ -3465,7 +3618,7 @@ async function saveAbuseContactEmail(abuseContactEmail) {
     throw new Error('Admin authentication required to change site settings.');
   }
 
-  const response = await fetch(`${API_BASE_URL}/site-settings`, {
+  const response = await apiFetch(`${API_BASE_URL}/site-settings`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -3530,6 +3683,35 @@ function refreshSiteAdminHosts() {
   loadSiteAdminHosts();
 }
 
+// Every game in the system, in one request. The admin panel used to build
+// this list itself - the hosts, then each host's games, then the full payload
+// of every game in turn just to count its teams, bases and players - which is
+// dozens of requests against a server that may only answer one at a time, and
+// left the panel loading for as long as that took.
+async function fetchAdminGames() {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to fetch games.');
+  }
+
+  const response = await apiFetch(`${API_BASE_URL}/admin/games`, {
+    headers: {
+      'Authorization': `Bearer ${appState.siteAdmin.token}`
+    }
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Reset admin auth if unauthorized
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+    throw new Error('Unable to load games. Please try again.');
+  }
+
+  return response.json();
+}
+
 async function loadSiteAdminGames() {
   // Prevent duplicate loading
   if (appState.siteAdmin.gamesLoading || appState.siteAdmin.gamesLoaded) {
@@ -3545,75 +3727,9 @@ async function loadSiteAdminGames() {
       window.renderApp();
     }
 
-    // First, get all hosts to get their games
-    const hosts = await fetchHosts();
-
-    let allGames = [];
-
-    // For each host, get their games using existing API
-    for (const host of hosts) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`, {
-          headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
-        });
-        if (response.ok) {
-          const hostGames = await response.json();
-
-          // Add host info to each game
-          const gamesWithHost = hostGames.map(game => ({
-            ...game,
-            host_id: host.id,
-            host_name: host.name,
-            host_qr_code: host.qr_code
-          }));
-
-          allGames = allGames.concat(gamesWithHost);
-        }
-      } catch (error) {
-        console.warn(`Failed to load games for host ${host.name}:`, error);
-      }
-    }
-
-    // For each game, get detailed info to get base/team/player counts
-    for (let i = 0; i < allGames.length; i++) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/games/${allGames[i].id}`);
-        if (response.ok) {
-          const gameDetails = await response.json();
-          allGames[i].bases_count = gameDetails.bases ? gameDetails.bases.length : 0;
-          allGames[i].teams_count = gameDetails.teams ? gameDetails.teams.length : 0;
-
-          // Count total players across all teams
-          let totalPlayers = 0;
-          if (gameDetails.teams) {
-            totalPlayers = gameDetails.teams.reduce((sum, team) => sum + (team.playerCount || 0), 0);
-          }
-          allGames[i].players_count = totalPlayers;
-        }
-      } catch (error) {
-        console.warn(`Failed to load details for game ${allGames[i].id}:`, error);
-        // Set defaults if we can't get details
-        allGames[i].bases_count = 0;
-        allGames[i].teams_count = 0;
-        allGames[i].players_count = 0;
-      }
-    }
-
-    // Sort games by status priority and start time
-    allGames.sort((a, b) => {
-      const statusPriority = { 'active': 1, 'setup': 2, 'ended': 3 };
-      const aPriority = statusPriority[a.status] || 4;
-      const bPriority = statusPriority[b.status] || 4;
-
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority;
-      }
-
-      // If same status, sort by start time (most recent first)
-      return (b.start_time || 0) - (a.start_time || 0);
-    });
-
-    appState.siteAdmin.games = allGames;
+    // The server sorts them: live games first, then the ones still being set
+    // up, then the ended ones, most recently started first within each
+    appState.siteAdmin.games = await fetchAdminGames();
     appState.siteAdmin.gamesLoaded = true;
     appState.siteAdmin.gamesError = null;
   } catch (error) {
@@ -3646,7 +3762,7 @@ async function completeGameAsAdmin(game) {
     setLoading(true);
 
     // Use existing end game API, passing the host_id from the game
-    const response = await fetch(`${API_BASE_URL}/games/${game.id}/end`, {
+    const response = await apiFetch(`${API_BASE_URL}/games/${game.id}/end`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -3688,7 +3804,7 @@ async function deleteGameAsAdmin(game) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/games/${game.id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/games/${game.id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -3768,8 +3884,9 @@ async function exportGameAsAdmin(game) {
   try {
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/games/${game.id}/export`, {
-      headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+    const response = await apiFetch(`${API_BASE_URL}/games/${game.id}/export`, {
+      headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` },
+      timeoutMs: API_LONG_TIMEOUT_MS
     });
 
     if (!response.ok) {
