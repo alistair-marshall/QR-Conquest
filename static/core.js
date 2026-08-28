@@ -3598,6 +3598,108 @@ async function deleteGameAsAdmin(game) {
 }
 
 // =============================================================================
+// RETENTION AND GAME EXPORT
+// =============================================================================
+
+// A game is deleted for good once it has been over for the deployment's
+// retention window, so the game lists say when that will be rather than
+// leaving people to know the rule. Null until the game ends - the clock
+// starts then.
+function formatPurgeDate(purgeAfter) {
+  if (!purgeAfter) return null;
+
+  return new Date(purgeAfter * 1000).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric'
+  });
+}
+
+// "Deletes in 12 days (14 Sep 2026)", or the past-tense version for a game
+// the sweeper has not got to yet
+function describePurge(purgeAfter) {
+  const date = formatPurgeDate(purgeAfter);
+  if (!date) return null;
+
+  const days = Math.ceil((purgeAfter * 1000 - Date.now()) / 86400000);
+
+  if (days <= 0) return `Due for deletion (${date})`;
+  if (days === 1) return `Deletes tomorrow (${date})`;
+
+  return `Deletes in ${days} days (${date})`;
+}
+
+// Download the whole record of one game as a JSON file.
+//
+// The export is the site admin's tool for getting a game's record out before
+// the purge takes it, and for answering a complaint or a subject access
+// request afterwards. It carries the admin bearer token, so it cannot be a
+// plain link - the file comes back through fetch and is saved from a blob.
+async function exportGameAsAdmin(game) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to export games.');
+  }
+
+  let objectUrl = null;
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/games/${game.id}/export`, {
+      headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+    });
+
+    if (!response.ok) {
+      // The error body is JSON even though the success body is a file
+      let message = `Failed to export game: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          message = errorData.error;
+        }
+      } catch (parseError) {
+        // No JSON body - keep the status-based message
+      }
+      throw new Error(message);
+    }
+
+    // The server names the file; fall back to naming it here if a proxy has
+    // stripped the header
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `qr-conquest-game-${game.id}.json`;
+
+    const blob = await response.blob();
+    objectUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (window.showNotification) {
+      window.showNotification(`Exported "${game.name}" to ${filename}`, 'success');
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error exporting game:', err);
+    const userMessage = err.message || 'Unable to export game. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    if (objectUrl) {
+      // Revoked on a later tick: some browsers cancel a download that is
+      // still starting if the blob it points at is released synchronously
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    }
+    setLoading(false);
+  }
+}
+
+// =============================================================================
 // STATE MANAGEMENT FUNCTIONS
 // =============================================================================
 

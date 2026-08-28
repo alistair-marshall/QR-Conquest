@@ -1065,6 +1065,19 @@ async function loadHostGames() {
 
         gameCard.appendChild(gameStats);
 
+        // Finished games are deleted automatically once the retention window
+        // is up. A host cannot stop that or take a copy - only a site
+        // administrator can export a game - so the card says when, in time
+        // for them to ask
+        const purgeNote = describePurge(game.purge_after);
+        if (purgeNote) {
+          const purgeLine = UIBuilder.createElement('div', {
+            className: 'text-xs text-gray-500 mb-3',
+            textContent: purgeNote
+          });
+          gameCard.appendChild(purgeLine);
+        }
+
         // Action button
         const actionButton = UIBuilder.createElement('div');
 
