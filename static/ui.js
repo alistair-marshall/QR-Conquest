@@ -2040,6 +2040,14 @@ function renderApp() {
     copyright.textContent = 'QR Conquest © 2025';
     footerContent.appendChild(copyright);
 
+    const footerLinks = document.createElement('div');
+    footerLinks.className = 'flex items-center gap-4';
+
+    // Only shown when this deployment has published a contact address
+    if (getAbuseContact()) {
+      footerLinks.appendChild(createAbuseReportLink('text-gray-500 hover:text-gray-700 text-xs underline'));
+    }
+
     const adminLink = document.createElement('a');
     adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
     adminLink.textContent = 'Site Administration';
@@ -2048,7 +2056,9 @@ function renderApp() {
       e.preventDefault();
       navigateTo('siteAdminLogin');
     });
-    footerContent.appendChild(adminLink);
+    footerLinks.appendChild(adminLink);
+
+    footerContent.appendChild(footerLinks);
 
     footer.appendChild(footerContent);
     newContent.appendChild(footer);
@@ -3246,6 +3256,12 @@ function showAnnouncementPanel() {
 
   if (isHost) {
     content.appendChild(buildAnnouncementComposer());
+  } else if (getAbuseContact()) {
+    // Players encounter the host's words here, so the reporting route sits
+    // next to them rather than only in the footer
+    const reportRow = UIBuilder.createElement('div', { className: 'mt-3 text-right' });
+    reportRow.appendChild(createAbuseReportLink('text-xs text-gray-500 hover:text-gray-700 underline'));
+    content.appendChild(reportRow);
   }
 
   announcementModalRef = UIBuilder.createModal({
@@ -3287,6 +3303,107 @@ function refreshAnnouncementPanel() {
   markAnnouncementsRead();
 }
 
+
+
+// =============================================================================
+// ABUSE REPORTING
+// =============================================================================
+
+// The site administrator's contact address, injected into the page shell by
+// the server (see render_index in flask_app.py). Empty means this deployment
+// has not published a reporting route, and nothing about reporting is shown.
+function getAbuseContact() {
+  const contact = window.QRC_ABUSE_CONTACT;
+  return typeof contact === 'string' && contact.trim() ? contact.trim() : null;
+}
+
+// Pre-fill what the administrator will need to find the content again: the
+// game it was in, and when the report was made. Reports arrive by email, so
+// there is nothing to look up on this end afterwards.
+function buildAbuseReportMailto(contact) {
+  const game = appState.gameData || {};
+  const bodyLines = [
+    'What happened:',
+    '',
+    '',
+    'Where you saw it (a message from the host, a player name, something else):',
+    '',
+    '',
+    '---',
+    'Game: ' + (game.name || 'not in a game'),
+    'Game ID: ' + (game.id || 'n/a'),
+    'Reported: ' + new Date().toLocaleString()
+  ];
+
+  return 'mailto:' + contact +
+    '?subject=' + encodeURIComponent('QR Conquest - report') +
+    '&body=' + encodeURIComponent(bodyLines.join('\n'));
+}
+
+function showAbuseReportModal() {
+  const contact = getAbuseContact();
+  if (!contact) return;
+
+  const content = UIBuilder.createElement('div', { className: 'space-y-3 text-sm text-gray-700' });
+
+  content.appendChild(UIBuilder.createElement('p', {
+    textContent: 'Use this to report something a player or host has written - a message from your host, a player\'s name - or to complain about how a game is being run.'
+  }));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    textContent: 'It goes to the administrator who runs this site, not to your game host. If you need your host, contact them the way they told you to.'
+  }));
+
+  const addressBox = UIBuilder.createElement('div', {
+    className: 'bg-gray-50 border border-gray-200 rounded-lg p-3 break-all font-medium text-gray-900',
+    textContent: contact
+  });
+  content.appendChild(addressBox);
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-600',
+    textContent: 'Say what you saw, where you saw it, and roughly when. If you or someone else is in immediate danger, contact the emergency services first.'
+  }));
+
+  const modal = UIBuilder.createModal({
+    title: 'Report content or a problem',
+    content: content,
+    actions: [
+      {
+        text: 'Open email app',
+        onClick: function () {
+          window.location.href = buildAbuseReportMailto(contact);
+        },
+        className: 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors',
+        icon: 'mail'
+      },
+      {
+        text: 'Close',
+        onClick: function () {
+          modal.close();
+        },
+        className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+      }
+    ]
+  });
+
+  document.body.appendChild(modal);
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// A plain text link, used in the footer and under the announcement list
+function createAbuseReportLink(className) {
+  const link = UIBuilder.createElement('a', {
+    className: className,
+    textContent: 'Report abuse',
+    href: '#'
+  });
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    showAbuseReportModal();
+  });
+  return link;
+}
 
 // =============================================================================
 // GLOBAL INTERFACE FUNCTIONS (exported to window for core.js)

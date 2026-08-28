@@ -61,18 +61,24 @@ assessment. Record them:
   checks who is asking.
 - **Player names and team QR codes are never served anonymously** - only to the
   game's own host.
+- **A reporting route is built in.** Set `ABUSE_CONTACT_EMAIL`, or fill in the
+  address under Site Settings in the admin panel, and every player and host
+  gets a "Report abuse" link - in the footer, and under the messages panel
+  where they read the host's announcements. It reaches you, the provider, not
+  the host being reported. Leave it unset and no route is shown, which is the
+  one configuration you should not ship.
 
 ### What you have to provide yourself
 
-The app gives you none of these, and Ofcom's deadlines for the first two have
-already passed:
+Apart from the reporting link, the app gives you none of these, and Ofcom's
+deadlines for the first two have already passed:
 
 | Duty | What it means here |
 |---|---|
 | Illegal content risk assessment | Write one, keep it, review it when you change the deployment. It can be short: list the user content (display names, host announcements), the risks, and the mitigations above |
 | Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
 | Terms of service | Say what is allowed and what you will do about content that is not |
-| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. **There is no in-app reporting route**, and a player has no way to reach a host through the app at all |
+| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. Set `ABUSE_CONTACT_EMAIL` or the Site Settings address and the app shows it as a "Report abuse" link; you still have to read that mailbox and act on what arrives. A player has no way to reach a *host* through the app at all |
 | Content takedown | You can delete a whole game, which deletes its announcements. There is no per-announcement delete, so plan on direct database access, or removing the game |
 | Records | Keep the assessments and your decisions |
 
@@ -123,6 +129,10 @@ announcement, and should not.
   tool is deleting the whole game.
 - **Security.** Serve over HTTPS, keep `SITE_ADMIN_PASSWORD` strong and out of
   version control, and never enable `DEBUG_FEATURES` in production.
+- **Publish a contact.** The address in `ABUSE_CONTACT_EMAIL` (or Site
+  Settings) is the one the app shows for reports and complaints. It is a
+  sensible place to point data protection queries too, as long as someone
+  actually monitors it.
 
 ### Known gaps to cover in your own procedures
 
@@ -130,7 +140,9 @@ Be aware of these when you write your assessments - they are honest limits of
 the software, not oversights it hides:
 
 - No age assurance of any kind
-- No in-app reporting or complaints route
+- The reporting route is an email address and nothing more: no in-app report
+  form, no ticketing, no record of what was reported, and it is only there if
+  you configure it
 - No per-announcement deletion, and no moderation tooling for a site
   administrator
 - No automatic retention purge

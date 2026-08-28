@@ -157,8 +157,13 @@ function renderSiteAdminPanel() {
     const gamesTab = UIBuilder.createButton('Game Management', null, 'py-2 px-1 border-b-2 font-medium text-sm');
     gamesTab.id = 'games-tab';
 
+    // Site settings tab
+    const settingsTab = UIBuilder.createButton('Site Settings', null, 'py-2 px-1 border-b-2 font-medium text-sm');
+    settingsTab.id = 'settings-tab';
+
     tabsList.appendChild(hostsTab);
     tabsList.appendChild(gamesTab);
+    tabsList.appendChild(settingsTab);
     tabsContainer.appendChild(tabsList);
     tabsSection.appendChild(tabsContainer);
     container.appendChild(tabsSection);
@@ -180,14 +185,19 @@ function renderSiteAdminPanel() {
 
         sessionStorage.setItem('siteAdminActiveTab', tabName);
 
-        if (tabName === 'hosts') {
-            hostsTab.className = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
-            gamesTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
-            showHostsSection();
-        } else {
-            gamesTab.className = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
-            hostsTab.className = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
+        const activeClass = 'py-2 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm';
+        const inactiveClass = 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm';
+
+        hostsTab.className = tabName === 'hosts' ? activeClass : inactiveClass;
+        gamesTab.className = tabName === 'games' ? activeClass : inactiveClass;
+        settingsTab.className = tabName === 'settings' ? activeClass : inactiveClass;
+
+        if (tabName === 'settings') {
+            showSettingsSection();
+        } else if (tabName === 'games') {
             showGamesSection();
+        } else {
+            showHostsSection();
         }
     }
 
@@ -222,9 +232,25 @@ function renderSiteAdminPanel() {
         }
     }
 
+    function showSettingsSection() {
+        const contentArea = document.getElementById('admin-content-area');
+        if (!contentArea) {
+            console.error('Content area not found in showSettingsSection');
+            return;
+        }
+
+        contentArea.innerHTML = '';
+        contentArea.appendChild(buildSiteSettingsSection());
+
+        if (!appState.siteAdmin.settingsLoaded && !appState.siteAdmin.settingsLoading) {
+            loadSiteAdminSettings();
+        }
+    }
+
     // Set up event listeners after functions are defined
     hostsTab.addEventListener('click', () => setActiveTab('hosts'));
     gamesTab.addEventListener('click', () => setActiveTab('games'));
+    settingsTab.addEventListener('click', () => setActiveTab('settings'));
 
     // Use setTimeout to ensure DOM is ready before setting initial tab
     setTimeout(() => {
@@ -232,6 +258,131 @@ function renderSiteAdminPanel() {
     }, 0);
 
     return container;
+}
+
+// Build the site settings section (currently just the abuse-reporting contact)
+function buildSiteSettingsSection() {
+  const container = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md p-6 max-w-2xl'
+  });
+
+  const header = UIBuilder.createElement('div', { className: 'mb-4' });
+  header.appendChild(UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold text-gray-900',
+    textContent: 'Abuse reporting contact'
+  }));
+  header.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-600 text-sm mt-1',
+    textContent: 'The address players and hosts are given to report content or complain. It appears as a "Report abuse" link in the footer and under the host messages panel. Leave it empty and no reporting route is shown at all.'
+  }));
+  container.appendChild(header);
+
+  if (appState.siteAdmin.settingsLoading && !appState.siteAdmin.settings) {
+    container.appendChild(UIBuilder.createLoadingDisplay('Loading site settings...'));
+    return container;
+  }
+
+  if (appState.siteAdmin.settingsError) {
+    container.appendChild(UIBuilder.createErrorDisplay(
+      appState.siteAdmin.settingsError,
+      () => refreshSiteAdminSettings()
+    ));
+    return container;
+  }
+
+  const settings = appState.siteAdmin.settings || {};
+  const override = settings.abuse_contact_email_override || '';
+  const envDefault = settings.abuse_contact_email_default || '';
+  const inForce = settings.abuse_contact_email || '';
+
+  // Say plainly which address is live and where it came from, so an admin
+  // does not have to guess whether the server was started with one set
+  const status = UIBuilder.createElement('div', {
+    className: inForce
+      ? 'bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm'
+      : 'bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800'
+  });
+  if (inForce) {
+    status.appendChild(UIBuilder.createElement('div', {
+      className: 'font-medium text-gray-900 break-all',
+      textContent: inForce
+    }));
+    status.appendChild(UIBuilder.createElement('div', {
+      className: 'text-gray-600 mt-1',
+      textContent: override
+        ? 'Set here in the admin panel.' + (envDefault ? ' Clearing it falls back to ' + envDefault + ' from the ABUSE_CONTACT_EMAIL environment variable.' : '')
+        : 'From the ABUSE_CONTACT_EMAIL environment variable.'
+    }));
+  } else {
+    status.textContent = 'No reporting address is set, so players and hosts have no way to report content. Set one below, or start the server with ABUSE_CONTACT_EMAIL.';
+  }
+  container.appendChild(status);
+
+  const form = UIBuilder.createElement('form');
+
+  const label = UIBuilder.createElement('label', {
+    className: 'block text-gray-700 text-sm font-bold mb-2',
+    htmlFor: 'abuse-contact-email',
+    textContent: 'Contact email address'
+  });
+  form.appendChild(label);
+
+  const input = UIBuilder.createElement('input', {
+    type: 'email',
+    id: 'abuse-contact-email',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500',
+    placeholder: envDefault || 'abuse@example.com'
+  });
+  // Set as a property: createElement would otherwise leave a stale attribute
+  input.value = override;
+  form.appendChild(input);
+
+  form.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-2',
+    textContent: envDefault
+      ? "Empty means use the environment variable's address (" + envDefault + ').'
+      : 'Empty means no reporting route is shown.'
+  }));
+
+  const buttonRow = UIBuilder.createElement('div', { className: 'flex gap-3 mt-4' });
+
+  const saveButton = UIBuilder.createButton('Save', null, 'bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors');
+  saveButton.type = 'submit';
+  buttonRow.appendChild(saveButton);
+
+  if (override) {
+    const clearButton = UIBuilder.createButton('Clear', function() {
+      input.value = '';
+      form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true }));
+    }, 'bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors');
+    clearButton.type = 'button';
+    buttonRow.appendChild(clearButton);
+  }
+
+  form.appendChild(buttonRow);
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    saveButton.disabled = true;
+    saveButton.classList.add('opacity-60');
+
+    try {
+      await saveAbuseContactEmail(input.value.trim());
+      showNotification('Abuse reporting contact updated', 'success');
+      // Redraw so the status line, the Clear button and the footer link all
+      // reflect what is now stored
+      renderApp();
+    } catch (err) {
+      showNotification(err.message || 'Unable to save site settings', 'error');
+      saveButton.disabled = false;
+      saveButton.classList.remove('opacity-60');
+    }
+  });
+
+  container.appendChild(form);
+
+  return container;
 }
 
 // Build game list section
