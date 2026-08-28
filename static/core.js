@@ -758,6 +758,22 @@ function startGPSTracking() {
     return;
   }
 
+  // The privacy notice comes first. Nothing here may ask the browser for a
+  // position until whoever is holding the phone has been told what happens to
+  // it - which for a player joining by team QR has already happened on the
+  // join page, and for anyone who reached the scanner first happens now.
+  if (window.hasAcceptedPrivacyNotice && !window.hasAcceptedPrivacyNotice()) {
+    console.log('Holding GPS until the privacy notice has been read');
+    window.ensurePrivacyNoticeAccepted().then(function (accepted) {
+      // They may have moved on to a page that has no use for a fix while the
+      // notice was open
+      if (accepted && window.pageUsesGPS && window.pageUsesGPS(appState.page)) {
+        startGPSTracking();
+      }
+    });
+    return;
+  }
+
   console.log('Starting GPS tracking');
   appState.gps.status = 'getting';
   appState.gps.isTracking = true;
@@ -2123,6 +2139,17 @@ async function getCurrentGPSCoordinates() {
       accuracy: appState.gps.accuracy,
       usingFreshGPS: false
     };
+  }
+
+  // No cached fix, so this is about to prompt for one: the notice first, as
+  // in startGPSTracking. A player who got here has seen it on the join page,
+  // so this only bites if they closed it again afterwards.
+  if (window.ensurePrivacyNoticeAccepted) {
+    const accepted = await window.ensurePrivacyNoticeAccepted();
+    if (!accepted) {
+      throw new Error('The game needs to know where you are to check you are at ' +
+                      'this base. Read the privacy notice to carry on.');
+    }
   }
 
   if (window.showNotification) {

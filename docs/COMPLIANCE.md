@@ -154,6 +154,43 @@ host - the game name, the team names, the base names, the announcements and
 the question bank - though a host could of course type anything into any of
 them, and should not.
 
+### What players are told, and when
+
+The app carries a short privacy notice of its own, written to be read by a
+ten-year-old without help: five points, short sentences, no legal vocabulary.
+It covers where a player's location goes and who can see it, that the game
+names them rather than asking, that map tiles come from OpenStreetMap and what
+that means, how long any of it is kept, and that they can refuse.
+
+**It always comes before the browser is asked for a position.** That is
+enforced in the client rather than left to the order of the pages: nothing
+calls `watchPosition` or `getCurrentPosition` until the notice has been
+acknowledged on that device. In practice it is met in one of two places:
+
+- **On the join page**, in full, above the button that joins the team - which
+  is the page a team QR code leads to, and the point at which someone decides
+  whether to play at all. Joining records that it was shown.
+- **As a modal**, the first time a device is about to be asked for its
+  location without having been through that page - the player who opens the
+  scanner first, and the host, who gets a version written for the job they are
+  doing.
+
+A **Privacy** link in the footer opens the same words again at any time, for a
+player who wants another look or a parent reading over a shoulder.
+
+Two things this is not. It is not consent - the location is processed to run
+the game, on whatever lawful basis you wrote down, and tapping the button
+records nothing on the server. And it is not your privacy notice: it describes
+the software, not your deployment, so it names no controller, no lawful basis
+and no contact address. It is the transparency the ICO's Age Appropriate
+Design Code asks for at the point of collection, and a floor under whatever
+you hand out on paper.
+
+If you change `GAME_RETENTION_DAYS`, the notice quotes your value rather than
+the default, so it stays true on your deployment. If you change the wording,
+bump `PRIVACY_NOTICE_VERSION` in `static/ui.js` so devices that accepted the
+old text are shown the new one.
+
 ### How long it is kept
 
 A game's data has a lifecycle, and the app enforces it without anyone
@@ -200,13 +237,19 @@ host, not to any one game, and only a site administrator removes them.
   game, not after.
 - **Decide your lawful basis** and write it down - legitimate interests is the
   usual fit for running the game itself.
-- **Tell people.** There is no privacy notice in the app. Players are told
-  nothing at join time about what is collected or who sees it. Put a notice
-  where they will actually see it: on the team sheet, in the briefing, or in
-  the consent form parents sign.
+- **Tell people.** The app tells players the essentials itself - see "What
+  players are told, and when" below - but that notice is a plain-language
+  summary of what the software does, not your privacy notice. Yours has to
+  name you as the controller, give your lawful basis and your contact, and say
+  how someone exercises their rights. Put it where they will actually see it:
+  on the team sheet, in the briefing, or in the consent form parents sign, and
+  make sure it does not contradict what the app says on screen.
 - **If children play, the ICO's Age Appropriate Design Code applies** - data
   minimisation, privacy-protective defaults, and transparency in language a
-  child can follow. Its expectations are stricter than the baseline.
+  child can follow. Its expectations are stricter than the baseline. The
+  in-app notice is written for a ten-year-old to read on their own and is
+  shown before the location prompt, which is the transparency limb; the rest
+  of the code is still yours to meet.
 - **Check the retention rule fits.** The app enforces one for you: positions
   are deleted when a game ends, and thirty days later the game and everything
   in it is deleted permanently by a background sweeper. Write that down as
@@ -252,7 +295,13 @@ the software, not oversights it hides:
 - Exports are files that leave the system. They hold player names, join times
   and everything the host wrote, so where they are stored and who can read
   them becomes your problem the moment you download one
-- No privacy notice or terms shown in the app
+- No terms of service shown in the app. The privacy notice that is shown is a
+  short plain-language summary written for players, not the full notice UK
+  GDPR requires from you - it names no controller, no lawful basis and no
+  contact, because the software cannot know them
+- The notice is shown, and has to be acknowledged, before anything asks the
+  browser for a position - but acknowledging it is not consent to anything,
+  and nothing is recorded server-side about who read it
 - No rate limiting on any endpoint
 - A game's id is a random UUID, so it cannot be guessed, but it is not a
   secret either: every player device that scans into a game holds it, and it
@@ -270,7 +319,8 @@ For a typical deployment that runs games for other organisations:
 2. Children's access assessment, and a children's risk assessment if children
    are likely to access it (OSA)
 3. Data protection impact assessment (UK GDPR)
-4. Privacy notice, in language your players can read
+4. Privacy notice, in language your players can read - the app's own notice
+   is a summary of the software, not a substitute for yours
 5. Terms of use / acceptable use for hosts, including that announcements go to
    everyone and are retained
 6. A named contact for reports and complaints, published where players and

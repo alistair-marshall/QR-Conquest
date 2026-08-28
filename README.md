@@ -13,6 +13,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 
 **Joining Your Team:**
 - Scan your team's unique QR code 
+- Read the short privacy notice on the join page - where you are, who can see it, and how long it is kept, in words a ten-year-old can read. It is shown before your phone is asked about your location, and the **Privacy** link in the footer brings it back any time
 - Confirm the team to join it - you are given a game name like `quiet-badger`, so there is nothing to type
 - See your team's color and current score
 
@@ -167,10 +168,11 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 1. **Receive your team QR code** from the game host or team captain
 2. **Scan the QR code** with your phone's camera
 3. **Install as PWA** when prompted for better GPS performance (optional but recommended)
-4. **Confirm the team** to join it - the game names you `quiet-badger` or similar; you are never asked to type a name
-5. **Navigate to bases** using the map
-6. **Scan base QR codes** when you're close enough to capture them
-7. **Watch your team climb the scoreboard!**
+4. **Read the short privacy notice** on the join page - what the game knows about where you are, who can see it, and how long it is kept, in plain words. It is on screen before your phone ever asks about your location
+5. **Confirm the team** to join it - the game names you `quiet-badger` or similar; you are never asked to type a name
+6. **Navigate to bases** using the map
+7. **Scan base QR codes** when you're close enough to capture them
+8. **Watch your team climb the scoreboard!**
 
 ### For Game Hosts
 
@@ -458,6 +460,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
+- **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
 - **Abuse Reporting**: A "Report abuse" link in the footer, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
 - **Responsive Design**: Works on mobile phones and tablets
 
@@ -465,7 +468,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 | File | Responsibility | Contains | Calls |
 |------|---------------|----------|-------|
 | **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
-| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, abuse reporting link and modal, PWA | Core.js API functions |
+| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, privacy notice, abuse reporting link and modal, PWA | Core.js API functions |
 | **host.js** | Host UI | Host panel, team/base forms, question bank, host modals | Core.js API functions |
 | **site-admin.js** | Admin UI | Admin login, host management, site settings, admin modals | Core.js API functions |
 | **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
@@ -477,10 +480,11 @@ rather than a CDN. Players are usually outdoors on patchy mobile data, and a
 blocked or slow CDN previously took the styling, the map or the QR scanner
 down with it; serving the libraries from the app itself removes that failure
 mode. The only third-party request left in normal play is the OpenStreetMap
-tiles the map needs; the opt-in debug console (`DEBUG_FEATURES`) still pulls
-Eruda from a CDN when a developer asks for it. The vendored copies are
-committed, so running the app still takes nothing more than Python and
-`flask_app.py`.
+tiles the map needs - which is why the privacy notice players read names
+OpenStreetMap and says what their servers can tell from the request; the
+opt-in debug console (`DEBUG_FEATURES`) still pulls Eruda from a CDN when a
+developer asks for it. The vendored copies are committed, so running the app
+still takes nothing more than Python and `flask_app.py`.
 
 | Library | Vendored as | Version |
 |---------|-------------|---------|
@@ -596,7 +600,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
 | `ABUSE_CONTACT_EMAIL` | No | Address published to players and hosts as a "Report abuse" link, for reporting content or complaining. A site administrator can override it under Site Settings in the admin panel; with neither set, no reporting route is shown. | `safety@example.org` |
 | `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
-| `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. | `30` |
+| `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. The privacy notice players read quotes this value, so it stays true whatever you set. | `30` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
 | `FLASK_DEBUG` | No | Enable debug mode | `False` |
 
@@ -680,6 +684,7 @@ costs the host one scan.
 - **HTTPS required**: Camera access requires secure connection
 
 ### Privacy Considerations
+- **Players are told before they are asked**: a short privacy notice - written to be read by a ten-year-old, five points, no legal vocabulary - appears in full on the join page, and as a modal for anyone whose device is about to be asked for a position without having been through it. Nothing calls `watchPosition` or `getCurrentPosition` until it has been acknowledged on that device, so the notice cannot end up behind the browser's location prompt. It covers where a player's position goes and who sees it, the generated name, the OpenStreetMap tiles the map is drawn from, how long anything is kept, and that they can say no. A **Privacy** link in the footer reopens it at any time. It is transparency, not consent: acknowledging it records nothing on the server, and it does not replace the privacy notice a deployment has to publish for itself - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - **Location data**: Only stored for base creation and capture verification, and only the newest fix per player - never a route. Every stored position is deleted the moment the game ends
 - **Retention**: A finished game deletes itself. Ending it clears the personal data play needed; thirty days later the game and everything in it is permanently deleted, sweeper-driven and automatic. Set `GAME_RETENTION_DAYS` to match your own retention schedule, and export anything you need to keep before the clock runs out
 - **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database, so the deployment can still answer for what was sent, until the game is deleted or purged
