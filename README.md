@@ -107,6 +107,8 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Your host panel shows a live checklist of which bases are still out, collected, or returned; ending the game releases all QR codes as usual
 
 **Managing the Game:**
+- Fold any section of the host panel away by tapping its heading - a game with five teams and twenty-six bases is a very long page otherwise. **Collapse all** brings the whole panel back to a single screen, **Expand all** puts it back, and the team and base headings carry a count so you can see what is in a folded section without opening it
+- What you fold stays folded on that device, so the panel comes back the way you left it
 - Start the game when teams are ready
 - Delete any team that ended up unused once players have arrived (only while it has no players)
 - Monitor all team activity in real-time

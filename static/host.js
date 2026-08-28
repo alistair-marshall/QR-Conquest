@@ -4,8 +4,150 @@ function toDatetimeLocalValue(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+// The host panel stacks section on section: a game with five teams and
+// twenty-six bases runs to hundreds of rows, so reaching the game controls at
+// the bottom means scrolling past everything else. Every section folds away
+// from its header, and what a host folds stays folded - the state is kept per
+// section so the panel comes back the way they left it.
+const HOST_SECTION_COLLAPSE_KEY = 'hostCollapsedSections';
+
+// The sections built for the panel currently on screen, so "Collapse all"
+// and "Expand all" can reach every one of them
+let hostPanelSections = [];
+
+function getCollapsedHostSections() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(HOST_SECTION_COLLAPSE_KEY) || '{}');
+    return stored && typeof stored === 'object' ? stored : {};
+  } catch (e) {
+    // A corrupt (or unavailable) store shouldn't cost the host their panel
+    console.warn('Could not read collapsed host sections:', e);
+    return {};
+  }
+}
+
+function setHostSectionCollapsed(sectionId, collapsed) {
+  const state = getCollapsedHostSections();
+  if (collapsed) {
+    state[sectionId] = true;
+  } else {
+    delete state[sectionId];
+  }
+  try {
+    localStorage.setItem(HOST_SECTION_COLLAPSE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Could not remember collapsed host sections:', e);
+  }
+}
+
+// Build a host panel section whose header folds everything inside it away.
+// Returns the element to add to the page, the body to fill (whatever is
+// appended to the body collapses), and whether it started out collapsed.
+function createHostSection(config) {
+  const sectionId = config.id;
+  const startsCollapsed = getCollapsedHostSections()[sectionId] === true;
+
+  const section = UIBuilder.createElement('div', {
+    className: 'bg-white rounded-lg shadow-md ' + (config.className || 'p-4')
+  });
+
+  const body = UIBuilder.createElement('div', {
+    id: sectionId + '-body',
+    className: startsCollapsed ? 'mt-3 hidden' : 'mt-3'
+  });
+
+  // my-0 drops the site-wide heading margins: a folded section should be
+  // little more than its header
+  const heading = UIBuilder.createElement('h3', {
+    className: 'text-xl font-semibold my-0'
+  });
+
+  const toggle = UIBuilder.createElement('button', {
+    type: 'button',
+    className: 'w-full flex items-center justify-between text-left',
+    'aria-expanded': startsCollapsed ? 'false' : 'true',
+    'aria-controls': body.id
+  });
+  heading.appendChild(toggle);
+
+  const label = UIBuilder.createElement('span', {
+    className: 'flex items-center flex-wrap gap-2',
+    textContent: config.title
+  });
+
+  // A count in the header says what is inside without opening the section
+  if (config.summary) {
+    label.appendChild(UIBuilder.createElement('span', {
+      className: 'text-sm font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full',
+      textContent: config.summary
+    }));
+  }
+  toggle.appendChild(label);
+
+  // The chevron sits in a span of its own so the rotation survives Lucide
+  // swapping the <i> for an <svg> when it draws the icon
+  const chevron = UIBuilder.createElement('span', {
+    className: 'text-gray-400 ml-3 flex-shrink-0'
+  });
+  chevron.style.transition = 'transform 0.2s';
+  chevron.style.transform = startsCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+  chevron.appendChild(UIBuilder.createElement('i', {
+    'data-lucide': 'chevron-down',
+    className: 'w-5 h-5'
+  }));
+  toggle.appendChild(chevron);
+
+  function setCollapsed(collapsed) {
+    if (body.classList.contains('hidden') === collapsed) return;
+
+    body.classList.toggle('hidden', collapsed);
+    chevron.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    setHostSectionCollapsed(sectionId, collapsed);
+
+    if (!collapsed && typeof config.onExpand === 'function') {
+      config.onExpand();
+    }
+  }
+
+  toggle.addEventListener('click', function() {
+    setCollapsed(!body.classList.contains('hidden'));
+  });
+
+  section.appendChild(heading);
+  section.appendChild(body);
+
+  hostPanelSections.push({ id: sectionId, setCollapsed: setCollapsed });
+
+  return { section: section, body: body, startsCollapsed: startsCollapsed };
+}
+
+// Fold every section at once - the quickest way back to a page a host can
+// see the whole of, and to put it all back again
+function createHostSectionControls() {
+  const controls = UIBuilder.createElement('div', {
+    className: 'flex justify-end gap-2 mb-4'
+  });
+
+  const buttonClass = 'text-sm text-gray-600 bg-white border border-gray-300 px-3 py-1 rounded-lg hover:bg-gray-100 transition-colors';
+
+  controls.appendChild(UIBuilder.createButton('Collapse all', function() {
+    hostPanelSections.forEach(section => section.setCollapsed(true));
+  }, buttonClass, 'chevrons-down-up'));
+
+  controls.appendChild(UIBuilder.createButton('Expand all', function() {
+    hostPanelSections.forEach(section => section.setCollapsed(false));
+  }, buttonClass, 'chevrons-up-down'));
+
+  return controls;
+}
+
 // Host Panel - UI components only, API calls handled by core.js
 function renderHostPanel() {
+  // Sections register themselves as they are built, so start each render
+  // from an empty list rather than the last render's elements
+  hostPanelSections = [];
+
   const container = UIBuilder.createElement('div');
 
   // If game is not loaded, show form to create or list existing games
@@ -18,16 +160,15 @@ function renderHostPanel() {
     });
     container.appendChild(title);
 
-    // Create Game Section
-    const createSection = UIBuilder.createElement('div', {
-      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
-    });
+    container.appendChild(createHostSectionControls());
 
-    const createTitle = UIBuilder.createElement('h3', {
-      className: 'text-xl font-semibold mb-4',
-      textContent: 'Create New Game'
+    // Create Game Section
+    const createPanel = createHostSection({
+      id: 'host-create-game',
+      className: 'p-6 mb-6',
+      title: 'Create New Game'
     });
-    createSection.appendChild(createTitle);
+    const createSection = createPanel.body;
 
     // Use the consolidated form for game creation
     const gameForm = buildGameSettingsForm({
@@ -45,18 +186,15 @@ function renderHostPanel() {
     });
 
     createSection.appendChild(gameForm);
-    container.appendChild(createSection);
+    container.appendChild(createPanel.section);
 
     // Existing Games Section
-    const existingGamesSection = UIBuilder.createElement('div', {
-      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    const existingGamesPanel = createHostSection({
+      id: 'host-existing-games',
+      className: 'p-6 mb-6',
+      title: 'Your Existing Games'
     });
-
-    const existingGamesTitle = UIBuilder.createElement('h3', {
-      className: 'text-xl font-semibold mb-4',
-      textContent: 'Your Existing Games'
-    });
-    existingGamesSection.appendChild(existingGamesTitle);
+    const existingGamesSection = existingGamesPanel.body;
 
     // Games list container - will be populated by loadHostGames
     const gamesListContainer = UIBuilder.createElement('div', {
@@ -65,21 +203,18 @@ function renderHostPanel() {
     });
     existingGamesSection.appendChild(gamesListContainer);
 
-    container.appendChild(existingGamesSection);
+    container.appendChild(existingGamesPanel.section);
 
     // Load host games after rendering
     setTimeout(() => loadHostGames(), 100);
 
     // Question Bank Section - host-level, reusable across games
-    const questionBankSection = UIBuilder.createElement('div', {
-      className: 'bg-white rounded-lg shadow-md p-6 mb-6'
+    const questionBankPanel = createHostSection({
+      id: 'host-question-bank',
+      className: 'p-6 mb-6',
+      title: 'Question Bank'
     });
-
-    const questionBankTitle = UIBuilder.createElement('h3', {
-      className: 'text-xl font-semibold mb-2',
-      textContent: 'Question Bank'
-    });
-    questionBankSection.appendChild(questionBankTitle);
+    const questionBankSection = questionBankPanel.body;
 
     questionBankSection.appendChild(UIBuilder.createElement('p', {
       className: 'text-gray-600 mb-4 text-sm',
@@ -91,7 +226,7 @@ function renderHostPanel() {
     }, 'w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors text-lg font-medium flex items-center justify-center', 'help-circle');
     questionBankSection.appendChild(manageQuestionsBtn);
 
-    container.appendChild(questionBankSection);
+    container.appendChild(questionBankPanel.section);
 
     // Back to Home link
     const backContainer = UIBuilder.createElement('div', { className: 'text-center mt-6' });
@@ -103,6 +238,11 @@ function renderHostPanel() {
 
     container.appendChild(backContainer);
 
+    // Draw the section chevrons once the panel is on the page
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      setTimeout(() => window.lucide.createIcons(), 0);
+    }
+
     return container;
   }
 
@@ -110,23 +250,21 @@ function renderHostPanel() {
   container.className = 'max-w-4xl mx-auto px-4 pb-4';
 
   const title = UIBuilder.createElement('h2', {
-    className: 'text-2xl font-bold mb-6 text-center',
+    className: 'text-2xl font-bold mb-4 text-center',
     textContent: 'Game Administration'
   });
   container.appendChild(title);
 
+  container.appendChild(createHostSectionControls());
+
   const grid = UIBuilder.createElement('div', { className: 'space-y-6' });
 
   // Game Info Section
-  const infoSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
+  const infoPanel = createHostSection({
+    id: 'game-info',
+    title: 'Game Info'
   });
-
-  const infoTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-3',
-    textContent: 'Game Info'
-  });
-  infoSection.appendChild(infoTitle);
+  const infoSection = infoPanel.body;
 
   const gameInfoGrid = UIBuilder.createElement('div', {
     className: 'grid grid-cols-1 sm:grid-cols-2 gap-4'
@@ -165,18 +303,14 @@ function renderHostPanel() {
   gameInfoGrid.appendChild(statusCard);
 
   infoSection.appendChild(gameInfoGrid);
-  grid.appendChild(infoSection);
+  grid.appendChild(infoPanel.section);
 
   // Game Settings Section
-  const settingsSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
+  const settingsPanel = createHostSection({
+    id: 'game-settings',
+    title: 'Game Settings'
   });
-
-  const settingsTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-3',
-    textContent: 'Game Settings'
-  });
-  settingsSection.appendChild(settingsTitle);
+  const settingsSection = settingsPanel.body;
 
   const settingsGrid = UIBuilder.createElement('div', {
     className: 'grid grid-cols-2 sm:grid-cols-4 gap-4'
@@ -346,18 +480,14 @@ function renderHostPanel() {
     settingsSection.appendChild(settingsActions);
   }
 
-  grid.appendChild(settingsSection);
+  grid.appendChild(settingsPanel.section);
 
   // QR Code Management Section
-  const qrSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
+  const qrPanel = createHostSection({
+    id: 'game-qr-codes',
+    title: 'QR Code Management'
   });
-
-  const qrTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-3',
-    textContent: 'QR Code Management'
-  });
-  qrSection.appendChild(qrTitle);
+  const qrSection = qrPanel.body;
 
   const qrDescription = UIBuilder.createElement('p', {
     className: 'text-gray-600 mb-4 text-sm',
@@ -389,18 +519,16 @@ function renderHostPanel() {
 
   qrSection.appendChild(qrActionsContainer);
 
-  grid.appendChild(qrSection);
+  grid.appendChild(qrPanel.section);
 
   // Team Management Section - Mobile Optimized
-  const teamSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
+  const teamCount = (appState.gameData.teams || []).length;
+  const teamPanel = createHostSection({
+    id: 'game-teams',
+    title: 'Team Management',
+    summary: teamCount ? `${teamCount} team${teamCount === 1 ? '' : 's'}` : null
   });
-
-  const teamTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-4',
-    textContent: 'Team Management'
-  });
-  teamSection.appendChild(teamTitle);
+  const teamSection = teamPanel.body;
 
   if (appState.gameData.teams && appState.gameData.teams.length > 0) {
     const teamsContainer = UIBuilder.createElement('div', { className: 'space-y-3' });
@@ -532,26 +660,34 @@ function renderHostPanel() {
     }));
   }
 
-  grid.appendChild(teamSection);
+  grid.appendChild(teamPanel.section);
 
   // Base Management Section - Mobile Optimized with Map
-  const baseSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
-  });
+  const liveBaseCount = (appState.gameData.bases || []).filter(base => !base.deleted_at).length;
+  const basePanel = createHostSection({
+    id: 'game-bases',
+    title: 'Base Management',
+    summary: liveBaseCount ? `${liveBaseCount} base${liveBaseCount === 1 ? '' : 's'}` : null,
+    // Leaflet can't measure a map inside a hidden section, so the map is
+    // only built once the section is open. An instance left over from an
+    // earlier render points at a container this render threw away, so it is
+    // rebuilt rather than remeasured
+    onExpand: function() {
+      const mapElement = document.getElementById('map-container');
+      if (!mapElement) return;
 
-  const baseSectionHeader = UIBuilder.createElement('div', {
-    className: 'flex flex-wrap justify-between items-center gap-2 mb-4'
+      if (gameMapInstance && gameMapInstance.getContainer() === mapElement) {
+        gameMapInstance.invalidateSize();
+      } else {
+        initGameMap();
+      }
+    }
   });
-
-  const baseTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold',
-    textContent: 'Base Management'
-  });
-  baseSectionHeader.appendChild(baseTitle);
+  const baseSection = basePanel.body;
 
   // Map/list filters (only for hosts)
   const toggleGroup = UIBuilder.createElement('div', {
-    className: 'flex items-center space-x-3'
+    className: 'flex flex-wrap items-center gap-x-4 gap-y-2 mb-4'
   });
 
   // Show deleted bases toggle
@@ -615,8 +751,7 @@ function renderHostPanel() {
   showPlayersToggle.appendChild(playersToggleText);
   toggleGroup.appendChild(showPlayersToggle);
 
-  baseSectionHeader.appendChild(toggleGroup);
-  baseSection.appendChild(baseSectionHeader);
+  baseSection.appendChild(toggleGroup);
 
   if (appState.gameData.bases && appState.gameData.bases.length > 0) {
     // Filter bases based on toggle setting
@@ -747,8 +882,21 @@ function renderHostPanel() {
 
       baseSection.appendChild(basesContainer);
 
-      // Initialize game map after section is added to DOM
-      setTimeout(() => initGameMap(), 100);
+      // Initialize game map after section is added to DOM - unless the
+      // section is folded, in which case onExpand builds it later
+      if (!basePanel.startsCollapsed) {
+        setTimeout(() => initGameMap(), 100);
+      } else if (gameMapInstance) {
+        // Nothing should keep drawing into the map this render has just
+        // replaced - onExpand builds a fresh one when the host unfolds
+        try {
+          gameMapInstance.remove();
+        } catch (e) {
+          console.warn('Error removing existing map:', e);
+        }
+        gameMapInstance = null;
+        stopPlayerPositionPolling();
+      }
     } else {
       // Show message when all bases are hidden
       const hiddenMessage = UIBuilder.createElement('div', {
@@ -771,18 +919,14 @@ function renderHostPanel() {
     }));
   }
 
-  grid.appendChild(baseSection);
+  grid.appendChild(basePanel.section);
 
   // Game Control Section - Mobile Optimized
-  const controlSection = UIBuilder.createElement('div', {
-    className: 'bg-white rounded-lg shadow-md p-4'
+  const controlPanel = createHostSection({
+    id: 'game-control',
+    title: 'Game Control'
   });
-
-  const controlTitle = UIBuilder.createElement('h3', {
-    className: 'text-xl font-semibold mb-4',
-    textContent: 'Game Control'
-  });
-  controlSection.appendChild(controlTitle);
+  const controlSection = controlPanel.body;
 
   const controlButtons = UIBuilder.createElement('div', { className: 'space-y-3' });
 
@@ -947,9 +1091,15 @@ function renderHostPanel() {
   controlButtons.appendChild(exitButton);
 
   controlSection.appendChild(controlButtons);
-  grid.appendChild(controlSection);
+  grid.appendChild(controlPanel.section);
 
   container.appendChild(grid);
+
+  // Draw the section chevrons (and any icon added above) once the panel is
+  // on the page
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    setTimeout(() => window.lucide.createIcons(), 0);
+  }
 
   return container;
 }
