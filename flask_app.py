@@ -87,8 +87,11 @@ def require_host(f):
         host = cursor.fetchone()
         conn.close()
 
+        # Every unknown id gets this same answer, so the response cannot be
+        # used to tell a real host id from an invented one. It is also what a
+        # host whose credentials were rotated away sees, so it says what to do.
         if not host:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Host sign-in is no longer valid. Scan your host QR code again.'}), 401
 
         return f(host_id, *args, **kwargs)
     return decorated_function
@@ -594,36 +597,57 @@ def delete_host(host_id):
 
     return jsonify({'success': True})
 
-# Host verification endpoint
-@app.route('/api/hosts/verify/<qr_code>', methods=['GET'])
-def verify_host(qr_code):
+# Rotate a host's credentials
+#
+# A host holds two secrets: the qr_code its device scans to enrol, and the
+# host_id that device stores and then sends on every request afterwards.
+# Replacing only the QR code would leave a leaked host_id working forever, so
+# rotation replaces both. Every device signed in as this host is signed out,
+# and the host gets back in by scanning the new QR code.
+#
+# The host's games and question bank are carried across rather than lost: the
+# new row is written first, the child rows are repointed at it, and only then
+# does the old row go, so nothing is ever orphaned mid-rotation.
+@app.route('/api/hosts/<host_id>/rotate-credentials', methods=['POST'])
+@require_site_admin
+def rotate_host_credentials(host_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM hosts WHERE qr_code = ?', (qr_code,))
+    cursor.execute('SELECT * FROM hosts WHERE id = ?', (host_id,))
     host = cursor.fetchone()
 
     if not host:
         conn.close()
-        return jsonify({'error': 'Invalid host QR code'}), 404
+        return jsonify({'error': 'Host not found'}), 404
 
-    # Check expiry
-    if host['expiry_date'] and host['expiry_date'] < int(time.time()):
+    new_id = str(uuid.uuid4())
+    new_qr = str(uuid.uuid4())
+
+    try:
+        cursor.execute('''
+        INSERT INTO hosts (id, name, qr_code, expiry_date, creation_date)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (new_id, host['name'], new_qr, host['expiry_date'], host['creation_date']))
+
+        cursor.execute('UPDATE games SET host_id = ? WHERE host_id = ?', (new_id, host_id))
+        cursor.execute('UPDATE questions SET host_id = ? WHERE host_id = ?', (new_id, host_id))
+        cursor.execute('DELETE FROM hosts WHERE id = ?', (host_id,))
+
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
         conn.close()
-        return jsonify({
-            'status': 'expired',
-            'host_id': host['id'],
-            'name': host['name']
-        })
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
     conn.close()
 
     return jsonify({
-        'status': 'valid',
-        'host_id': host['id'],
+        'id': new_id,
         'name': host['name'],
-        'creation_date': host['creation_date'],
-        'expiry_date': host['expiry_date']
+        'qr_code': new_qr,
+        'expiry_date': host['expiry_date'],
+        'creation_date': host['creation_date']
     })
 
 # ==========================================================

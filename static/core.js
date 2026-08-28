@@ -3190,6 +3190,50 @@ async function deleteHost(hostId) {
   }
 }
 
+// Issue a host a fresh QR code and a fresh host id, so a credential that has
+// leaked stops working. The host's games and question bank move across with
+// them; every device signed in as this host is signed out.
+async function rotateHostCredentials(hostId) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to rotate credentials.');
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/rotate-credentials`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      }
+    });
+
+    if (response.status === 401) {
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+
+    const result = await handleApiResponse(response, 'Unable to rotate host credentials');
+
+    if (window.showNotification) {
+      window.showNotification('New credentials issued. The host must scan the new QR code.', 'success');
+    }
+
+    refreshSiteAdminHosts();
+    return result;
+  } catch (err) {
+    console.error('Error rotating host credentials:', err);
+    const userMessage = err.message || 'Unable to rotate host credentials. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function loadSiteAdminHosts() {
   // Prevent duplicate loading
   if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
