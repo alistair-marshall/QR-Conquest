@@ -60,7 +60,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
 - **Live Scoreboard**: Track team rankings as they change throughout the game
-- **Capture Notifications**: Instant WebSocket notifications whenever any team captures a base
+- **Capture Notifications**: A notification whenever any team captures a base - instantly over the live socket where the deployment can carry one, otherwise on the next poll a moment later
 - **Host Messages**: Announcements from your host, sent to everyone at once
 - **Team Coordination**: Work together to develop capture and defense strategies
 
@@ -444,7 +444,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ### Backend (Python Flask)
 - **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, answer_sessions, announcements and site_settings
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
-- **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
+- **Live events**: Base captures, quiz outcomes, bonus collections and announcements reach every player in the game by one of two routes. A WebSocket (flask-sock) pushes them the moment they happen; where a socket cannot be held open - the client's network, or a host like uWSGI that gives flask-sock no socket to take over - the same events ride along on the client's five-second poll of the game, from a short in-memory buffer the server keeps per game. Each event carries a sequence number, so a client that has both routes working announces it once. `LIVE_EVENT_SOCKET=off` skips the socket entirely; nothing but a few seconds of latency is lost
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Ending a game deletes every stored position outright - the server stops accepting updates and clears the last fix, so nothing is left saying where anybody was
 - **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
@@ -460,7 +460,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **PWA**: Installable Progressive Web App
 - **QR Scanning**: Camera-based QR code detection
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
-- **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
+- **Real-time Updates**: Capture notifications over the live socket or the game poll, whichever the deployment supports, plus automatic polling for live scoreboard updates
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
 - **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
 - **Abuse Reporting**: A "Report abuse" link in the footer, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
@@ -600,9 +600,12 @@ database. To upgrade a library, bump its version in `package.json` and run
    connection - but the app's own request volume is the whole budget, so keep
    an eye on it: the site admin panel reads its games table in one request, and
    a live game costs roughly one request per player every five seconds. The
-   live-events WebSocket cannot connect there at all (the socket the handshake
-   needs is not in uWSGI's WSGI environment), so clients fall back to polling,
-   which is what keeps everything up to date anyway.
+   live-events WebSocket cannot connect there at all - the socket the handshake
+   needs is not in uWSGI's WSGI environment - so set `LIVE_EVENT_SOCKET=off` and
+   clients will not try. They lose nothing: capture notifications ride along on
+   the same five-second poll, a moment later than a socket would deliver them.
+   Left on, each client makes a few doomed attempts and then stops trying by
+   itself, which costs a handful of requests per page load.
 
 ## Configuration Options
 
@@ -612,6 +615,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 |----------|----------|-------------|---------|
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
 | `ABUSE_CONTACT_EMAIL` | No | Address published to players and hosts as a "Report abuse" link, for reporting content or complaining. A site administrator can override it under Site Settings in the admin panel; with neither set, no reporting route is shown. | `safety@example.org` |
+| `LIVE_EVENT_SOCKET` | No | Whether clients open the live-events WebSocket. On by default. Set it off on a host that cannot carry a WebSocket (uWSGI, which is what PythonAnywhere and similar shared hosting run) so clients do not attempt one; the same events reach them on their five-second poll of the game either way. | `off` |
 | `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
 | `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. The privacy notice players read quotes this value, so it stays true whatever you set. | `30` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
@@ -638,7 +642,7 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 
 ### Live Notifications
 
-- Base captures are broadcast over WebSockets to everyone in the game
+- Base captures are broadcast to everyone in the game, over the live socket or the game poll
 - Scoreboard and map refresh immediately when a capture happens
 - Host announcements arrive as a toast with an unread badge on the header's megaphone icon; they are polled every 10 seconds as well as pushed, so they still reach a player sitting on a page where the game socket isn't running
 - Automatic reconnection with backoff if the connection drops

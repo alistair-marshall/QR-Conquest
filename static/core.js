@@ -1095,8 +1095,36 @@ function stopPlayerPositionPolling() {
 // Team rosters and QR codes are only served to the game's own host, so the
 // host identifies itself when reading a game. Players send nothing and get
 // the anonymous view.
-function fetchGame(gameId) {
-  return apiFetch(`${API_BASE_URL}/games/${gameId}`, { headers: hostAuthHeaders() });
+function fetchGame(gameId, options = {}) {
+  // The poll asks for the events it has not seen; everything else just wants
+  // the game, and asking without a cursor returns none
+  const query = options.eventsSince != null
+    ? `?events_since=${encodeURIComponent(options.eventsSince)}`
+    : '';
+
+  return apiFetch(`${API_BASE_URL}/games/${gameId}${query}`, { headers: hostAuthHeaders() });
+}
+
+// The last event this device has acted on, and the game it belongs to. Both
+// routes an event can arrive by - the socket and the poll - move this forward,
+// which is what stops one event being announced twice when both are working.
+let lastGameEventSeq = null;
+let gameEventSeqGameId = null;
+
+function gameEventCursorFor(gameId) {
+  if (gameEventSeqGameId !== gameId) {
+    // A different game: nothing seen here yet, so start from where it is now
+    gameEventSeqGameId = gameId;
+    lastGameEventSeq = null;
+  }
+
+  return lastGameEventSeq;
+}
+
+function noteGameEventSeq(seq) {
+  if (typeof seq === 'number' && (lastGameEventSeq === null || seq > lastGameEventSeq)) {
+    lastGameEventSeq = seq;
+  }
 }
 
 // Fetch game data
@@ -1170,8 +1198,11 @@ async function fetchGameUpdates() {
   if (!appState.gameData.id) return;
 
   try {
-    // Fetch complete game data instead of just scores
-    const response = await fetchGame(appState.gameData.id);
+    // Fetch complete game data instead of just scores, along with anything
+    // that has happened since the last poll
+    const gameId = appState.gameData.id;
+    const eventsSince = gameEventCursorFor(gameId);
+    const response = await fetchGame(gameId, { eventsSince });
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1256,6 +1287,12 @@ async function fetchGameUpdates() {
         window.renderApp();
       }
     }
+
+    // Say what happened while this was in flight - a capture, a quiz outcome,
+    // a base collected. The socket announces these the moment they happen
+    // where it works; this is the same list, up to one poll later, and is
+    // what a player hears on a deployment that cannot carry a socket
+    applyPolledGameEvents(gameId, gameData.events, gameData.event_cursor);
   } catch (err) {
     console.error('Error fetching game updates:', err);
     // Don't show error notification for background updates to avoid spam
@@ -1616,8 +1653,24 @@ let gameSocketGameId = null;
 let gameSocketReconnectTimer = null;
 let gameSocketReconnectDelay = 1000;
 
+// A socket that has never once opened on this page load is treated as a
+// socket this deployment cannot carry - uWSGI hosts cannot, and there the
+// attempt fails, retries, and fails again for as long as the page is open,
+// on a server that may be answering one request at a time. Give up after a
+// few tries and let the poll carry the events; it delivers the same ones.
+let gameSocketEverConnected = false;
+let gameSocketFailedAttempts = 0;
+let gameSocketUnavailable = false;
+const GAME_SOCKET_MAX_FAILED_ATTEMPTS = 4;
+
+// Switched off by the server on a deployment where the socket cannot work
+function liveEventSocketEnabled() {
+  return window.QRC_LIVE_EVENT_SOCKET !== false;
+}
+
 function connectGameSocket(gameId) {
   if (!gameId || !('WebSocket' in window)) return;
+  if (!liveEventSocketEnabled() || gameSocketUnavailable) return;
 
   // Already connected (or connecting) to this game
   if (gameSocket && gameSocketGameId === gameId &&
@@ -1635,11 +1688,18 @@ function connectGameSocket(gameId) {
   socket.onopen = function () {
     console.log('Game event socket connected for game:', gameId);
     gameSocketReconnectDelay = 1000;
+    gameSocketEverConnected = true;
+    gameSocketFailedAttempts = 0;
   };
 
   socket.onmessage = function (event) {
     try {
-      handleGameSocketMessage(JSON.parse(event.data));
+      const message = JSON.parse(event.data);
+
+      // A poll may have carried this one already
+      if (claimGameEvent(gameId, message.seq)) {
+        handleGameEvent(message);
+      }
     } catch (err) {
       console.warn('Ignoring malformed game event:', err);
     }
@@ -1649,6 +1709,19 @@ function connectGameSocket(gameId) {
     if (gameSocket !== socket) return; // Superseded by a newer connection
 
     gameSocket = null;
+
+    if (!gameSocketEverConnected) {
+      gameSocketFailedAttempts += 1;
+
+      if (gameSocketFailedAttempts >= GAME_SOCKET_MAX_FAILED_ATTEMPTS) {
+        gameSocketUnavailable = true;
+        gameSocketGameId = null;
+        console.log('Game event socket never connected - this deployment ' +
+                    'looks like one that cannot carry it. Falling back to ' +
+                    'the game poll, which carries the same events.');
+        return;
+      }
+    }
 
     // Reconnect with backoff while this game is still being watched
     if (gameSocketGameId === gameId) {
@@ -1698,7 +1771,17 @@ const QUIZ_OUTCOME_VERBS = {
   reinforced: 'reinforced'
 };
 
-function handleGameSocketMessage(message) {
+// One game event, however it reached this device. refreshGame is false when
+// it came in on a poll, which has just refreshed the game itself - asking for
+// it again per event would turn a busy minute into a burst of requests.
+function handleGameEvent(message, options = {}) {
+  const refreshGame = options.refreshGame !== false;
+  const refresh = function () {
+    if (refreshGame) {
+      fetchGameUpdates();
+    }
+  };
+
   if (message.type === 'base_captured') {
     console.log('Base captured event:', message);
 
@@ -1714,7 +1797,7 @@ function handleGameSocketMessage(message) {
     }
 
     // Refresh scores and base ownership straight away
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'base_state_changed') {
     console.log('Base state changed event:', message);
 
@@ -1730,12 +1813,12 @@ function handleGameSocketMessage(message) {
       );
     }
 
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'bonus_round_started') {
     console.log('Bonus round started event:', message);
 
     // fetchGameUpdates detects the status change and shows the announcement
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'base_collected') {
     console.log('Base collected event:', message);
 
@@ -1750,13 +1833,13 @@ function handleGameSocketMessage(message) {
       );
     }
 
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'team_deleted') {
     console.log('Team deleted event:', message);
 
     // The team had no players, so nobody is being kicked out - just drop it
     // from the scoreboard everyone is looking at
-    fetchGameUpdates();
+    refresh();
   } else if (message.type === 'announcement_posted') {
     console.log('Announcement posted event:', message);
 
@@ -1789,8 +1872,36 @@ function handleGameSocketMessage(message) {
       }
     }
 
-    fetchGameUpdates();
+    refresh();
   }
+}
+
+
+// True when this event has not been acted on yet, and claims it if so. Both
+// the socket and the poll can carry the same event; whichever arrives first
+// is the one that announces it.
+function claimGameEvent(gameId, seq) {
+  const cursor = gameEventCursorFor(gameId);
+
+  if (typeof seq !== 'number') return true;
+  if (cursor !== null && seq <= cursor) return false;
+
+  noteGameEventSeq(seq);
+  return true;
+}
+
+// Events a poll of the game came back with, oldest first
+function applyPolledGameEvents(gameId, events, cursor) {
+  if (Array.isArray(events)) {
+    events.forEach(function (event) {
+      if (claimGameEvent(gameId, event.seq)) {
+        handleGameEvent(event, { refreshGame: false });
+      }
+    });
+  }
+
+  // Move past anything the server left out as too old to be news
+  noteGameEventSeq(cursor);
 }
 
 // =============================================================================

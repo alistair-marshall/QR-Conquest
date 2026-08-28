@@ -14,6 +14,7 @@ import math
 import random
 import re
 from functools import wraps
+from collections import deque
 
 app = Flask(__name__, static_folder='static')
 sock = Sock(app)
@@ -34,6 +35,15 @@ if not SITE_ADMIN_PASSWORD:
 # Debug features (mobile console viewer, manual GPS coordinate entry) are
 # hidden unless explicitly enabled on the server via this environment variable.
 DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+# The live-events WebSocket. On by default; set LIVE_EVENT_SOCKET to a false
+# value on a host that cannot carry a WebSocket at all - uWSGI, which is what
+# shared hosting like PythonAnywhere runs, gives flask-sock no socket to take
+# over, so every client's attempt fails and is retried for the life of the
+# page. Nothing is lost by switching it off: the same events reach clients on
+# their five-second poll of the game, just up to five seconds later.
+LIVE_EVENT_SOCKET = os.environ.get('LIVE_EVENT_SOCKET', 'on').strip().lower() \
+    not in ('0', 'false', 'no', 'off')
 
 # Address players and hosts can use to report abusive content (an announcement,
 # a game, team or base name) or complain about the service. Set the default here;
@@ -834,9 +844,81 @@ def game_events_socket(ws, game_id):
                 if not clients:
                     del ws_clients[game_id]
 
+
+# Recent events per game, for the clients that are not holding a socket open.
+# A WebSocket is the fast path, not the only one: a client that has none (its
+# browser refused, its network dropped it, or the deployment cannot carry one
+# at all) reads the same events off its five-second poll of the game, so a
+# capture still raises a notification rather than silently moving the score.
+#
+# Every event gets a sequence number, so a client can say what it has already
+# seen, and a socket and a poll delivering the same event are recognised as
+# one thing. Held in memory only: this is a few seconds of catch-up, not a
+# record of the game - the database is that.
+GAME_EVENT_BUFFER_SIZE = 200        # events kept per game
+GAME_EVENT_BUFFER_SECONDS = 600     # how long a game's buffer outlives its last event
+GAME_EVENT_MAX_AGE_SECONDS = 120    # older than this and it is not news any more
+
+game_events = {}
+game_event_seq = 0
+game_events_lock = threading.Lock()
+
+
+def _prune_game_events(now):
+    """Drop buffers for games nothing has happened in for a while. Called with
+    the lock held."""
+    cutoff = now - GAME_EVENT_BUFFER_SECONDS
+    for game_id in [gid for gid, buf in game_events.items()
+                    if not buf or buf[-1][1] < cutoff]:
+        del game_events[game_id]
+
+
+def record_game_event(game_id, payload):
+    """Stamp an event with its sequence number and buffer it. Returns the
+    stamped payload, which is what goes out on the socket too, so both routes
+    carry the same number."""
+    global game_event_seq
+
+    now = time.time()
+    with game_events_lock:
+        game_event_seq += 1
+        stamped = dict(payload, seq=game_event_seq)
+
+        buf = game_events.get(game_id)
+        if buf is None:
+            buf = game_events[game_id] = deque(maxlen=GAME_EVENT_BUFFER_SIZE)
+        buf.append((game_event_seq, now, stamped))
+
+        _prune_game_events(now)
+
+    return stamped
+
+
+def current_game_event_seq():
+    """The sequence number a client should start from when it has seen
+    nothing yet."""
+    with game_events_lock:
+        return game_event_seq
+
+
+def game_events_since(game_id, since_seq):
+    """Events this game has seen since since_seq, and the sequence number the
+    caller should send next time. Anything older than a couple of minutes is
+    left out - a notification about something that happened while the phone was
+    in a pocket is noise, and the poll carries the current state regardless."""
+    cutoff = time.time() - GAME_EVENT_MAX_AGE_SECONDS
+
+    with game_events_lock:
+        buf = game_events.get(game_id) or ()
+        events = [payload for seq, at, payload in buf
+                  if seq > since_seq and at >= cutoff]
+        return events, game_event_seq
+
+
 def broadcast_game_event(game_id, payload):
-    """Send a JSON event to every client subscribed to a game."""
-    message = json.dumps(payload)
+    """Buffer an event for the polling clients, and send it to every client
+    subscribed to this game's socket."""
+    message = json.dumps(record_game_event(game_id, payload))
     with ws_clients_lock:
         clients = list(ws_clients.get(game_id, ()))
     for client in clients:
@@ -1515,11 +1597,23 @@ def get_game(game_id):
     if game['start_time'] and game['game_duration_minutes']:
         calculated_end_time = game['start_time'] + (game['game_duration_minutes'] * 60)
 
-    return jsonify({
+    # Events since the caller last asked. A client polling this endpoint is
+    # how a capture reaches anyone whose WebSocket never connected; without a
+    # cursor it gets the sequence number only, so a page that has just opened
+    # starts from now rather than replaying what it missed.
+    events_since = request.args.get('events_since')
+    if events_since is None:
+        recent_events, event_cursor = None, current_game_event_seq()
+    else:
+        recent_events, event_cursor = game_events_since(
+            game_id, int(events_since) if events_since.isdigit() else 0)
+
+    payload = {
         'id': game['id'],
         'name': game['name'],
         'status': game['status'],
         'hostName': game['host_name'],
+        'event_cursor': event_cursor,
         'settings': {
             'capture_radius_meters': game['capture_radius_meters'],
             'points_interval_seconds': game['points_interval_seconds'],
@@ -1538,7 +1632,12 @@ def get_game(game_id):
         },
         'teams': teams,
         'bases': bases
-    })
+    }
+
+    if events_since is not None:
+        payload['events'] = recent_events
+
+    return jsonify(payload)
 
 # Helper function to calculate team score
 def calculate_team_score(cursor, team_id, game):
@@ -4374,6 +4473,11 @@ def render_index():
         html = html.replace(
             'window.QRC_DEBUG_FEATURES = false;',
             'window.QRC_DEBUG_FEATURES = true;'
+        )
+    if not LIVE_EVENT_SOCKET:
+        html = html.replace(
+            'window.QRC_LIVE_EVENT_SOCKET = true;',
+            'window.QRC_LIVE_EVENT_SOCKET = false;'
         )
     contact = get_abuse_contact_email()
     if contact:
