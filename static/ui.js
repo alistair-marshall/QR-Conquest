@@ -3162,11 +3162,34 @@ function renderAnnouncementList() {
       className: 'bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm'
     });
 
-    card.appendChild(UIBuilder.createElement('div', {
-      className: 'text-xs text-gray-500 mb-1',
+    const header = UIBuilder.createElement('div', {
+      className: 'flex items-start justify-between gap-2 mb-1'
+    });
+
+    header.appendChild(UIBuilder.createElement('div', {
+      className: 'text-xs text-gray-500',
       textContent: (isHost ? 'Sent to everyone at ' : 'From the host at ') +
         formatAnnouncementTime(announcement.sentAt)
     }));
+
+    // Only the host can take a message back down, and only their own game's
+    if (isHost) {
+      const deleteButton = UIBuilder.createElement('button', {
+        className: 'text-gray-400 hover:text-red-900 transition-colors flex-shrink-0',
+        title: 'Delete this message',
+        'aria-label': 'Delete this message',
+        onClick: function () {
+          deleteAnnouncementFromPanel(announcement, deleteButton);
+        }
+      });
+      deleteButton.appendChild(UIBuilder.createElement('i', {
+        'data-lucide': 'trash-2',
+        className: 'w-4 h-4'
+      }));
+      header.appendChild(deleteButton);
+    }
+
+    card.appendChild(header);
 
     card.appendChild(UIBuilder.createElement('p', {
       className: 'text-sm text-gray-800 whitespace-pre-wrap break-words',
@@ -3176,8 +3199,36 @@ function renderAnnouncementList() {
     list.appendChild(card);
   });
 
+  // The cards were just rebuilt, so any icon in them is still a placeholder
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
   if (nearBottom) {
     list.scrollTop = list.scrollHeight;
+  }
+}
+
+// Withdraw one message. It goes for the players too, so ask first - and say
+// what deleting does and does not undo, because a player who already read it
+// has read it.
+async function deleteAnnouncementFromPanel(announcement, deleteButton) {
+  const confirmed = confirm(
+    'Delete this message?\n\nIt disappears from every player\'s list and from ' +
+    'yours. Anyone who has already read it has still read it.'
+  );
+  if (!confirmed) return;
+
+  deleteButton.disabled = true;
+  deleteButton.classList.add('opacity-50');
+
+  const deleted = await deleteAnnouncement(announcement.id);
+
+  if (deleted) {
+    showNotification('Message deleted', 'success');
+  } else if (deleteButton.isConnected) {
+    deleteButton.disabled = false;
+    deleteButton.classList.remove('opacity-50');
   }
 }
 
@@ -3240,7 +3291,7 @@ function showAnnouncementPanel() {
   content.appendChild(UIBuilder.createElement('p', {
     className: 'text-sm text-gray-600 mb-3',
     textContent: isHost
-      ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to.'
+      ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to. Delete a message to take it off everyone\'s list.'
       : 'Messages from your game host. You cannot reply here - contact your host the way they told you to.'
   }));
 

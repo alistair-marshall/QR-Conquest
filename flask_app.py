@@ -34,16 +34,23 @@ if not SITE_ADMIN_PASSWORD:
 # hidden unless explicitly enabled on the server via this environment variable.
 DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
+# True when the caller presented the site admin password as a bearer token.
+# Endpoints that are a host's own but need an admin escape hatch check this
+# themselves; everything admin-only uses the decorator below.
+def request_is_site_admin():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return False
+
+    token = auth_header.split(' ')[1]
+
+    return hmac.compare_digest(token, SITE_ADMIN_PASSWORD)
+
 # Admin authentication decorator
 def require_site_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Unauthorized'}), 401
-
-        token = auth_header.split(' ')[1]
-        if not hmac.compare_digest(token, SITE_ADMIN_PASSWORD):
+        if not request_is_site_admin():
             return jsonify({'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
@@ -325,6 +332,7 @@ def init_db():
         game_id TEXT NOT NULL,
         body TEXT NOT NULL,
         sent_at INTEGER NOT NULL,
+        deleted_at INTEGER DEFAULT NULL,
         FOREIGN KEY (game_id) REFERENCES games (id)
     )
     ''')
@@ -333,6 +341,12 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_announcements_game_time
     ON announcements (game_id, sent_at)
     ''')
+
+    # Migrate databases created before an announcement could be withdrawn
+    cursor.execute('PRAGMA table_info(announcements)')
+    announcement_columns = [row['name'] for row in cursor.fetchall()]
+    if 'deleted_at' not in announcement_columns:
+        cursor.execute('ALTER TABLE announcements ADD COLUMN deleted_at INTEGER DEFAULT NULL')
 
     # An unreleased first cut of this feature stored two-way host/player
     # messages. It never shipped, but drop the table so private messages are
@@ -2038,10 +2052,15 @@ def read_announcement_body(data):
 
 
 def fetch_announcements(cursor, game_id):
-    """Read a game's most recent announcements, oldest first."""
+    """Read a game's most recent live announcements, oldest first.
+
+    A withdrawn announcement is gone for everyone, host included: the row is
+    kept so the deployment can still answer for what was sent (see
+    docs/COMPLIANCE.md), but nothing serves it again.
+    """
     cursor.execute("""
     SELECT id, body, sent_at FROM announcements
-    WHERE game_id = ?
+    WHERE game_id = ? AND deleted_at IS NULL
     ORDER BY sent_at DESC, rowid DESC
     LIMIT ?
     """, (game_id, ANNOUNCEMENT_HISTORY_LIMIT))
@@ -2093,6 +2112,57 @@ def send_announcement(game_id):
     return jsonify({'id': announcement_id, 'body': body, 'sentAt': sent_at}), 201
 
 
+# Host withdraws something they sent - a typo, a wrong instruction, or content
+# that has to come down. The row is kept with a deletion time rather than
+# removed: the deployment can still answer for what was sent if someone
+# complains about it, while nothing serves it to a player again.
+@app.route('/api/games/<game_id>/announcements/<announcement_id>', methods=['DELETE'])
+def delete_announcement(game_id, announcement_id):
+    data = request.get_json(silent=True) or {}
+    host_id = data.get('host_id')
+    if not host_id:
+        return jsonify({'error': 'Host ID required'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT host_id FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game['host_id'] != host_id:
+        conn.close()
+        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+    cursor.execute("""
+    SELECT deleted_at FROM announcements WHERE id = ? AND game_id = ?
+    """, (announcement_id, game_id))
+    announcement = cursor.fetchone()
+
+    if not announcement:
+        conn.close()
+        return jsonify({'error': 'Announcement not found'}), 404
+
+    if announcement['deleted_at'] is not None:
+        conn.close()
+        return jsonify({'error': 'Announcement is already deleted'}), 400
+
+    deleted_at = int(time.time())
+    cursor.execute('UPDATE announcements SET deleted_at = ? WHERE id = ?',
+                   (deleted_at, announcement_id))
+
+    conn.commit()
+    conn.close()
+
+    # Same reasoning as posting: the event says only that the list changed
+    broadcast_game_event(game_id, {'type': 'announcement_deleted'})
+
+    return jsonify({'success': True, 'id': announcement_id, 'deletedAt': deleted_at})
+
+
 # The host's own record of what they have already sent
 @app.route('/api/games/<game_id>/announcements', methods=['GET'])
 def get_host_announcements(game_id):
@@ -2142,7 +2212,8 @@ def get_player_announcements(player_id):
 
     read_at = player['announcements_read_at'] or 0
     cursor.execute("""
-    SELECT COUNT(*) FROM announcements WHERE game_id = ? AND sent_at > ?
+    SELECT COUNT(*) FROM announcements
+    WHERE game_id = ? AND sent_at > ? AND deleted_at IS NULL
     """, (player['game_id'], read_at))
     unread = cursor.fetchone()[0]
 
@@ -3383,17 +3454,25 @@ def delete_team(team_id):
 
     return jsonify({'success': True})
 
-# Delete game (host can delete their own games)
+# Delete a game and everything in it. A host can clear away a game nobody
+# joined - a mis-scanned setup, a game that never ran. Once a player has
+# joined, the game holds other people's data and its history is what a
+# complaint or an erasure request would be answered from, so deleting it is
+# the site administrator's call: the host ends the game instead.
 @app.route('/api/games/<game_id>', methods=['DELETE'])
 def delete_game(game_id):
-    data = request.json
-    if not data or 'host_id' not in data:
+    # A site admin deleting from the admin panel has no host id to send, so
+    # the body is optional for them - and may not be there at all
+    data = request.get_json(silent=True) or {}
+    is_admin = request_is_site_admin()
+
+    if not is_admin and 'host_id' not in data:
         return jsonify({'error': 'Host ID required'}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verify game exists and host is authorized
+    # Verify game exists and the caller is allowed to delete it
     cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
     game = cursor.fetchone()
 
@@ -3401,9 +3480,22 @@ def delete_game(game_id):
         conn.close()
         return jsonify({'error': 'Game not found'}), 404
 
-    if game['host_id'] != data['host_id']:
-        conn.close()
-        return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+    if not is_admin:
+        if game['host_id'] != data['host_id']:
+            conn.close()
+            return jsonify({'error': 'Unauthorized: host ID does not match game owner'}), 403
+
+        cursor.execute("""
+        SELECT COUNT(*) FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+        """, (game_id,))
+
+        if cursor.fetchone()[0] > 0:
+            conn.close()
+            return jsonify({
+                'error': 'Players have joined this game, so it can no longer be deleted. '
+                         'End the game instead, or ask a site administrator to remove it.'
+            }), 403
 
     try:
         # Begin transaction for cascade deletion
