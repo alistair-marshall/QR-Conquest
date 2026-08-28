@@ -187,8 +187,10 @@ function clearGameState() {
   // Clear temporary session data
   sessionStorage.removeItem('pendingQRCode');
   sessionStorage.removeItem('pendingTeamId');
+  sessionStorage.removeItem('pendingTeamQrCode');
   sessionStorage.removeItem('pendingJoinGameId');
   sessionStorage.removeItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingCaptureQrCode');
 
   // Stop any active polling
   stopScorePolling();
@@ -415,7 +417,10 @@ async function handleTeamQR(qrCode, statusData) {
     const startRegistration = async () => {
       updateAuthState({ gameId: gameId });
       await fetchGameData(gameId);
+      // The scanned code travels with the pending team: the server only takes
+      // the join as proof of a scan if the code comes back with it
       sessionStorage.setItem('pendingTeamId', teamId);
+      sessionStorage.setItem('pendingTeamQrCode', qrCode);
       if (window.navigateTo) {
         window.navigateTo('playerRegistration');
       }
@@ -447,7 +452,7 @@ async function handleTeamQR(qrCode, statusData) {
         
         if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
           console.log('Player confirmed team change within same game');
-          await joinTeam(teamId);
+          await joinTeam(teamId, null, qrCode);
         } else {
           if (window.navigateTo) {
             window.navigateTo('gameView');
@@ -457,6 +462,7 @@ async function handleTeamQR(qrCode, statusData) {
         // Same game, no team yet
         console.log('Same game, no team - go to registration');
         sessionStorage.setItem('pendingTeamId', teamId);
+        sessionStorage.setItem('pendingTeamQrCode', qrCode);
         if (window.navigateTo) {
           window.navigateTo('playerRegistration');
         }
@@ -552,7 +558,7 @@ async function handleBaseQR(qrCode, statusData) {
 
     // Check if user is on a team
     if (!authState.hasTeam) {
-      await handleBaseScanWithoutTeam(baseId, gameId);
+      await handleBaseScanWithoutTeam(baseId, gameId, qrCode);
       return;
     }
 
@@ -566,7 +572,7 @@ async function handleBaseQR(qrCode, statusData) {
       if (!navigator.onLine) {
         throw new Error('A connection is needed to collect this base.');
       }
-      await collectBase(baseId);
+      await collectBase(baseId, qrCode);
       // Leave the scanner: it would otherwise restart and collect the same
       // base again, which the server rejects as already collected
       leaveScannerPage();
@@ -597,12 +603,12 @@ async function handleBaseQR(qrCode, statusData) {
         }
         return;
       }
-      await startQuizSession(baseId);
+      await startQuizSession(baseId, qrCode);
     } else {
       // Attempt to capture the base (legacy instantaneous capture). This
       // moves to the base view for the attack animation, leaving the
       // scanner page so it can't rescan the base just captured.
-      await captureBase(baseId);
+      await captureBase(baseId, qrCode);
     }
   } catch (err) {
     // Navigate appropriately based on error context
@@ -630,7 +636,7 @@ function leaveScannerPage() {
 
 // Handle a base scan by a player who is not yet on a team.
 // What happens depends on the game's join method setting.
-async function handleBaseScanWithoutTeam(baseId, gameId) {
+async function handleBaseScanWithoutTeam(baseId, gameId, qrCode) {
   const response = await fetch(`${API_BASE_URL}/games/${gameId}`);
   if (!response.ok) {
     throw new Error('Unable to load game information. Please try again.');
@@ -652,6 +658,7 @@ async function handleBaseScanWithoutTeam(baseId, gameId) {
   await fetchGameData(gameId);
   sessionStorage.setItem('pendingJoinGameId', gameId);
   sessionStorage.setItem('pendingCaptureBaseId', baseId);
+  sessionStorage.setItem('pendingCaptureQrCode', qrCode);
   if (window.navigateTo) {
     window.navigateTo('playerRegistration');
   }
@@ -660,10 +667,13 @@ async function handleBaseScanWithoutTeam(baseId, gameId) {
 // After joining via a base scan, try to capture the base that was scanned
 async function attemptPendingCapture() {
   const baseId = sessionStorage.getItem('pendingCaptureBaseId');
+  const qrCode = sessionStorage.getItem('pendingCaptureQrCode');
   sessionStorage.removeItem('pendingCaptureBaseId');
+  sessionStorage.removeItem('pendingCaptureQrCode');
   sessionStorage.removeItem('pendingJoinGameId');
 
-  if (!baseId || (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
+  if (!baseId || !qrCode ||
+      (appState.gameData.status !== 'active' && appState.gameData.status !== 'bonus')) {
     return;
   }
 
@@ -673,7 +683,7 @@ async function attemptPendingCapture() {
     }
 
     if (appState.gameData.status === 'bonus') {
-      await collectBase(baseId);
+      await collectBase(baseId, qrCode);
       return;
     }
 
@@ -687,9 +697,9 @@ async function attemptPendingCapture() {
         }
         return;
       }
-      await startQuizSession(baseId);
+      await startQuizSession(baseId, qrCode);
     } else {
-      await captureBase(baseId);
+      await captureBase(baseId, qrCode);
     }
   } catch (err) {
     // capture/session functions already notify the user; joining still succeeded
@@ -1897,8 +1907,10 @@ async function deleteGame() {
 // PLAYER ACTIONS
 // =============================================================================
 
-// Join team
-async function joinTeam(teamId, playerName = 'Anonymous Player') {
+// Join team. teamQrCode is the code just scanned off the team's sheet; the
+// server insists on it unless the game lets players pick a team from a list.
+async function joinTeam(teamId, playerName, teamQrCode) {
+  playerName = playerName || 'Anonymous Player';
   try {
     setLoading(true);
     console.log('Joining team:', teamId, 'with name:', playerName);
@@ -1907,6 +1919,10 @@ async function joinTeam(teamId, playerName = 'Anonymous Player') {
     const requestBody = {
       player_name: playerName
     };
+
+    if (teamQrCode) {
+      requestBody.qr_code = teamQrCode;
+    }
 
     // If player already has an ID (team change), include it to preserve identity
     if (authState.playerId) {
@@ -2062,10 +2078,14 @@ async function getCurrentGPSCoordinates() {
 
 // Handle base capture with GPS location verification (legacy, instantaneous
 // capture - used only when the game does not have quiz capture enabled)
-async function captureBase(baseId) {
+async function captureBase(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to capture it.");
   }
 
   const { latitude, longitude, accuracy, usingFreshGPS } = await getCurrentGPSCoordinates();
@@ -2098,7 +2118,8 @@ async function captureBase(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2162,10 +2183,14 @@ function snapshotBaseForView(baseId) {
 
 // Player collects a base during the bonus round. GPS-verified server-side so
 // the base is marked collected at its map location, not wherever it ends up.
-async function collectBase(baseId) {
+async function collectBase(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must be on a team to collect bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to collect it.");
   }
 
   const { latitude, longitude, accuracy } = await getCurrentGPSCoordinates();
@@ -2192,7 +2217,8 @@ async function collectBase(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2357,10 +2383,14 @@ function clearQuizSession() {
 }
 
 // Begin a scan session against a base (quiz-enabled games only)
-async function startQuizSession(baseId) {
+async function startQuizSession(baseId, qrCode) {
   const authState = getAuthState();
   if (!authState.hasTeam) {
     throw new Error('You must join a team before capturing bases.');
+  }
+
+  if (!qrCode) {
+    throw new Error("Scan the base's QR code to capture it.");
   }
 
   const { latitude, longitude } = await getCurrentGPSCoordinates();
@@ -2376,7 +2406,8 @@ async function startQuizSession(baseId) {
       body: JSON.stringify({
         player_id: authState.playerId,
         latitude: latitude,
-        longitude: longitude
+        longitude: longitude,
+        qr_code: qrCode
       })
     });
 
@@ -2399,6 +2430,9 @@ async function startQuizSession(baseId) {
       active: true,
       sessionId: data.session_id,
       baseId: baseId,
+      // Held so the bonus-round collect prompt below can reuse the scan
+      // rather than sending the player back to the marker for another
+      qrCode: qrCode,
       baseName: data.base.name,
       shield: data.base.shield,
       ownerTeamId: data.base.owner_team_id,
@@ -2461,7 +2495,7 @@ async function submitQuizAnswer(optionId) {
       session.active = false;
       clearQuizSession();
       if (data.bonus_round && window.showBonusCollectPrompt) {
-        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct);
+        window.showBonusCollectPrompt(session.baseId, session.baseName, data.correct, session.qrCode);
       } else {
         if (window.closeQuizModal) window.closeQuizModal();
         if (window.showNotification) {

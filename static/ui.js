@@ -2891,7 +2891,7 @@ function closeQuizModal() {
 // Called by core.js when an answer comes back after the main game has rolled
 // into the bonus round - replaces the quiz with the collect prompt, since
 // the player is already standing at the base
-function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
+function showBonusCollectPrompt(baseId, baseName, wasCorrect, qrCode) {
   closeQuizModal();
 
   const content = UIBuilder.createElement('div', { className: 'text-center' });
@@ -2921,7 +2921,7 @@ function showBonusCollectPrompt(baseId, baseName, wasCorrect) {
         text: 'Collect This Base',
         onClick: function () {
           modal.close();
-          collectBase(baseId);
+          collectBase(baseId, qrCode);
         },
         className: 'flex-1 bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors',
         icon: 'flag'

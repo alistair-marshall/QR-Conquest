@@ -1297,6 +1297,30 @@ def end_game(game_id):
     })
 
 # ==========================================================
+# Scanned QR codes - proof the player was actually there
+# ==========================================================
+
+# A base id and a team id both travel in the game payload that every player
+# device reads, so an endpoint that trusts the id alone can be driven from an
+# armchair: any player can read another team's id and join it, or read a base
+# id and capture a base they never walked to. The QR code is what the ids are
+# not - a secret printed on the sign-up sheet or the base marker, served only
+# to the game's own host - so scan-backed actions carry the scanned code and
+# check it against the row it claims to be. Ids stay in the path; they say
+# which row, not that the caller was there.
+#
+# For a base this sits alongside the GPS check rather than replacing it: the
+# code proves the player found the marker, the location proves they are at it
+# now, and a base capture needs both.
+def scanned_code_matches(assigned_code, submitted_code):
+    if not assigned_code or not isinstance(submitted_code, str) or not submitted_code:
+        return False
+    # Compared as bytes: compare_digest refuses str holding non-ASCII, so a
+    # crafted code would raise rather than simply not match
+    return hmac.compare_digest(assigned_code.encode('utf-8'),
+                               submitted_code.encode('utf-8'))
+
+# ==========================================================
 # Bonus Round - collect the bases in after the main game
 # ==========================================================
 
@@ -1371,7 +1395,8 @@ def start_bonus_round(game_id):
 @app.route('/api/bases/<base_id>/collect', methods=['POST'])
 def collect_base(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -1399,6 +1424,10 @@ def collect_base(base_id):
     if base_data['game_status'] != 'bonus':
         conn.close()
         return jsonify({'error': 'Bases can only be collected during the bonus round'}), 403
+
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     cursor.execute('''
     SELECT p.team_id, t.game_id, t.name AS team_name, t.color AS team_color FROM players p
@@ -1530,12 +1559,17 @@ def return_base(base_id):
         'points': points
     })
 
-# Join team
+# Join team. A team's id is public to everyone already in the game, so joining
+# by id alone would let any player walk onto any team; the scanned team QR code
+# is what proves they were handed it. The one exception is a choose_team game,
+# where picking a team off a list is the intended way in and there is no code
+# to scan - a code is still checked there if one is sent.
 @app.route('/api/teams/<team_id>/join', methods=['POST'])
 def join_team(team_id):
     data = request.json
     player_id = data.get('player_id') if data else None
     player_name = data.get('player_name', 'Anonymous Player') if data else 'Anonymous Player'
+    submitted_qr = data.get('qr_code') if data else None
     current_time = int(time.time())
 
     conn = get_db_connection()
@@ -1543,7 +1577,7 @@ def join_team(team_id):
 
     # Check if team exists and get game info
     cursor.execute('''
-    SELECT t.*, g.status FROM teams t
+    SELECT t.*, g.status, g.join_method FROM teams t
     JOIN games g ON t.game_id = g.id
     WHERE t.id = ?
     ''', (team_id,))
@@ -1556,6 +1590,14 @@ def join_team(team_id):
     if team['status'] == 'ended':
         conn.close()
         return jsonify({'error': 'This game has already ended'}), 400
+
+    if submitted_qr is not None:
+        if not scanned_code_matches(team['qr_code'], submitted_qr):
+            conn.close()
+            return jsonify({'error': 'That QR code does not belong to this team.'}), 403
+    elif (team['join_method'] or 'team_qr') != 'choose_team':
+        conn.close()
+        return jsonify({'error': 'Scan the team QR code to join this team.'}), 403
 
     # If player_id is provided, check if they're already in a team for this game
     if player_id:
@@ -1686,7 +1728,8 @@ def join_game(game_id):
 @app.route('/api/bases/<base_id>/capture', methods=['POST'])
 def capture_base(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -1721,6 +1764,12 @@ def capture_base(base_id):
     if base_data['quiz_enabled']:
         conn.close()
         return jsonify({'error': 'This game uses quiz capture. Start a scan session instead.'}), 400
+
+    # The scanned code proves the player found the marker; the distance check
+    # below proves they are standing at it. A capture needs both.
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     # Get player's team and confirm they belong to this base's game
     cursor.execute('''
@@ -2893,7 +2942,8 @@ def serialize_question_for_client(question):
 @app.route('/api/bases/<base_id>/session/start', methods=['POST'])
 def start_session(base_id):
     data = request.json
-    if not data or 'player_id' not in data or 'latitude' not in data or 'longitude' not in data:
+    if (not data or 'player_id' not in data or 'latitude' not in data
+            or 'longitude' not in data or 'qr_code' not in data):
         return jsonify({'error': 'Missing required fields'}), 400
 
     player_id = data['player_id']
@@ -2928,6 +2978,12 @@ def start_session(base_id):
         if base_data['game_status'] == 'bonus':
             return jsonify({'error': 'The main game has ended. Bases can no longer be captured - collect them in for bonus points instead.'}), 403
         return jsonify({'error': 'Bases can only be captured while the game is active'}), 403
+
+    # As in capture_base: the scanned code proves the player found the marker,
+    # the distance check below proves they are at it.
+    if not scanned_code_matches(base_data['qr_code'], data['qr_code']):
+        conn.close()
+        return jsonify({'error': 'That QR code does not belong to this base. Scan the code on the base itself.'}), 403
 
     cursor.execute('''
     SELECT p.*, t.game_id, t.name AS team_name FROM players p
