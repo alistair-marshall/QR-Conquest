@@ -161,8 +161,6 @@ the software, not oversights it hides:
 - No per-announcement deletion, and no moderation tooling for a site
   administrator
 - No automatic retention purge
-- Names players typed into games created before names became generated are
-  still in the database until those games are deleted
 - No privacy notice or terms shown in the app
 - No rate limiting on any endpoint
 - A game's id is a random UUID, so it cannot be guessed, but it is not a
