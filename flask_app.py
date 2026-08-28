@@ -97,53 +97,27 @@ def require_host(f):
     return decorated_function
 
 # ==========================================================
-# Word Lists for Game Code Generation
+# Game Identifiers
 # ==========================================================
 
-ADJECTIVES = [
-    'brave', 'calm', 'dark', 'fast', 'green', 'happy', 'jolly', 'kind', 'loud', 'magic',
-    'new', 'orange', 'proud', 'quiet', 'red', 'shy', 'smart', 'strong', 'tall', 'tiny',
-    'vivid', 'wild', 'yellow', 'zealous', 'ancient', 'bold', 'clever', 'daring', 'eager',
-    'fancy', 'gentle', 'honest', 'icy', 'juicy', 'keen', 'lively', 'mighty', 'noble',
-    'polite', 'quick', 'radiant', 'silver', 'tidy', 'unique', 'vibrant', 'witty', 'exotic',
-    'young', 'zesty', 'blue', 'golden', 'royal', 'rustic', 'swift', 'lucky', 'merry', 'prime'
-]
+# A game's id is handed to every player device that scans into it, and it
+# names the game in API paths and on the game socket. Earlier versions used a
+# friendly "adjective-noun" code, which was short enough for anyone outside
+# the game to guess their way into its payload. Games are identified by a
+# random UUID instead; the host-chosen game name is what people read and say
+# out loud, so nothing is lost by the id being unmemorable.
+def generate_game_id():
+    """Generate an unguessable id for a new game"""
+    return str(uuid.uuid4())
 
-NOUNS = [
-    'apple', 'bear', 'cloud', 'door', 'eagle', 'forest', 'garden', 'hill', 'island', 'jungle',
-    'king', 'lake', 'mountain', 'night', 'ocean', 'planet', 'queen', 'river', 'star', 'tree',
-    'unicorn', 'valley', 'whale', 'xylophone', 'yeti', 'zebra', 'arrow', 'bell', 'castle', 'diamond',
-    'elephant', 'falcon', 'galaxy', 'harbor', 'igloo', 'jewel', 'knight', 'lantern', 'moon', 'ninja',
-    'oasis', 'panda', 'quest', 'rocket', 'sailor', 'tiger', 'umbrella', 'village', 'warrior', 'yacht',
-    'zeppelin', 'dragon', 'phoenix', 'treasure', 'wizard', 'crown', 'carnival', 'banana', 'compass', 'dolphin'
-]
 
-# Helper function to generate game codes - add after the word lists
-def generate_game_code():
-    """Generate a friendly game code using an adjective and a noun"""
-    adjective = random.choice(ADJECTIVES)
-    noun = random.choice(NOUNS)
-    return f"{adjective}-{noun}"
-
-# Helper function to generate a unique game code
-def generate_unique_game_code():
-    """Generate a unique friendly game code that doesn't exist in the database"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Try up to 10 times to generate a unique code
-    for _ in range(10):
-        code = generate_game_code()
-        cursor.execute('SELECT id FROM games WHERE id = ?', (code,))
-        if not cursor.fetchone():
-            conn.close()
-            return code
-
-    # If we couldn't generate a unique code after 10 attempts,
-    # add a random number suffix to ensure uniqueness
-    code = f"{generate_game_code()}-{random.randint(1, 999)}"
-    conn.close()
-    return code
+def looks_like_uuid(value):
+    """True if value is a UUID string, as generate_game_id produces"""
+    try:
+        uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
 
 
 # ==========================================================
@@ -359,6 +333,22 @@ def init_db():
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_points_per_base INTEGER')
     if 'bonus_start_time' not in game_columns:
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_start_time INTEGER')
+
+    # Re-key games that still carry a guessable "adjective-noun" code as their
+    # id, so nobody outside a game can walk the id space into its payload.
+    # Games being played right now are left alone: the id lives in each
+    # player's localStorage, and changing it mid-game would sign every device
+    # out of a game it is standing in. They are picked up on the first restart
+    # after they end. SQLite has no ON UPDATE CASCADE here, so the rows that
+    # reference a game move with it.
+    cursor.execute("SELECT id FROM games WHERE status NOT IN ('active', 'bonus')")
+    stale_game_ids = [row['id'] for row in cursor.fetchall() if not looks_like_uuid(row['id'])]
+    for stale_id in stale_game_ids:
+        fresh_id = generate_game_id()
+        cursor.execute('UPDATE games SET id = ? WHERE id = ?', (fresh_id, stale_id))
+        cursor.execute('UPDATE teams SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
+        cursor.execute('UPDATE bases SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
+        cursor.execute('UPDATE announcements SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
 
     # Migrate databases created before players.cooldown_until existed
     cursor.execute('PRAGMA table_info(players)')
@@ -754,7 +744,7 @@ def create_game():
         conn.close()
         return jsonify({'error': 'Host account has expired'}), 400
 
-    game_id = generate_unique_game_code()
+    game_id = generate_game_id()
 
     # Extract game settings with defaults
     capture_radius = data.get('capture_radius_meters', 15)

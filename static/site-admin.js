@@ -329,18 +329,14 @@ function buildGameRow(game) {
       className: 'px-6 py-4 whitespace-nowrap'
     });
 
+    // A game's id is a random UUID and identifies nothing to a reader, so the
+    // host-given name and the Host column are what name a row here
     const nameContainer = UIBuilder.createElement('div');
     const gameName = UIBuilder.createElement('div', {
       className: 'text-sm font-medium text-gray-900',
       textContent: game.name
     });
     nameContainer.appendChild(gameName);
-
-    const gameId = UIBuilder.createElement('div', {
-      className: 'text-sm text-gray-500',
-      textContent: `ID: ${game.id}`
-    });
-    nameContainer.appendChild(gameId);
 
     nameCell.appendChild(nameContainer);
     row.appendChild(nameCell);

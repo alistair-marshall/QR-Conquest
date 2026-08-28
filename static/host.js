@@ -132,18 +132,20 @@ function renderHostPanel() {
     className: 'grid grid-cols-1 sm:grid-cols-2 gap-4'
   });
 
-  const gameIdCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
-  const gameIdLabel = UIBuilder.createElement('div', {
+  // The game's id is a random UUID that nobody needs to read or repeat, so
+  // this card names the game the way the host named it
+  const gameNameCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
+  const gameNameLabel = UIBuilder.createElement('div', {
     className: 'text-sm text-gray-600 font-medium',
-    textContent: 'Game ID'
+    textContent: 'Game'
   });
-  gameIdCard.appendChild(gameIdLabel);
-  const gameIdValue = UIBuilder.createElement('div', {
+  gameNameCard.appendChild(gameNameLabel);
+  const gameNameValue = UIBuilder.createElement('div', {
     className: 'text-lg font-bold text-purple-600',
-    textContent: appState.gameData.id
+    textContent: appState.gameData.name
   });
-  gameIdCard.appendChild(gameIdValue);
-  gameInfoGrid.appendChild(gameIdCard);
+  gameNameCard.appendChild(gameNameValue);
+  gameInfoGrid.appendChild(gameNameCard);
 
   const statusCard = UIBuilder.createElement('div', { className: 'bg-gray-50 p-3 rounded-lg' });
   const statusLabel = UIBuilder.createElement('div', {
@@ -1004,12 +1006,6 @@ async function loadHostGames() {
           textContent: game.name
         });
         gameInfo.appendChild(gameName);
-
-        const gameId = UIBuilder.createElement('p', {
-          className: 'text-sm text-gray-600',
-          textContent: `ID: ${game.id}`
-        });
-        gameInfo.appendChild(gameId);
 
         gameHeader.appendChild(gameInfo);
 

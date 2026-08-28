@@ -181,8 +181,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 3. **Create your game**:
    - Visit your host secret link if not already authenticated
    - Click "Host a Game" or use "Host Menu" button
-   - Create new game with descriptive name
-   - Note the friendly game code generated
+   - Create new game with descriptive name - that name is how the game is identified everywhere you and your players see it
 
 4. **Set up teams**:
    - Use "Scan QR Code" to add teams
@@ -408,8 +407,9 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
-- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game code can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
-- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
+- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
+- **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
+- **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
@@ -590,7 +590,7 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Secret link expiry**: Host permissions can be time-limited
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
-- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
+- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. A game's id is a random UUID rather than a guessable code, so the payload cannot be reached by walking the id space either - but it is still scoped as though it could be, because the id travels to every player device that scans in
 - **Credentials stay out of URLs**: a host identifies itself with an `X-Host-ID` header rather than a `?host_id=` query string or an id in the path, either of which would be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
 - **A host addresses only its own data**: the endpoints a host uses live under `/api/host/...` and carry no id at all - the header names whose question bank or games are being read, so there is no id in the path that could disagree with the credential, and nothing to guess but the credential itself. An unknown host id is refused exactly like a missing one, so the API cannot be used to test whether a host id is real. The remaining `/api/hosts/<host_id>/...` routes are the site admin's, authorised by the admin bearer token, where the id names which record to manage rather than who is asking
 - **Credentials can be rotated**: a host holds two secrets - the `qr_code` its device scans to enrol, and the `host_id` that device stores and sends afterwards. **Rotate** on the site admin's host list replaces *both*, because replacing only the QR code would leave a leaked `host_id` working forever. The host's games and question bank move across unchanged; every device signed in as that host is signed out and gets back in by scanning the new code. This is the remedy whenever a secret link is forwarded to the wrong person, a host's phone is lost, or a host leaves
