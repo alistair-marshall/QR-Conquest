@@ -354,7 +354,7 @@ function loadQRCodeLibrary() {
 
     // Create script element to load QRCode.js
     const script = UIBuilder.createElement('script', {
-      src: '/libs/qrcode.min.js',
+      src: window.assetUrl('/libs/qrcode.min.js'),
       onLoad: () => {
         console.log('QRCode library loaded successfully');
         resolve();
@@ -1306,7 +1306,7 @@ function renderQRScanner() {
 
     // Create script element to load jsQR
     const script = document.createElement('script');
-    script.src = '/libs/jsQR.js';
+    script.src = window.assetUrl('/libs/jsQR.js');
     script.onload = () => scanWithJsQR(generation);
     script.onerror = () => {
       setStatusMessage('Failed to load QR scanner library', 'error');
