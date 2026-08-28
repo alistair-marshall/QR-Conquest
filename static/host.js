@@ -971,7 +971,7 @@ async function loadHostGames() {
     gamesListContainer.appendChild(UIBuilder.createLoadingDisplay('Loading your games...'));
 
     // Fetch games for this host
-    const games = await fetchHostGames(authState.hostId);
+    const games = await fetchHostGames();
 
     // Clear loading state
     gamesListContainer.innerHTML = '';
@@ -1615,7 +1615,7 @@ function buildGameSettingsForm(options = {}) {
   // Populate the category picker asynchronously from the host's bank
   const quizAuthState = getAuthState();
   if (quizAuthState.hostId) {
-    fetchHostCategories(quizAuthState.hostId).then(function(categories) {
+    fetchHostCategories().then(function(categories) {
       categoriesList.innerHTML = '';
       if (!categories.length) {
         categoriesList.appendChild(UIBuilder.createElement('p', {
@@ -2062,10 +2062,8 @@ async function loadQuestionBankList() {
   const listContainer = document.getElementById('question-bank-list');
   if (!listContainer) return;
 
-  const authState = getAuthState();
-
   try {
-    const questions = await fetchQuestions(authState.hostId);
+    const questions = await fetchQuestions();
     listContainer.innerHTML = '';
 
     if (!questions.length) {
@@ -2097,7 +2095,7 @@ async function loadQuestionBankList() {
         const count = byCategory[category].length;
         if (!confirm(`Permanently delete all ${count} question(s) in "${category}"? This cannot be undone.`)) return;
         try {
-          const result = await bulkDeleteQuestions(getAuthState().hostId, byCategory[category].map(q => q.id));
+          const result = await bulkDeleteQuestions(byCategory[category].map(q => q.id));
           if (result.in_use) {
             showNotification(`Deleted ${result.deleted} question(s); ${result.in_use} skipped because a running game is using this category`, 'warning');
           } else {
@@ -2165,7 +2163,7 @@ function buildQuestionCard(question) {
 
   const toggleBtn = UIBuilder.createButton(question.active ? 'Disable' : 'Enable', async function() {
     try {
-      await updateQuestion(getAuthState().hostId, question.id, { active: !question.active });
+      await updateQuestion(question.id, { active: !question.active });
       showNotification(question.active ? 'Question disabled' : 'Question enabled', 'success');
       loadQuestionBankList();
     } catch (err) {
@@ -2180,7 +2178,7 @@ function buildQuestionCard(question) {
   const deleteBtn = UIBuilder.createButton('Delete', async function() {
     if (!confirm('Permanently delete this question? This cannot be undone.')) return;
     try {
-      await deleteQuestion(getAuthState().hostId, question.id);
+      await deleteQuestion(question.id);
       showNotification('Question deleted', 'success');
       loadQuestionBankList();
     } catch (err) {
@@ -2378,12 +2376,11 @@ function renderQuestionFormModal(existingQuestion) {
     }
 
     try {
-      const hostId = getAuthState().hostId;
       if (isEditing) {
-        await updateQuestion(hostId, existingQuestion.id, payload);
+        await updateQuestion(existingQuestion.id, payload);
         showNotification('Question updated', 'success');
       } else {
-        await createQuestion(hostId, payload);
+        await createQuestion(payload);
         showNotification('Question added', 'success');
       }
       modal.close();
@@ -2456,7 +2453,7 @@ function renderBulkImportModal() {
     }
 
     try {
-      const result = await bulkImportQuestions(getAuthState().hostId, payload);
+      const result = await bulkImportQuestions(payload);
       resultsContainer.innerHTML = '';
       resultsContainer.appendChild(UIBuilder.createElement('p', {
         className: 'text-green-700 font-medium',

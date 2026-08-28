@@ -409,7 +409,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game code can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
-- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host passing their own `host_id` gets those fields for their own game
+- **Payload scoping**: The game payload is fetched without a credential, and game codes are short and guessable, so the anonymous view carries no player names or ids and none of the QR codes that join a team. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
 
 ### Frontend (Vanilla JavaScript)
@@ -591,6 +591,43 @@ There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in 
 - **Session management**: Persistent authentication via localStorage
 - **No password storage**: Only site admin password in environment
 - **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. Game codes are guessable by design (they are meant to be read out loud), so nothing sensitive hangs off knowing one
+- **Credentials stay out of URLs**: a host identifies itself with an `X-Host-ID` header rather than a `?host_id=` query string or an id in the path, either of which would be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
+- **A host addresses only its own data**: the endpoints a host uses live under `/api/host/...` and carry no id at all - the header names whose question bank or games are being read, so there is no id in the path that could disagree with the credential, and nothing to guess but the credential itself. An unknown host id is refused exactly like a missing one, so the API cannot be used to test whether a host id is real. The remaining `/api/hosts/<host_id>/...` routes are the site admin's, authorised by the admin bearer token, where the id names which record to manage rather than who is asking
+- **Credentials can be rotated**: a host holds two secrets - the `qr_code` its device scans to enrol, and the `host_id` that device stores and sends afterwards. **Rotate** on the site admin's host list replaces *both*, because replacing only the QR code would leave a leaked `host_id` working forever. The host's games and question bank move across unchanged; every device signed in as that host is signed out and gets back in by scanning the new code. This is the remedy whenever a secret link is forwarded to the wrong person, a host's phone is lost, or a host leaves
+
+### Known Limitation: The Enrolment Link Is a URL
+
+A host enrols by opening `/?id=<qr_code>` - scanned from a printed code or
+followed from the secret link. The credential is therefore *in a URL*, which
+is exactly what the rules above avoid everywhere else. This is inherent to
+QR-based enrolment: with no usernames or passwords, the link has to carry the
+secret, because the link **is** the credential. It is a deliberate trade -
+hosts set up by pointing a camera at a poster instead of managing accounts -
+and it is worth knowing where that secret can end up:
+
+- **The host's browser history.** The app calls `history.replaceState` as soon
+  as it reads the parameter, so the `?id=` entry is replaced rather than left
+  behind, but a browser that syncs history across devices may still have taken
+  a copy
+- **Server and proxy access logs.** `GET /?id=<qr_code>` and the
+  `GET /api/qr-codes/<qr_code>/status` that follows it both appear in full in
+  ordinary access logs. Anyone who can read those logs can enrol as that host.
+  If you keep logs, treat them as holding credentials: restrict who can read
+  them, and keep them no longer than you need
+- **Wherever the link was sent.** A secret link pasted into email or a group
+  chat stays there, readable by anyone with access to that thread, long after
+  the game ends
+
+`Referrer-Policy: no-referrer` is set on the page, so the credential is never
+sent onward in a `Referer` header. Browsers already withhold it cross-origin
+by default; the explicit policy makes that a guarantee rather than a default.
+
+None of this is fixed by the routing changes above, and it cannot be while
+enrolment stays QR-only. What makes it survivable is that the exposure is
+**recoverable**: use **Rotate** to retire a link that has been over-shared or
+a host id that may have been read from a log, and set an expiry date on hosts
+so a forgotten link stops working on its own. Rotate on any suspicion - it
+costs the host one scan.
 
 ### Data Protection
 - **Input validation**: All API inputs validated

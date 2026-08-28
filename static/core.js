@@ -121,6 +121,17 @@ function getAuthState() {
   };
 }
 
+// The host id is a credential, so it is sent in a header rather than in the
+// query string, which would leave it in server logs, browser history and the
+// Referer header of anything the page links out to.
+function hostAuthHeaders() {
+  const authState = getAuthState();
+
+  return authState.isHost && authState.hostId
+    ? { 'X-Host-ID': authState.hostId }
+    : {};
+}
+
 // Update authentication state
 function updateAuthState(authData) {
   // Update localStorage for persistent data
@@ -954,7 +965,8 @@ async function fetchPlayerPositions() {
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/games/${appState.gameData.id}/positions?host_id=${encodeURIComponent(authState.hostId)}`
+      `${API_BASE_URL}/games/${appState.gameData.id}/positions`,
+      { headers: hostAuthHeaders() }
     );
 
     if (!response.ok) {
@@ -1001,13 +1013,8 @@ function stopPlayerPositionPolling() {
 // Team rosters and QR codes are only served to the game's own host, so the
 // host identifies itself when reading a game. Players send nothing and get
 // the anonymous view.
-function gameDataUrl(gameId) {
-  const authState = getAuthState();
-  const url = `${API_BASE_URL}/games/${gameId}`;
-
-  return authState.isHost
-    ? `${url}?host_id=${encodeURIComponent(authState.hostId)}`
-    : url;
+function fetchGame(gameId) {
+  return fetch(`${API_BASE_URL}/games/${gameId}`, { headers: hostAuthHeaders() });
 }
 
 // Fetch game data
@@ -1019,7 +1026,7 @@ async function fetchGameData(gameId) {
     let data = null;
 
     try {
-      const response = await fetch(gameDataUrl(gameId));
+      const response = await fetchGame(gameId);
 
       if (response.ok) {
         data = await response.json();
@@ -1082,7 +1089,7 @@ async function fetchGameUpdates() {
 
   try {
     // Fetch complete game data instead of just scores
-    const response = await fetch(gameDataUrl(appState.gameData.id));
+    const response = await fetchGame(appState.gameData.id);
     if (!response.ok) {
       throw new Error('Failed to fetch game updates');
     }
@@ -1254,15 +1261,19 @@ function getAnnouncementRole() {
   return null;
 }
 
-function announcementsUrl() {
+// A host reads its own record of what it has sent, identifying itself in a
+// header; a player reads what has been sent to them.
+function fetchAnnouncementsForRole(role) {
   const authState = getAuthState();
 
-  if (getAnnouncementRole() === 'host') {
-    return `${API_BASE_URL}/games/${appState.gameData.id}/announcements` +
-      `?host_id=${encodeURIComponent(authState.hostId)}`;
+  if (role === 'host') {
+    return fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/announcements`,
+      { headers: hostAuthHeaders() }
+    );
   }
 
-  return `${API_BASE_URL}/players/${authState.playerId}/announcements`;
+  return fetch(`${API_BASE_URL}/players/${authState.playerId}/announcements`);
 }
 
 // Toast anything that arrived while the panel was closed. The first load only
@@ -1293,7 +1304,7 @@ async function fetchAnnouncements() {
   appState.announcements.loading = true;
 
   try {
-    const response = await fetch(announcementsUrl());
+    const response = await fetchAnnouncementsForRole(role);
 
     // The stored host credentials do not own this game: carry on as a player
     // if this device also joined one, and otherwise stop asking
@@ -2848,16 +2859,19 @@ async function restoreBase(baseId, qrCode) {
   }
 }
 
-// Fetch games for a specific host
-async function fetchHostGames(hostId) {
-  if (!hostId) {
+// Fetch the signed-in host's own games
+async function fetchHostGames() {
+  const authState = getAuthState();
+  if (!authState.hostId) {
     throw new Error('Host ID is required to fetch games.');
   }
 
   try {
-    console.log('Fetching games for host:', hostId);
+    console.log('Fetching games for the signed-in host');
 
-    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/games`);
+    const response = await fetch(`${API_BASE_URL}/host/games`, {
+      headers: hostAuthHeaders()
+    });
     const data = await handleApiResponse(response, 'Failed to fetch host games');
 
     console.log('Host games received:', data);
@@ -2876,54 +2890,62 @@ async function fetchHostGames(hostId) {
 // QUESTION BANK FUNCTIONS (host-level, reusable across games)
 // =============================================================================
 
-async function fetchHostCategories(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/categories`);
+// The question bank belongs to whichever host the header names, so none of
+// these take a host id: there is no id in the URL to leak, and no way to ask
+// for a bank other than your own.
+async function fetchHostCategories() {
+  const response = await fetch(`${API_BASE_URL}/host/categories`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch categories');
 }
 
-async function fetchQuestions(hostId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`);
+async function fetchQuestions() {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
+    headers: hostAuthHeaders()
+  });
   return handleApiResponse(response, 'Failed to fetch questions');
 }
 
-async function createQuestion(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions`, {
+async function createQuestion(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to create question');
 }
 
-async function updateQuestion(hostId, questionId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
+async function updateQuestion(questionId, payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to update question');
 }
 
-async function deleteQuestion(hostId, questionId) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/${questionId}`, {
-    method: 'DELETE'
+async function deleteQuestion(questionId) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/${questionId}`, {
+    method: 'DELETE',
+    headers: hostAuthHeaders()
   });
   return handleApiResponse(response, 'Failed to delete question');
 }
 
-async function bulkDeleteQuestions(hostId, questionIds) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk-delete`, {
+async function bulkDeleteQuestions(questionIds) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk-delete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify({ question_ids: questionIds })
   });
   return handleApiResponse(response, 'Failed to delete questions');
 }
 
-async function bulkImportQuestions(hostId, payload) {
-  const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/questions/bulk`, {
+async function bulkImportQuestions(payload) {
+  const response = await fetch(`${API_BASE_URL}/host/questions/bulk`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...hostAuthHeaders() },
     body: JSON.stringify(payload)
   });
   return handleApiResponse(response, 'Failed to import questions');
@@ -3168,6 +3190,50 @@ async function deleteHost(hostId) {
   }
 }
 
+// Issue a host a fresh QR code and a fresh host id, so a credential that has
+// leaked stops working. The host's games and question bank move across with
+// them; every device signed in as this host is signed out.
+async function rotateHostCredentials(hostId) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to rotate credentials.');
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/hosts/${hostId}/rotate-credentials`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
+      }
+    });
+
+    if (response.status === 401) {
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+
+    const result = await handleApiResponse(response, 'Unable to rotate host credentials');
+
+    if (window.showNotification) {
+      window.showNotification('New credentials issued. The host must scan the new QR code.', 'success');
+    }
+
+    refreshSiteAdminHosts();
+    return result;
+  } catch (err) {
+    console.error('Error rotating host credentials:', err);
+    const userMessage = err.message || 'Unable to rotate host credentials. Please try again.';
+    if (window.showNotification) {
+      window.showNotification(userMessage, 'error');
+    }
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function loadSiteAdminHosts() {
   // Prevent duplicate loading
   if (appState.siteAdmin.hostsLoading || appState.siteAdmin.hostsLoaded) {
@@ -3243,7 +3309,9 @@ async function loadSiteAdminGames() {
     // For each host, get their games using existing API
     for (const host of hosts) {
       try {
-        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`);
+        const response = await fetch(`${API_BASE_URL}/hosts/${host.id}/games`, {
+          headers: { 'Authorization': `Bearer ${appState.siteAdmin.token}` }
+        });
         if (response.ok) {
           const hostGames = await response.json();
 

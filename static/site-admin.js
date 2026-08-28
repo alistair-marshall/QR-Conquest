@@ -660,6 +660,29 @@ function buildHostRow(host) {
     }, 'text-blue-600 hover:text-blue-900 transition-colors');
     actionsContainer.appendChild(editButton);
 
+    // Rotate credentials button. The QR code alone is not the whole
+    // credential - the host id its device stores is too - so rotation
+    // replaces both and the host has to scan the new code to get back in.
+    const rotateButton = UIBuilder.createButton('Rotate', function() {
+      const warning = `Rotate credentials for host "${host.name}"?\n\n` +
+        'A new QR code and a new host id are issued. Any device currently ' +
+        'signed in as this host is signed out and must scan the new QR code. ' +
+        'Their games and question bank are kept.\n\nThis cannot be undone.';
+
+      if (!confirm(warning)) return;
+
+      rotateHostCredentials(host.id).then(function(newHost) {
+        if (newHost) {
+          // Show the new code straight away - it is the only way back in
+          renderHostQRModal(newHost);
+        }
+      }).catch(function() {
+        // rotateHostCredentials has already told the admin what went wrong
+      });
+    }, 'text-amber-600 hover:text-amber-900 transition-colors');
+    rotateButton.title = 'Issue a new QR code and host id, revoking the old ones';
+    actionsContainer.appendChild(rotateButton);
+
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
       if (confirm(`Are you sure you want to delete host "${host.name}"?\n\nThis action cannot be undone.`)) {
@@ -887,6 +910,7 @@ function renderHostQRModal(host) {
 
   const notes = [
     'Keep this QR code private - anyone who scans it can host games',
+    'If it is ever shared too widely, use "Rotate" on the host list to issue a new one - the old code and the old sign-in stop working immediately',
     'For best GPS performance, install the game as a PWA when prompted',
     'Players need to be close to bases (within 15m by default) to capture them'
   ];
