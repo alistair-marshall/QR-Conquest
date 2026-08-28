@@ -3947,14 +3947,45 @@ function renderPlayerRegistrationPage() {
     form.appendChild(teamGroup);
   }
 
+  // The privacy notice, in full, on the page where a player decides whether to
+  // play at all - and before anything has asked the browser for a position.
+  // Joining is what records that it has been read, so the notice is never
+  // behind a tap the player could skip.
+  if (window.buildPrivacyNoticeContent) {
+    const privacyCard = UIBuilder.createElement('div', {
+      className: 'bg-blue-50 border border-blue-200 rounded-lg p-4 text-left'
+    });
+
+    privacyCard.appendChild(UIBuilder.createElement('h3', {
+      className: 'font-bold text-gray-900 mb-3',
+      textContent: 'Before you join'
+    }));
+
+    privacyCard.appendChild(window.buildPrivacyNoticeContent({ forHost: false }));
+
+    form.appendChild(privacyCard);
+  }
+
   // Submit button
   const submitButton = UIBuilder.createButton(mode === 'team' ? 'Join Team' : 'Join Game', null, 'bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full');
   submitButton.type = 'submit';
   form.appendChild(submitButton);
 
+  const consentNote = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-600 text-center',
+    textContent: 'Tapping the button means you have read the bit above.'
+  });
+  form.appendChild(consentNote);
+
   // Handle form submission
   form.addEventListener('submit', async function(e) {
     e.preventDefault();
+
+    // They have just joined from a page carrying the notice, so the location
+    // prompt that follows on the game view does not need to ask again
+    if (window.recordPrivacyNoticeAccepted) {
+      window.recordPrivacyNoticeAccepted();
+    }
 
     if (mode === 'team') {
       // The code scanned to get here proves the player was handed this team's

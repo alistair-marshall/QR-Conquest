@@ -22,6 +22,11 @@
      route entirely; the server rewrites this with the address configured by
      the ABUSE_CONTACT_EMAIL environment variable or the site admin panel. -->
 <script>window.QRC_ABUSE_CONTACT = "";</script>
+<!-- How many days after a game ends before it is deleted. Defaults to the
+     server's own default; the server rewrites this with the value the
+     GAME_RETENTION_DAYS environment variable actually set, so the privacy
+     notice quotes this deployment's real retention rule. -->
+<script>window.QRC_RETENTION_DAYS = 30;</script>
 <script src="dev-gps.js"></script>
 <script>
   // The offline-capture service worker has been removed; unregister any

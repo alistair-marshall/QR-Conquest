@@ -372,6 +372,16 @@ function loadQRCodeLibrary() {
 // NAVIGATION AND STATE MANAGEMENT
 // =============================================================================
 
+// Pages that keep a live GPS fix. baseView is included: the player is standing
+// at a base there, so keeping the fix warm means the next scan doesn't wait on
+// a cold GPS lock. core.js reads this too - a player who has just accepted the
+// privacy notice only starts tracking if they are still on a page that needs it.
+const GPS_PAGES = ['gameView', 'scanQR', 'hostPanel', 'qrAssignment', 'baseView'];
+
+function pageUsesGPS(page) {
+  return GPS_PAGES.includes(page);
+}
+
 function navigateTo(page) {
   console.log('Navigating to:', page);
   const previousPage = appState.page;
@@ -402,11 +412,8 @@ function navigateTo(page) {
   }
 
   // GPS tracking management
-  // baseView included: the player is standing at a base there, so keeping the
-  // fix warm means the next scan doesn't wait on a cold GPS lock
-  const gpsPages = ['gameView', 'scanQR', 'hostPanel', 'qrAssignment', 'baseView'];
-  const wasOnGPSPage = gpsPages.includes(previousPage);
-  const isOnGPSPage = gpsPages.includes(page);
+  const wasOnGPSPage = pageUsesGPS(previousPage);
+  const isOnGPSPage = pageUsesGPS(page);
 
   if (!wasOnGPSPage && isOnGPSPage) {
     // Starting GPS tracking
@@ -2048,6 +2055,10 @@ function renderApp() {
     const footerLinks = document.createElement('div');
     footerLinks.className = 'flex items-center gap-4';
 
+    // Always available, so a player or a parent can read what the game does
+    // with a location long after the join page has gone
+    footerLinks.appendChild(createPrivacyNoticeLink('text-gray-500 hover:text-gray-700 text-xs underline'));
+
     // Only shown when this deployment has published a contact address
     if (getAbuseContact()) {
       footerLinks.appendChild(createAbuseReportLink('text-gray-500 hover:text-gray-700 text-xs underline'));
@@ -3462,6 +3473,334 @@ function createAbuseReportLink(className) {
 }
 
 // =============================================================================
+// PRIVACY NOTICE
+// =============================================================================
+//
+// Players are children as often as not, so the notice is written to be read
+// by one: short sentences, ordinary words, no legal vocabulary. It is shown
+// twice over, and both are before anything can ask the browser for a
+// position:
+//
+//   - in full on the join page, which is where a player decides whether to
+//     play at all, and
+//   - as a modal the first time this device is about to be asked for its
+//     location, which catches the player who reaches the scanner before the
+//     join page and the host who never sees one.
+//
+// The footer link opens the same words again at any time.
+
+// Bump this when the wording changes in a way a player should read again -
+// a device that accepted an older version is asked once more.
+const PRIVACY_NOTICE_VERSION = '1';
+const PRIVACY_NOTICE_STORAGE_KEY = 'privacyNoticeAccepted';
+
+// localStorage throws in some private-browsing modes. Falling back to a
+// per-load flag means such a device is asked once per visit rather than on
+// every page that wants a position.
+let privacyNoticeAcceptedThisLoad = false;
+
+// The modal is a singleton: two pages wanting a position at once should not
+// stack two copies of the same notice on top of each other.
+let privacyNoticeModalRef = null;
+let privacyNoticePendingCallbacks = [];
+
+// How long a finished game is kept before it is deleted. The server rewrites
+// the value in the page shell to whatever GAME_RETENTION_DAYS says, so the
+// notice quotes this deployment's real retention rule rather than a default
+// that may not be true here.
+function getRetentionDays() {
+  const days = Number(window.QRC_RETENTION_DAYS);
+  return Number.isFinite(days) && days >= 1 ? Math.floor(days) : 30;
+}
+
+function hasAcceptedPrivacyNotice() {
+  if (privacyNoticeAcceptedThisLoad) return true;
+  try {
+    return localStorage.getItem(PRIVACY_NOTICE_STORAGE_KEY) === PRIVACY_NOTICE_VERSION;
+  } catch (e) {
+    return false;
+  }
+}
+
+function recordPrivacyNoticeAccepted() {
+  privacyNoticeAcceptedThisLoad = true;
+  try {
+    localStorage.setItem(PRIVACY_NOTICE_STORAGE_KEY, PRIVACY_NOTICE_VERSION);
+  } catch (e) {
+    console.warn('Could not remember that the privacy notice was read:', e);
+  }
+}
+
+// One point of the notice: a picture to anchor it, a heading to skim, and a
+// couple of short sentences underneath
+function createPrivacyPoint(symbol, heading, body) {
+  const row = UIBuilder.createElement('div', { className: 'flex gap-3' });
+
+  row.appendChild(UIBuilder.createElement('div', {
+    className: 'text-2xl leading-none flex-shrink-0',
+    'aria-hidden': 'true',
+    textContent: symbol
+  }));
+
+  const text = UIBuilder.createElement('div');
+  text.appendChild(UIBuilder.createElement('p', {
+    className: 'font-bold text-gray-900',
+    textContent: heading
+  }));
+  text.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-700',
+    textContent: body
+  }));
+  row.appendChild(text);
+
+  return row;
+}
+
+// The notice itself. Same words wherever it appears - on the join page, in
+// the modal before the location prompt, and from the footer link.
+function buildPrivacyNoticeContent(options) {
+  const forHost = !!(options && options.forHost);
+  const days = getRetentionDays();
+  const dayCount = days === 1 ? '1 day' : days + ' days';
+
+  const content = UIBuilder.createElement('div', { className: 'space-y-4 text-sm' });
+
+  if (forHost) {
+    content.appendChild(UIBuilder.createElement('p', {
+      className: 'text-gray-700',
+      textContent: 'This is what the app does with location while you run a game.'
+    }));
+
+    content.appendChild(createPrivacyPoint(
+      '📍',
+      'Where you are',
+      'Your phone shows your own position on your map, and puts a new base where you are standing when you add one. Your position is not sent to the server, and players never see where you are.'
+    ));
+
+    content.appendChild(createPrivacyPoint(
+      '👀',
+      'Where your players are',
+      'While the game is running you can see your players on your map. Every player is told this before they join. Those positions are deleted the moment the game ends.'
+    ));
+
+    content.appendChild(createPrivacyPoint(
+      '🗺️',
+      'The map',
+      'The map pictures come from OpenStreetMap, a free map made by people all around the world. Your phone asks their computers for the pictures, so they can see that a phone near you wanted a map. They are not told who you are or anything about the game.'
+    ));
+
+    content.appendChild(createPrivacyPoint(
+      '🗑️',
+      'How long it is kept',
+      'Positions are deleted as soon as the game ends. The rest of the game - the scores, the names, anything you wrote - is deleted ' + dayCount + ' after that.'
+    ));
+
+    return content;
+  }
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-700',
+    textContent: 'This game uses your phone to know where you are. Here is what that means. It is short, so please read it.'
+  }));
+
+  content.appendChild(createPrivacyPoint(
+    '📍',
+    'Where you are',
+    'While you are playing, your phone tells the game where you are. That is how the game knows you are standing at a base. The person running the game can see you on their map. Other players cannot see you - they only see the scores.'
+  ));
+
+  content.appendChild(createPrivacyPoint(
+    '🦡',
+    'Your game name',
+    'The game makes up a name for you, like quiet-badger. You never type your real name, so the game never learns it.'
+  ));
+
+  content.appendChild(createPrivacyPoint(
+    '🗺️',
+    'The map',
+    'The map pictures come from OpenStreetMap, a free map made by people all around the world. Your phone asks their computers for the pictures, so they can see that a phone near you wanted a map. They are not told your name, your team, or anything about the game.'
+  ));
+
+  content.appendChild(createPrivacyPoint(
+    '🗑️',
+    'It is not kept for ever',
+    'When the game finishes, where you were is deleted straight away. The rest of the game, like the scores, is deleted ' + dayCount + ' later.'
+  ));
+
+  content.appendChild(createPrivacyPoint(
+    '🛑',
+    'You can say no',
+    'Your phone will ask if this game can use your location. You can say no, and you can stop playing whenever you want. Without it the game cannot check that you are at a base.'
+  ));
+
+  content.appendChild(UIBuilder.createElement('p', {
+    className: 'text-gray-700 font-medium',
+    textContent: 'Not sure about any of this? Ask the person running the game, or a grown-up you trust, before you join.'
+  }));
+
+  return content;
+}
+
+// Shows the notice. With needsAcceptance the player has to say they have read
+// it before whatever wanted their location may carry on; without it the
+// notice is simply there to read again.
+function showPrivacyNoticeModal(options) {
+  const opts = options || {};
+  const needsAcceptance = !!opts.needsAcceptance;
+  // A host who has also joined a team is a player like any other - their
+  // position does reach the server - so only a host without one gets the
+  // host wording
+  const authState = getAuthState();
+  const forHost = opts.forHost !== undefined
+    ? opts.forHost
+    : (authState.isHost && !authState.hasTeam);
+
+  // Already open: fold this caller's callback into the notice on screen
+  // rather than stacking a second copy of it
+  if (privacyNoticeModalRef) {
+    if (needsAcceptance && opts.onAccepted) {
+      privacyNoticePendingCallbacks.push(opts.onAccepted);
+    }
+    return privacyNoticeModalRef;
+  }
+
+  if (needsAcceptance && opts.onAccepted) {
+    privacyNoticePendingCallbacks.push(opts.onAccepted);
+  }
+
+  let accepted = false;
+
+  const actions = needsAcceptance
+    ? [
+        {
+          text: 'OK, got it',
+          onClick: function () {
+            accepted = true;
+            recordPrivacyNoticeAccepted();
+            modal.close();
+            const callbacks = privacyNoticePendingCallbacks;
+            privacyNoticePendingCallbacks = [];
+            callbacks.forEach(function (callback) {
+              try {
+                callback();
+              } catch (e) {
+                console.error('Privacy notice callback failed:', e);
+              }
+            });
+          },
+          className: 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors'
+        },
+        {
+          text: 'Not now',
+          onClick: function () {
+            modal.close();
+          },
+          className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+        }
+      ]
+    : [
+        {
+          text: 'Close',
+          onClick: function () {
+            modal.close();
+          },
+          className: 'flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors'
+        }
+      ];
+
+  // The notice scrolls inside the modal rather than pushing the buttons off
+  // the bottom of a phone screen - "OK, got it" has to be visible from the
+  // start, not something to be discovered by scrolling
+  const scrollArea = UIBuilder.createElement('div');
+
+  const scrollBox = UIBuilder.createElement('div', {
+    className: 'max-h-[55vh] overflow-y-auto pr-1'
+  });
+  scrollBox.appendChild(buildPrivacyNoticeContent({ forHost: forHost }));
+  scrollArea.appendChild(scrollBox);
+
+  // Shown only on a screen too short for the whole notice, so nobody taps OK
+  // over words they had no idea were there
+  const scrollHint = UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 text-center mt-2',
+    textContent: 'There is more underneath - keep scrolling.'
+  });
+  scrollHint.style.display = 'none';
+  scrollArea.appendChild(scrollHint);
+
+  const updateScrollHint = function () {
+    const more = scrollBox.scrollHeight - scrollBox.clientHeight - scrollBox.scrollTop;
+    scrollHint.style.display = more > 8 ? 'block' : 'none';
+  };
+  scrollBox.addEventListener('scroll', updateScrollHint);
+
+  const modal = UIBuilder.createModal({
+    title: forHost ? 'Location and privacy' : 'Before you play',
+    content: scrollArea,
+    size: 'lg',
+    actions: actions,
+    onClose: function () {
+      privacyNoticeModalRef = null;
+      if (needsAcceptance && !accepted) {
+        // Escape key or "Not now" - nothing asks for a position, and the
+        // callbacks waiting on it are dropped
+        privacyNoticePendingCallbacks = [];
+        if (window.showNotification) {
+          window.showNotification(
+            'No problem - you can read this again from the Privacy link at the bottom of the screen.',
+            'info'
+          );
+        }
+      }
+    }
+  });
+
+  privacyNoticeModalRef = modal;
+  document.body.appendChild(modal);
+  updateScrollHint();
+
+  return modal;
+}
+
+// Promise form, for the capture path: resolves true once the notice has been
+// read, false if the player closed it instead
+function ensurePrivacyNoticeAccepted(options) {
+  if (hasAcceptedPrivacyNotice()) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise(function (resolve) {
+    const opts = Object.assign({}, options || {}, {
+      needsAcceptance: true,
+      onAccepted: function () { resolve(true); }
+    });
+    const modal = showPrivacyNoticeModal(opts);
+
+    // The modal resolves true through onAccepted; anything else that closes
+    // it is a no
+    const previousClose = modal.close;
+    modal.close = function () {
+      previousClose();
+      resolve(hasAcceptedPrivacyNotice());
+    };
+  });
+}
+
+// A plain text link, used in the footer
+function createPrivacyNoticeLink(className) {
+  const link = UIBuilder.createElement('a', {
+    className: className,
+    textContent: 'Privacy',
+    href: '#'
+  });
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    showPrivacyNoticeModal();
+  });
+  return link;
+}
+
+// =============================================================================
 // GLOBAL INTERFACE FUNCTIONS (exported to window for core.js)
 // =============================================================================
 
@@ -3488,3 +3827,12 @@ window.updateAnnouncementBadge = updateAnnouncementBadge;
 window.refreshAnnouncementPanel = refreshAnnouncementPanel;
 window.announcementPanelIsOpen = announcementPanelIsOpen;
 window.showAnnouncementPanel = showAnnouncementPanel;
+
+// The privacy notice. core.js checks it before anything asks the browser for
+// a position, and host.js puts the same words on the join page.
+window.buildPrivacyNoticeContent = buildPrivacyNoticeContent;
+window.showPrivacyNoticeModal = showPrivacyNoticeModal;
+window.hasAcceptedPrivacyNotice = hasAcceptedPrivacyNotice;
+window.recordPrivacyNoticeAccepted = recordPrivacyNoticeAccepted;
+window.ensurePrivacyNoticeAccepted = ensurePrivacyNoticeAccepted;
+window.pageUsesGPS = pageUsesGPS;

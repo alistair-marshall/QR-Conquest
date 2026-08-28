@@ -4304,9 +4304,10 @@ def update_site_settings():
     })
 
 # Serve the SPA shell, injecting the debug-features flag so the client can
-# decide whether to expose the mobile console and manual GPS entry tools, and
-# the abuse-reporting address so the reporting route appears without an extra
-# round trip on a phone with patchy data.
+# decide whether to expose the mobile console and manual GPS entry tools, the
+# abuse-reporting address so the reporting route appears without an extra
+# round trip on a phone with patchy data, and the retention window the privacy
+# notice quotes.
 def render_index():
     index_path = os.path.join(app.static_folder, 'index.html')
     with open(index_path, 'r', encoding='utf-8') as f:
@@ -4322,6 +4323,14 @@ def render_index():
             'window.QRC_ABUSE_CONTACT = "";',
             # json.dumps leaves '<' alone, and the page shell is HTML, not JSON
             'window.QRC_ABUSE_CONTACT = %s;' % json.dumps(contact).replace('<', '\\u003c')
+        )
+    # The privacy notice tells players how long a finished game is kept, so it
+    # has to quote the rule this deployment actually runs rather than the
+    # default baked into the shell
+    if GAME_RETENTION_DAYS != DEFAULT_GAME_RETENTION_DAYS:
+        html = html.replace(
+            'window.QRC_RETENTION_DAYS = %d;' % DEFAULT_GAME_RETENTION_DAYS,
+            'window.QRC_RETENTION_DAYS = %d;' % GAME_RETENTION_DAYS
         )
     return Response(html, mimetype='text/html')
 
