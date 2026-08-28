@@ -145,7 +145,9 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - Create, edit, and delete host accounts
 - Generate links for new hosts
 - Review host account status and expiry dates
-- Delete any game, including one players have joined - hosts cannot do that themselves, so clearing down finished games is your job and belongs in your retention routine
+- Delete any game, including one players have joined - hosts cannot do that themselves
+- Export any game: one JSON file holding the whole record of it, for your files or to answer a complaint
+- Finished games clear themselves down. Every player's GPS position is deleted the moment a game ends, and thirty days after that the game and everything in it is deleted for good. Export anything you may need before then
 
 **Security Features:**
 - Secure authentication via environment variables
@@ -242,6 +244,16 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Set expiry date (optional)
    - Generate host secret link
    - Share the secret link with the host (can be sent digitally or printed)
+
+5. **Keep what you need from finished games**:
+   - Under **Game Management**, an ended game shows when it will be deleted
+   - **Export** downloads the whole record of that game as one JSON file:
+     settings, teams and players, bases, the capture timeline, every
+     announcement including ones the host withdrew, and the quiz questions
+     players were served. Credentials are left out, so the file is safe to
+     file away
+   - Do this before the retention window runs out. After that the game is
+     gone, and the export is the only copy there will be
 
 ## The Question Bank
 
@@ -409,7 +421,9 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
-- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
+- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Ending a game deletes every stored position outright - the server stops accepting updates and clears the last fix, so nothing is left saying where anybody was
+- **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
+- **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
 - **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
 - **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
@@ -558,6 +572,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 |----------|----------|-------------|---------|
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
 | `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
+| `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. | `30` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
 | `FLASK_DEBUG` | No | Enable debug mode | `False` |
 
@@ -641,8 +656,9 @@ costs the host one scan.
 - **HTTPS required**: Camera access requires secure connection
 
 ### Privacy Considerations
-- **Location data**: Only stored for base creation and capture verification
-- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database until the game itself is deleted
+- **Location data**: Only stored for base creation and capture verification, and only the newest fix per player - never a route. Every stored position is deleted the moment the game ends
+- **Retention**: A finished game deletes itself. Ending it clears the personal data play needed; thirty days later the game and everything in it is permanently deleted, sweeper-driven and automatic. Set `GAME_RETENTION_DAYS` to match your own retention schedule, and export anything you need to keep before the clock runs out
+- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database, so the deployment can still answer for what was sent, until the game is deleted or purged
 - **Player names**: Generated by the server as an `adjective-animal` handle - players never type one, so no player's real name is in the app. Served only to the game's own host, never to other players or an anonymous caller
 - **Team QR codes**: Never served to an anonymous caller, only to the game's own host
 - **Player data**: Minimal personal information collected
@@ -733,7 +749,7 @@ This is a pre-beta project focused on functionality over backwards compatibility
 - Single server instance (no clustering support)
 - SQLite database (not suitable for high concurrency)
 - Basic error handling (needs improvement for production)
-- No in-app reporting route, no retention purge, and no moderation tooling for a site administrator beyond deleting a whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+- No in-app reporting route, and limited moderation tooling for a site administrator: they can export a game and read everything in it, including withdrawn announcements, but the only thing they can take down is the whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - Limited game customization options
 - No game history or analytics
 

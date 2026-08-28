@@ -384,6 +384,18 @@ function buildGameRow(game) {
       textContent: statusText
     });
     statusCell.appendChild(statusBadge);
+
+    // An ended game is deleted automatically once the retention window is up,
+    // so say when rather than leaving the admin to work it out. Export it
+    // first if the record is worth keeping
+    const purgeNote = describePurge(game.purge_after);
+    if (purgeNote) {
+        statusCell.appendChild(UIBuilder.createElement('div', {
+          className: 'text-xs text-gray-500 mt-1',
+          textContent: purgeNote
+        }));
+    }
+
     row.appendChild(statusCell);
 
     // Teams count cell
@@ -440,9 +452,17 @@ function buildGameRow(game) {
         actionsContainer.appendChild(completeButton);
     }
 
+    // Export button - the whole record of the game in one file, taken before
+    // it is deleted here or by the retention sweeper
+    const exportButton = UIBuilder.createButton('Export', function() {
+      exportGameAsAdmin(game);
+    }, 'text-blue-600 hover:text-blue-900 transition-colors');
+    exportButton.title = 'Download the full record of this game as a JSON file';
+    actionsContainer.appendChild(exportButton);
+
     // Delete button
     const deleteButton = UIBuilder.createButton('Delete', function() {
-      if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nOnce players have joined, this is the only way a game can be removed - the host cannot do it.\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- Every message the host sent\n- All associated data\n\nThis action CANNOT be undone!`)) {
+      if (confirm(`Are you sure you want to DELETE game "${game.name}"?\n\nOnce players have joined, this is the only way a game can be removed - the host cannot do it.\n\nThis will permanently remove:\n- The game and all settings\n- All teams and players\n- All bases and capture history\n- Every message the host sent\n- All associated data\n\nExport it first if you may need the record later.\n\nThis action CANNOT be undone!`)) {
           deleteGameAsAdmin(game);
       }
     }, 'text-red-600 hover:text-red-900 transition-colors');

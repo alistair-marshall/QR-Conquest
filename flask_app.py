@@ -8,7 +8,7 @@ import time
 import json
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import math
 import random
@@ -33,6 +33,47 @@ if not SITE_ADMIN_PASSWORD:
 # Debug features (mobile console viewer, manual GPS coordinate entry) are
 # hidden unless explicitly enabled on the server via this environment variable.
 DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+# ==========================================================
+# Retention
+# ==========================================================
+
+# How long a finished game is kept before every trace of it is deleted. A
+# deployment is the data controller for what it stores (see
+# docs/COMPLIANCE.md) and needs a retention rule it can point at; thirty days
+# is long enough for a complaint about a game to reach the deployment and be
+# answered from the record, and short enough that nothing accumulates.
+# Override only if your own retention schedule says something different.
+DEFAULT_GAME_RETENTION_DAYS = 30
+
+
+def _read_retention_days():
+    raw = os.environ.get('GAME_RETENTION_DAYS', '').strip()
+    if not raw:
+        return DEFAULT_GAME_RETENTION_DAYS
+
+    try:
+        days = int(raw)
+    except ValueError:
+        days = 0
+
+    if days < 1:
+        print(f'WARNING: ignoring GAME_RETENTION_DAYS={raw!r} - it must be a '
+              f'whole number of days, 1 or more. Using '
+              f'{DEFAULT_GAME_RETENTION_DAYS}.')
+        return DEFAULT_GAME_RETENTION_DAYS
+
+    return days
+
+
+GAME_RETENTION_DAYS = _read_retention_days()
+GAME_RETENTION_SECONDS = GAME_RETENTION_DAYS * 24 * 60 * 60
+
+# How often the background sweeper looks for games that have aged out. The
+# window is measured in days, so checking hourly is far more often than it
+# needs to be - it just means a restarted server never sits on expired data
+# waiting for a daily tick.
+RETENTION_SWEEP_INTERVAL_SECONDS = 60 * 60
 
 # True when the caller presented the site admin password as a bearer token.
 # Endpoints that are a host's own but need an admin escape hatch check this
@@ -446,6 +487,242 @@ def init_db():
     conn.close()
 
 init_db()
+
+
+# ==========================================================
+# Retention - tidying an ended game, and purging an old one
+# ==========================================================
+
+# Two things happen to a game's personal data, at two different times.
+#
+# The moment a game ends, everything that only mattered while it was being
+# played is cleared: every player's last known GPS position, and the quiz
+# cooldown that was counting down when the whistle went. A position is the
+# sharpest piece of personal data the app holds - it says where an
+# identifiable person, quite possibly a child, was standing at a given minute
+# - and once nobody is playing there is no purpose left to keep it for. The
+# record of what happened is kept: generated player names, who was on which
+# team and when they joined, the capture timeline, the quiz sessions, and
+# every word of free text the host wrote, withdrawn announcements included.
+# That is what a complaint weeks later has to be answered from, and none of it
+# tracks anyone.
+#
+# Thirty days after the game ends, the rest goes too - see purge_game_data.
+
+# What an ended game stops needing. Written once here so the end-of-game path
+# and the sweeper below can never clear different sets of columns.
+_TIDY_PLAYER_COLUMNS = """
+    last_latitude = NULL,
+    last_longitude = NULL,
+    last_accuracy = NULL,
+    last_position_time = NULL,
+    cooldown_until = NULL
+"""
+
+_PLAYER_HAS_TIDYABLE_DATA = """
+    (last_latitude IS NOT NULL OR last_longitude IS NOT NULL
+     OR last_accuracy IS NOT NULL OR last_position_time IS NOT NULL
+     OR cooldown_until IS NOT NULL)
+"""
+
+
+def tidy_ended_game(cursor, game_id):
+    """Clear the personal data an ended game no longer needs.
+
+    Called on every path that takes a game to 'ended' - the host ending it,
+    the admin ending it on the host's behalf, and the scheduled end that fires
+    when someone next reads the game. Safe to run again on a game already
+    tidied: it matches nothing and reports 0.
+
+    Returns the number of players whose data was cleared.
+    """
+    cursor.execute(f"""
+    UPDATE players
+    SET {_TIDY_PLAYER_COLUMNS}
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+      AND {_PLAYER_HAS_TIDYABLE_DATA}
+    """, (game_id,))
+
+    return cursor.rowcount
+
+
+def purge_game_data(cursor, game_id):
+    """Delete a game and everything hanging off it. Caller owns the
+    transaction.
+
+    This is the only place the cascade is written down, so a table added to a
+    game cannot be forgotten by one caller and remembered by another. Both
+    ways a game is removed - a site admin deleting it, and the retention
+    sweeper reaching its purge date - come through here.
+
+    Returns a count per table for reporting.
+    """
+    counts = {}
+
+    # Counted before they are deleted; nothing here is used to decide what to
+    # delete, only to report what was
+    cursor.execute("""
+    SELECT COUNT(*) FROM answer_sessions
+    WHERE player_id IN (
+        SELECT id FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    )
+    """, (game_id,))
+    counts['answer_sessions'] = cursor.fetchone()[0]
+
+    cursor.execute("""
+    SELECT COUNT(*) FROM captures
+    WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)
+    """, (game_id,))
+    counts['captures'] = cursor.fetchone()[0]
+
+    cursor.execute("""
+    SELECT COUNT(*) FROM players
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    """, (game_id,))
+    counts['players'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
+    counts['bases'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
+    counts['teams'] = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM announcements WHERE game_id = ?', (game_id,))
+    counts['announcements'] = cursor.fetchone()[0]
+
+    # Children first, so a failure part-way through never leaves a row
+    # pointing at something that is gone
+    cursor.execute("""
+    DELETE FROM answer_sessions
+    WHERE player_id IN (
+        SELECT id FROM players
+        WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    )
+    """, (game_id,))
+
+    cursor.execute('DELETE FROM announcements WHERE game_id = ?', (game_id,))
+
+    cursor.execute("""
+    DELETE FROM captures
+    WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)
+    """, (game_id,))
+
+    cursor.execute("""
+    DELETE FROM players
+    WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)
+    """, (game_id,))
+
+    cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
+    cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
+    cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
+
+    return counts
+
+
+def game_purge_time(end_time):
+    """When a game that ended at end_time is deleted, or None if it has not
+    ended yet."""
+    return end_time + GAME_RETENTION_SECONDS if end_time else None
+
+
+def sweep_retention():
+    """Enforce the retention rule across the whole database.
+
+    Runs on startup and hourly after that. Three passes:
+
+    1. Tidy any ended game still holding positions. The end-of-game path does
+       this already, so this catches games that ended before the tidy-up
+       existed, and anything a crash left half-done.
+    2. Tidy stale positions in a game that never ended. A game runs for hours;
+       a fix older than the whole retention window is not where anybody is now
+       under any reading, and a game left running forever must not be a way to
+       keep tracking data forever.
+    3. Purge games that ended longer ago than the retention window.
+
+    Returns (tidied_players, purged_games).
+    """
+    now = int(time.time())
+    cutoff = now - GAME_RETENTION_SECONDS
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('BEGIN')
+
+        cursor.execute(f"""
+        UPDATE players
+        SET {_TIDY_PLAYER_COLUMNS}
+        WHERE team_id IN (
+            SELECT t.id FROM teams t
+            JOIN games g ON t.game_id = g.id
+            WHERE g.status = 'ended'
+        )
+          AND {_PLAYER_HAS_TIDYABLE_DATA}
+        """)
+        tidied = cursor.rowcount
+
+        cursor.execute(f"""
+        UPDATE players
+        SET {_TIDY_PLAYER_COLUMNS}
+        WHERE last_position_time IS NOT NULL AND last_position_time < ?
+        """, (cutoff,))
+        tidied += cursor.rowcount
+
+        # A game with no end_time never ended, so its clock has not started.
+        # Those are the site admin's to end or delete; the sweeper only takes
+        # their positions away, above.
+        cursor.execute("""
+        SELECT id, name FROM games
+        WHERE status = 'ended' AND end_time IS NOT NULL AND end_time <= ?
+        """, (cutoff,))
+        expired = cursor.fetchall()
+
+        for game in expired:
+            counts = purge_game_data(cursor, game['id'])
+            print(f'Retention: purged game {game["id"]} ("{game["name"]}") - '
+                  f'ended more than {GAME_RETENTION_DAYS} days ago; removed '
+                  + ', '.join(f'{value} {table}' for table, value in sorted(counts.items())))
+
+        cursor.execute('COMMIT')
+    except sqlite3.Error as e:
+        cursor.execute('ROLLBACK')
+        conn.close()
+        # A sweep that fails is not fatal - the next one an hour from now
+        # tries again against the same unchanged data
+        print(f'WARNING: retention sweep failed: {e}')
+        return 0, 0
+
+    conn.close()
+
+    if tidied:
+        print(f'Retention: cleared stored positions for {tidied} player(s) in ended or stale games')
+
+    return tidied, len(expired)
+
+
+def retention_sweeper():
+    while True:
+        try:
+            sweep_retention()
+        except Exception as e:
+            # The sweeper is the only thing enforcing the retention rule, so
+            # it must not be the kind of thread that dies quietly once and
+            # leaves data sitting there for the life of the process
+            print(f'WARNING: retention sweep raised {type(e).__name__}: {e}')
+
+        time.sleep(RETENTION_SWEEP_INTERVAL_SECONDS)
+
+
+# Werkzeug's auto-reloader runs this module in two processes when the app is
+# started with `python flask_app.py`: a supervising parent that never serves a
+# request, and the child that does. Only the child sets WERKZEUG_RUN_MAIN, so
+# this skips the parent and starts one sweeper per serving process. Under
+# Gunicorn (__name__ is the module name, not '__main__') it always starts.
+if __name__ != '__main__' or os.environ.get('WERKZEUG_RUN_MAIN'):
+    threading.Thread(target=retention_sweeper, daemon=True,
+                     name='retention-sweeper').start()
 
 
 # ==========================================================
@@ -1059,9 +1336,11 @@ def get_game(game_id):
                 WHERE id = ?
                 ''', (scheduled_end, game_id))
 
-                # Release QR codes for reuse, matching the manual end-game flow
+                # Release QR codes for reuse, and clear the personal data an
+                # ended game stops needing - matching the manual end-game flow
                 cursor.execute('UPDATE bases SET qr_code = NULL WHERE game_id = ?', (game_id,))
                 cursor.execute('UPDATE teams SET qr_code = NULL WHERE game_id = ?', (game_id,))
+                tidy_ended_game(cursor, game_id)
             game_state_changed = True
 
     if game_state_changed:
@@ -1360,13 +1639,19 @@ def end_game(game_id):
 
     team_count = cursor.rowcount
 
+    # Nobody is playing any more, so nothing needs to know where anybody is
+    tidied_players = tidy_ended_game(cursor, game_id)
+
     conn.commit()
     conn.close()
 
     return jsonify({
         'success': True,
         'released_bases': base_count,
-        'released_teams': team_count
+        'released_teams': team_count,
+        'tidied_players': tidied_players,
+        'purge_after': game_purge_time(current_time),
+        'retention_days': GAME_RETENTION_DAYS
     })
 
 # ==========================================================
@@ -3501,43 +3786,10 @@ def delete_game(game_id):
         # Begin transaction for cascade deletion
         cursor.execute('BEGIN')
 
-        # Get all teams for this game to delete their QR code mappings
-        cursor.execute('SELECT id FROM teams WHERE game_id = ?', (game_id,))
-        team_ids = [row[0] for row in cursor.fetchall()]
-
-        # Count what we're about to delete for reporting
-        cursor.execute('SELECT COUNT(*) FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
-        captures_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
-        players_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM bases WHERE game_id = ?', (game_id,))
-        bases_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM teams WHERE game_id = ?', (game_id,))
-        teams_count = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM announcements WHERE game_id = ?', (game_id,))
-        announcements_count = cursor.fetchone()[0]
-
-        # Delete announcements (they reference the game)
-        cursor.execute('DELETE FROM announcements WHERE game_id = ?', (game_id,))
-
-        # Delete captures (must be deleted before bases and teams due to foreign keys)
-        cursor.execute('DELETE FROM captures WHERE base_id IN (SELECT id FROM bases WHERE game_id = ?)', (game_id,))
-
-        # Delete players (must be deleted before teams due to foreign keys)
-        cursor.execute('DELETE FROM players WHERE team_id IN (SELECT id FROM teams WHERE game_id = ?)', (game_id,))
-
-        # Delete teams
-        cursor.execute('DELETE FROM teams WHERE game_id = ?', (game_id,))
-
-        # Delete bases (this will also clear their QR codes)
-        cursor.execute('DELETE FROM bases WHERE game_id = ?', (game_id,))
-
-        # Finally delete the game itself
-        cursor.execute('DELETE FROM games WHERE id = ?', (game_id,))
+        # The cascade itself lives with the retention sweeper, so deleting a
+        # game by hand and purging one that has aged out clear exactly the
+        # same set of tables
+        deleted = purge_game_data(cursor, game_id)
 
         # Commit the transaction
         cursor.execute('COMMIT')
@@ -3553,14 +3805,304 @@ def delete_game(game_id):
     return jsonify({
         'success': True,
         'message': 'Game and all associated data deleted successfully',
-        'deleted': {
-            'teams': teams_count,
-            'bases': bases_count,
-            'players': players_count,
-            'captures': captures_count,
-            'announcements': announcements_count
-        }
+        'deleted': deleted
     })
+
+# ==========================================================
+# Game Export - the whole record of one game, in one file
+# ==========================================================
+
+# A deployment is the data controller for what it stores, and thirty days
+# after a game ends the purge takes the lot (see docs/COMPLIANCE.md). This is
+# how a site administrator gets the record out before that happens, or answers
+# a complaint or a subject access request from it afterwards: everything the
+# database holds about one game, in one JSON file, in one request.
+#
+# It is the site administrator's, not the host's. The host already sees its
+# own game live; this exists for the person who has to answer for the
+# deployment, and it is a file of other people's data leaving the system, so
+# it takes the admin bearer token.
+#
+# Credentials are left out. Host ids and QR codes are bearer secrets - anyone
+# holding one can act as that host, or join that team - and an export is a
+# file that gets saved, emailed and forwarded. Nothing here needs them: the
+# host is named, and a base or team is identified by its id.
+
+EXPORT_FORMAT = 'qr-conquest-game-export'
+EXPORT_FORMAT_VERSION = 1
+
+_FILENAME_SAFE = set('abcdefghijklmnopqrstuvwxyz0123456789')
+
+
+def iso_time(timestamp):
+    """A unix timestamp as UTC ISO 8601, or None. Every time in the export is
+    given twice - the raw number the database holds, and this, so a human
+    reading the file does not have to convert anything."""
+    if not timestamp:
+        return None
+    return datetime.fromtimestamp(timestamp, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def export_filename(game_name, when):
+    """A download name built from the game's name and the export date. Only
+    ASCII letters, digits and dashes survive, so the name is safe both as a
+    filename and in the Content-Disposition header."""
+    slug = ''.join(ch if ch in _FILENAME_SAFE else '-' for ch in (game_name or '').lower())
+    slug = '-'.join(part for part in slug.split('-') if part)[:60].strip('-')
+    stamp = datetime.fromtimestamp(when, timezone.utc).strftime('%Y%m%d')
+
+    return f'qr-conquest-{slug or "game"}-{stamp}.json'
+
+
+def build_game_export(cursor, game):
+    """Assemble the full record of one game."""
+    game_id = game['id']
+    now = int(time.time())
+
+    cursor.execute('SELECT name FROM hosts WHERE id = ?', (game['host_id'],))
+    host = cursor.fetchone()
+
+    # Players, keyed by team, so the export reads the way the roster does
+    cursor.execute("""
+    SELECT p.*, t.game_id FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE t.game_id = ?
+    ORDER BY p.join_time ASC
+    """, (game_id,))
+    players_by_team = {}
+    player_ids = []
+
+    for player in cursor.fetchall():
+        player_ids.append(player['id'])
+
+        # Normally None: positions are cleared the moment a game ends. They
+        # are still here for a game exported mid-play, because an export is
+        # meant to say what the database actually holds
+        last_position = None
+        if player['last_latitude'] is not None and player['last_longitude'] is not None:
+            last_position = {
+                'lat': player['last_latitude'],
+                'lng': player['last_longitude'],
+                'accuracy': player['last_accuracy'],
+                'recorded_at': player['last_position_time'],
+                'recorded_at_iso': iso_time(player['last_position_time'])
+            }
+
+        players_by_team.setdefault(player['team_id'], []).append({
+            'id': player['id'],
+            'name': player['name'],
+            'join_time': player['join_time'],
+            'join_time_iso': iso_time(player['join_time']),
+            'announcements_read_at': player['announcements_read_at'],
+            'announcements_read_at_iso': iso_time(player['announcements_read_at']),
+            'last_position': last_position
+        })
+
+    cursor.execute('SELECT * FROM teams WHERE game_id = ? ORDER BY name ASC', (game_id,))
+    teams = []
+    for team in cursor.fetchall():
+        teams.append({
+            'id': team['id'],
+            'name': team['name'],
+            'color': team['color'],
+            'final_score': calculate_team_score(cursor, team['id'], game),
+            'players': players_by_team.get(team['id'], [])
+        })
+
+    cursor.execute('SELECT * FROM bases WHERE game_id = ? ORDER BY name ASC', (game_id,))
+    bases = []
+    for base in cursor.fetchall():
+        bases.append({
+            'id': base['id'],
+            'name': base['name'],
+            'lat': base['latitude'],
+            'lng': base['longitude'],
+            'shield': base['shield'] or 0,
+            'owner_team_id': base['owner_team_id'],
+            'deleted_at': base['deleted_at'],
+            'deleted_at_iso': iso_time(base['deleted_at']),
+            'collected_by_team_id': base['collected_by_team_id'],
+            'collected_at': base['collected_at'],
+            'collected_at_iso': iso_time(base['collected_at']),
+            'returned_at': base['returned_at'],
+            'returned_at_iso': iso_time(base['returned_at'])
+        })
+
+    # The ownership timeline. A NULL team_id is a neutralisation - the base
+    # stopped scoring for anyone until the next capture
+    cursor.execute("""
+    SELECT c.* FROM captures c
+    JOIN bases b ON c.base_id = b.id
+    WHERE b.game_id = ?
+    ORDER BY c.capture_time ASC
+    """, (game_id,))
+    captures = [{
+        'id': row['id'],
+        'base_id': row['base_id'],
+        'team_id': row['team_id'],
+        'neutralised': row['team_id'] is None,
+        'capture_time': row['capture_time'],
+        'capture_time_iso': iso_time(row['capture_time'])
+    } for row in cursor.fetchall()]
+
+    # Withdrawn announcements are in here too, with the time they were pulled.
+    # An announcement somebody complains about is usually one that was taken
+    # back down, so an export without them would be missing the thing it was
+    # asked for
+    cursor.execute("""
+    SELECT * FROM announcements WHERE game_id = ?
+    ORDER BY sent_at ASC, rowid ASC
+    """, (game_id,))
+    announcements = [{
+        'id': row['id'],
+        'body': row['body'],
+        'sent_at': row['sent_at'],
+        'sent_at_iso': iso_time(row['sent_at']),
+        'withdrawn_at': row['deleted_at'],
+        'withdrawn_at_iso': iso_time(row['deleted_at'])
+    } for row in cursor.fetchall()]
+
+    # Quiz sessions, and the questions they served. The question bank belongs
+    # to the host and outlives the game, so the questions this game actually
+    # put in front of players are copied in - otherwise the record of what a
+    # player was asked disappears the moment the host edits their bank
+    answer_sessions = []
+    served_question_ids = []
+
+    if player_ids:
+        placeholders = ','.join('?' * len(player_ids))
+        cursor.execute(f"""
+        SELECT * FROM answer_sessions WHERE player_id IN ({placeholders})
+        ORDER BY started_at ASC
+        """, player_ids)
+
+        for row in cursor.fetchall():
+            served = json.loads(row['served_question_ids'] or '[]')
+            served_question_ids.extend(served)
+            answer_sessions.append({
+                'id': row['id'],
+                'player_id': row['player_id'],
+                'base_id': row['base_id'],
+                'started_at': row['started_at'],
+                'started_at_iso': iso_time(row['started_at']),
+                'still_open': bool(row['active']),
+                'served_question_ids': served
+            })
+
+    questions = []
+    unique_question_ids = sorted(set(served_question_ids))
+    if unique_question_ids:
+        placeholders = ','.join('?' * len(unique_question_ids))
+        cursor.execute(f'SELECT * FROM questions WHERE id IN ({placeholders})',
+                       unique_question_ids)
+        for row in cursor.fetchall():
+            question = question_row_to_dict(row)
+            # The bank-management shape carries the host id, which is a bearer
+            # credential and has no business in a file that leaves the system
+            question.pop('host_id', None)
+            questions.append(question)
+
+    # A host can delete a question from their bank once the game that served
+    # it has ended, and then its text is simply gone. Saying which ids could
+    # not be resolved is more honest than a file that quietly omits them
+    found_ids = {question['id'] for question in questions}
+    missing_question_ids = [qid for qid in unique_question_ids if qid not in found_ids]
+
+    end_time = game['end_time']
+    purge_after = game_purge_time(end_time)
+
+    return {
+        'export': {
+            'format': EXPORT_FORMAT,
+            'version': EXPORT_FORMAT_VERSION,
+            'exported_at': now,
+            'exported_at_iso': iso_time(now),
+            'contains': [
+                'Every row the database holds about this game, other than '
+                'credentials: host ids and the QR codes that enrol a host, '
+                'join a team or mark a base are bearer secrets and are '
+                'deliberately left out.',
+                'Player names are generated by the server as an '
+                'adjective-animal handle. No player types anything, so no '
+                'player-written text exists anywhere in this file.',
+                'Announcements include ones the host withdrew, with the time '
+                'they were withdrawn.',
+                'Questions are copied from the host\'s bank as it stands now. '
+                'A question the host has already deleted cannot be recovered '
+                '- its id is listed under questions_missing instead. Export '
+                'soon after a game if what players were asked matters.',
+                'GPS positions are cleared when a game ends, so an ended '
+                'game exports none. A game exported mid-play carries each '
+                'player\'s last known fix.'
+            ],
+            'retention_days': GAME_RETENTION_DAYS,
+            'purge_after': purge_after,
+            'purge_after_iso': iso_time(purge_after)
+        },
+        'game': {
+            'id': game_id,
+            'name': game['name'],
+            'status': game['status'],
+            'host_name': host['name'] if host else None,
+            'created_time': game['created_time'],
+            'created_time_iso': iso_time(game['created_time']),
+            'start_time': game['start_time'],
+            'start_time_iso': iso_time(game['start_time']),
+            'end_time': end_time,
+            'end_time_iso': iso_time(end_time),
+            'settings': {
+                'capture_radius_meters': game['capture_radius_meters'],
+                'points_interval_seconds': game['points_interval_seconds'],
+                'auto_start_time': game['auto_start_time'],
+                'auto_start_time_iso': iso_time(game['auto_start_time']),
+                'game_duration_minutes': game['game_duration_minutes'],
+                'join_method': game['join_method'] or 'team_qr',
+                'quiz_enabled': bool(game['quiz_enabled']),
+                'active_categories': json.loads(game['active_categories'] or '[]'),
+                'max_shield': game['max_shield'],
+                'cooldown_seconds': game['cooldown_seconds'],
+                'bonus_round_enabled': bool(game['bonus_round_enabled']),
+                'bonus_points_per_base': game['bonus_points_per_base'],
+                'bonus_start_time': game['bonus_start_time'],
+                'bonus_start_time_iso': iso_time(game['bonus_start_time'])
+            }
+        },
+        'teams': teams,
+        'bases': bases,
+        'captures': captures,
+        'announcements': announcements,
+        'answer_sessions': answer_sessions,
+        'questions_served': questions,
+        'questions_missing': missing_question_ids
+    }
+
+
+@app.route('/api/games/<game_id>/export', methods=['GET'])
+@require_site_admin
+def export_game(game_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM games WHERE id = ?', (game_id,))
+    game = cursor.fetchone()
+
+    if not game:
+        conn.close()
+        return jsonify({'error': 'Game not found'}), 404
+
+    export = build_game_export(cursor, game)
+    conn.close()
+
+    # Sent as a download rather than a JSON body: this is a file to file away,
+    # and the point of it is that it survives the purge
+    filename = export_filename(game['name'], export['export']['exported_at'])
+
+    return Response(
+        json.dumps(export, indent=2, ensure_ascii=False),
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
 
 def list_host_games(host_id):
     """One host's games, newest and most alive first.
@@ -3610,7 +4152,12 @@ def list_host_games(host_id):
             'status': game['status'],
             'start_time': game['start_time'],
             'end_time': game['end_time'],
-            'team_count': team_count
+            'team_count': team_count,
+            # When the retention sweeper will delete this game, so a host or
+            # an admin can see the clock rather than having to know the rule.
+            # Null until the game ends - the clock starts then
+            'purge_after': game_purge_time(game['end_time']),
+            'retention_days': GAME_RETENTION_DAYS
         })
 
     conn.close()

@@ -92,6 +92,18 @@ assessment. Record them:
   joined, the game holds other people's data and the history a complaint or an
   erasure request would be answered from, so only a site administrator can
   remove it. A host ends the game instead.
+- **A site administrator can read everything a game holds.** The **Export**
+  button on the admin game list downloads one JSON file with the whole record
+  of a game in it - every announcement including the withdrawn ones, the
+  questions players were served, the game, team and base names, and the
+  timeline. That is the file to answer a complaint from, and the way to keep
+  a record past the retention purge below. There is still no way to withdraw
+  one announcement from the admin panel; the tool for taking content down is
+  the host's own delete, or deleting the game.
+- **Content is not kept indefinitely.** Thirty days after a game ends, the
+  game and every word written in it is deleted automatically - see the
+  retention rule below. Nothing a host wrote sits on the server forever
+  because everyone forgot about it.
 
 ### What you have to provide yourself
 
@@ -104,8 +116,8 @@ already passed:
 | Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
 | Terms of service | Say what is allowed and what you will do about content that is not |
 | Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. **There is no in-app reporting route**, and a player has no way to reach a host through the app at all |
-| Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: purging the text needs database access |
-| Records | Keep the assessments and your decisions |
+| Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: it is withdrawn from everyone immediately, but the text stays in the database until the game is deleted or reaches its purge date |
+| Records | Keep the assessments and your decisions. Export a game before its purge date if you want its record to outlive it |
 
 Duties are proportionate to size and risk, and a small game server run for a
 handful of events is at the low end of both. "Proportionate" does not mean
@@ -123,7 +135,7 @@ take content down are the floor.
 | Game, team and base names | Written by the host | Read by every player |
 | Question bank - question text, options, explanations, categories | Written by the host, or bulk-imported by them | Held against the host account and reused across their games |
 | Team membership, scores, capture history | Gameplay | |
-| Player GPS position | Posted by the player's device while they play | **Only the newest fix per player is kept - no route history** - and it is served only to the game's host. Updates stop when the game ends; the last fix is not cleared |
+| Player GPS position | Posted by the player's device while they play | **Only the newest fix per player is kept - no route history** - and it is served only to the game's host. **Deleted outright when the game ends**: updates stop and the stored fix is cleared, so a finished game holds no location data at all |
 | Announcements | Written by the host | |
 | Read markers | Set when a player reads announcements | |
 | QR code values | Generated per host, team and base | Team QR codes are join credentials - treat them as secrets |
@@ -135,6 +147,44 @@ special category data. Every piece of free text in the app is written by the
 host - the game name, the team names, the base names, the announcements and
 the question bank - though a host could of course type anything into any of
 them, and should not.
+
+### How long it is kept
+
+A game's data has a lifecycle, and the app enforces it without anyone
+remembering to:
+
+**When the game ends** - whether the host ends it, an administrator does, or
+the scheduled end time passes - everything that only mattered while people
+were playing is deleted. That is every player's last known GPS position, and
+any quiz cooldown still counting down. Base and team QR codes are released at
+the same time, as they always were. From that moment a finished game holds no
+location data at all, and the host's map has nothing to show.
+
+**What survives** is the record: the generated player names, who was on which
+team and when they joined, the capture and ownership timeline, the quiz
+sessions, and every word of free text the host wrote - announcements included,
+withdrawn ones included, with the times they were sent and taken down. That is
+deliberate. If a parent complains a fortnight later about something a host
+sent, or asks what their child's device sent to the server, the answer has to
+still exist. None of it tracks anybody.
+
+**Thirty days after the game ends** a background sweeper deletes the game and
+all of it, permanently: teams, players, bases, captures, quiz sessions and
+announcements. `GAME_RETENTION_DAYS` changes the window. The admin game list
+shows each ended game's deletion date, and so does a host's own game list.
+
+**Before that happens**, a site administrator can **Export** a game: one JSON
+file with the whole record in it, including withdrawn announcements and the
+quiz questions players were served. Credentials are left out - no host ids and
+no QR codes - so the file is safe to keep, but it is still a file of other
+people's data, and once it is on someone's laptop your retention schedule has
+to say something about it.
+
+**Two things the rule does not reach.** A game that is never ended has no
+purge date, so it keeps its data - and, after the window is up, its positions
+are cleared but the game itself stays; end or delete abandoned games. And host
+accounts and their question banks are outside it entirely: they belong to the
+host, not to any one game, and only a site administrator removes them.
 
 ### What you need to do
 
@@ -151,13 +201,21 @@ them, and should not.
 - **If children play, the ICO's Age Appropriate Design Code applies** - data
   minimisation, privacy-protective defaults, and transparency in language a
   child can follow. Its expectations are stricter than the baseline.
-- **Set a retention rule.** Games, announcements and last-known positions live
-  until the game is deleted, and once players have joined only a site
-  administrator can delete it. There is no automatic purge, so make clearing
-  down finished games part of *your* routine, not the host's.
-- **Be ready for subject access and erasure requests.** Today the only erasure
-  tool is deleting the whole game, which is a site administrator's job for any
-  game that was actually played.
+- **Check the retention rule fits.** The app enforces one for you: positions
+  are deleted when a game ends, and thirty days later the game and everything
+  in it is deleted permanently by a background sweeper. Write that down as
+  your retention schedule, or set `GAME_RETENTION_DAYS` to whatever your own
+  schedule says instead. Two things it does *not* cover: a game that is never
+  ended has no purge date at all, so its clock never starts - end or delete
+  abandoned games; and the host accounts and question banks the games hang off
+  are not touched by any of it.
+- **Be ready for subject access and erasure requests.** Export the game and
+  you have everything the app holds about everyone in it in one file - that is
+  the answer to a subject access request, though bear in mind a player is
+  identified in it only by a generated `adjective-animal` name, so matching a
+  real person to a row is something you have to do from your own records.
+  Erasure is still all-or-nothing: deleting the whole game, which is a site
+  administrator's job for any game that was actually played.
 - **Security.** Serve over HTTPS, keep `SITE_ADMIN_PASSWORD` strong and out of
   version control, and never enable `DEBUG_FEATURES` in production.
 
@@ -168,11 +226,20 @@ the software, not oversights it hides:
 
 - No age assurance of any kind
 - No in-app reporting or complaints route
-- No moderation tooling for a site administrator beyond deleting a whole game:
-  they cannot read or withdraw a single announcement from the admin panel
+- Limited moderation tooling for a site administrator: they can export a game
+  and read every announcement in it, withdrawn ones included, but they cannot
+  withdraw a single announcement from the admin panel - the only takedown they
+  have is deleting the whole game
 - A deleted announcement is hidden, not erased - the row stays until the game
-  is deleted
-- No automatic retention purge
+  is deleted or reaches its purge date
+- Retention is per game and all-or-nothing: there is no way to erase one
+  player from a game that other people are still in, and no purge at all for
+  a game nobody ever ended
+- Host accounts and question banks are outside the retention rule; they live
+  until a site administrator deletes them
+- Exports are files that leave the system. They hold player names, join times
+  and everything the host wrote, so where they are stored and who can read
+  them becomes your problem the moment you download one
 - No privacy notice or terms shown in the app
 - No rate limiting on any endpoint
 - A game's id is a random UUID, so it cannot be guessed, but it is not a
@@ -196,7 +263,10 @@ For a typical deployment that runs games for other organisations:
    everyone and are retained
 6. A named contact for reports and complaints, published where players and
    parents can find it
-7. Retention schedule - how long finished games are kept before deletion
+7. Retention schedule - the app deletes a finished game after 30 days by
+   default (`GAME_RETENTION_DAYS`); write down that this is your rule, or set
+   it to the one you have, and say where exported games are kept and for how
+   long
 8. Personal data breach procedure, including who reports to the ICO and when
 
 If your deployment is genuinely closed - one organisation, adults only, no
