@@ -18,6 +18,10 @@
      when the DEBUG_FEATURES environment variable is enabled. Gates the mobile
      console viewer and the dev GPS simulator (dev-gps.js). -->
 <script>window.QRC_DEBUG_FEATURES = false;</script>
+<!-- Abuse-reporting address. Defaults to empty, which hides the reporting
+     route entirely; the server rewrites this with the address configured by
+     the ABUSE_CONTACT_EMAIL environment variable or the site admin panel. -->
+<script>window.QRC_ABUSE_CONTACT = "";</script>
 <script src="dev-gps.js"></script>
 <script>
   // The offline-capture service worker has been removed; unregister any

@@ -54,7 +54,11 @@ const appState = {
     games: [],           // Array of game objects
     gamesLoading: false, // Loading state for games
     gamesLoaded: false,  // Whether games have been loaded
-    gamesError: null     // Error state for game loading
+    gamesError: null,    // Error state for game loading
+    settings: null,      // Site-wide settings, once loaded
+    settingsLoading: false,
+    settingsLoaded: false,
+    settingsError: null
   }
 };
 
@@ -3397,6 +3401,100 @@ function clearSiteAdminData() {
   appState.siteAdmin.gamesLoading = false;
   appState.siteAdmin.gamesLoaded = false;
   appState.siteAdmin.gamesError = null;
+  appState.siteAdmin.settings = null;
+  appState.siteAdmin.settingsLoading = false;
+  appState.siteAdmin.settingsLoaded = false;
+  appState.siteAdmin.settingsError = null;
+}
+
+// Site-wide settings (currently just the published abuse-reporting address)
+async function fetchSiteSettings() {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to read site settings.');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/site-settings`, {
+    headers: {
+      'Authorization': `Bearer ${appState.siteAdmin.token}`
+    }
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+    throw new Error('Unable to load site settings. Please try again.');
+  }
+
+  return response.json();
+}
+
+// An empty abuseContactEmail clears the override, so the server's
+// ABUSE_CONTACT_EMAIL environment variable applies again
+async function saveAbuseContactEmail(abuseContactEmail) {
+  if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
+    throw new Error('Admin authentication required to change site settings.');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/site-settings`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${appState.siteAdmin.token}`
+    },
+    body: JSON.stringify({ abuse_contact_email: abuseContactEmail })
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      appState.siteAdmin.isAuthenticated = false;
+      appState.siteAdmin.token = null;
+      throw new Error('Admin session expired. Please login again.');
+    }
+    const problem = await response.json().catch(function () { return {}; });
+    throw new Error(problem.error || 'Unable to save site settings. Please try again.');
+  }
+
+  const settings = await response.json();
+  appState.siteAdmin.settings = settings;
+
+  // Keep the reporting link on this page in step with what was just saved,
+  // rather than waiting for a reload of the page shell
+  window.QRC_ABUSE_CONTACT = settings.abuse_contact_email || '';
+
+  return settings;
+}
+
+async function loadSiteAdminSettings() {
+  if (appState.siteAdmin.settingsLoading || appState.siteAdmin.settingsLoaded) {
+    return;
+  }
+
+  try {
+    appState.siteAdmin.settingsLoading = true;
+    appState.siteAdmin.settingsError = null;
+
+    const settings = await fetchSiteSettings();
+
+    appState.siteAdmin.settings = settings;
+    appState.siteAdmin.settingsLoaded = true;
+  } catch (err) {
+    console.error('Error loading site settings:', err);
+    appState.siteAdmin.settingsError = err.message || 'Unable to load site settings. Please try again.';
+    appState.siteAdmin.settings = null;
+  } finally {
+    appState.siteAdmin.settingsLoading = false;
+    if (window.renderApp) {
+      window.renderApp();
+    }
+  }
+}
+
+function refreshSiteAdminSettings() {
+  appState.siteAdmin.settingsLoaded = false;
+  loadSiteAdminSettings();
 }
 
 function refreshSiteAdminHosts() {

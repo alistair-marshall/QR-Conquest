@@ -51,6 +51,11 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - New messages pop up as a notification, and the megaphone icon in the header carries an unread count until you've read them
 - It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
 
+**Reporting Something:**
+- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer of every page and under the messages panel
+- It gives you the address of the administrator who runs the site, not your game host, and opens your email app with the game already filled in
+- Whether it appears at all depends on the site publishing an address
+
 **Game Features:**
 - **Real-time Map**: See all bases and which team currently controls each one
 - **Live Scoreboard**: Track team rankings as they change throughout the game
@@ -148,6 +153,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - Delete any game, including one players have joined - hosts cannot do that themselves
 - Export any game: one JSON file holding the whole record of it, for your files or to answer a complaint
 - Finished games clear themselves down. Every player's GPS position is deleted the moment a game ends, and thirty days after that the game and everything in it is deleted for good. Export anything you may need before then
+- Publish the address players and hosts use to report abuse (Site Settings)
 
 **Security Features:**
 - Secure authentication via environment variables
@@ -225,6 +231,8 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 1. **Set up environment**:
    ```bash
    export SITE_ADMIN_PASSWORD="your_secure_admin_password"
+   # Optional, but publish one before you run games for other people:
+   export ABUSE_CONTACT_EMAIL="safety@example.org"
    ```
 
 2. **Start the application**:
@@ -254,6 +262,19 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
      file away
    - Do this before the retention window runs out. After that the game is
      gone, and the export is the only copy there will be
+
+#### Abuse Reporting
+
+6. **Publish a reporting address**:
+   - Open the "Site Settings" tab in the admin panel
+   - Enter the address reports and complaints should reach you on, and save
+   - Players and hosts then see a "Report abuse" link in the footer, and
+     players see one under the host messages panel. It opens their email app
+     with the game pre-filled
+   - The address defaults to the `ABUSE_CONTACT_EMAIL` environment variable;
+     saving here overrides it without a restart, and clearing the field falls
+     back to it. With neither set, no reporting route is shown - see
+     [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for why you should set one
 
 ## The Question Bank
 
@@ -417,7 +438,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 ## Technical Architecture
 
 ### Backend (Python Flask)
-- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, answer_sessions and announcements
+- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, answer_sessions, announcements and site_settings
 - **Authentication**: Token-based for site admin, QR code-based for hosts/players
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
@@ -425,6 +446,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
 - **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
+- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag rather than served from an endpoint, so the reporting link renders with the first paint and needs no credential
 - **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
 - **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
 - **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
@@ -436,15 +458,16 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: WebSocket capture notifications plus automatic polling for live scoreboard updates
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
+- **Abuse Reporting**: A "Report abuse" link in the footer, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
 - **Responsive Design**: Works on mobile phones and tablets
 
 **File Responsibility Matrix**:
 | File | Responsibility | Contains | Calls |
 |------|---------------|----------|-------|
 | **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
-| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, PWA | Core.js API functions |
+| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, abuse reporting link and modal, PWA | Core.js API functions |
 | **host.js** | Host UI | Host panel, team/base forms, question bank, host modals | Core.js API functions |
-| **site-admin.js** | Admin UI | Admin login, host management, admin modals | Core.js API functions |
+| **site-admin.js** | Admin UI | Admin login, host management, site settings, admin modals | Core.js API functions |
 | **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
 
 ### Front-end libraries
@@ -571,6 +594,7 @@ database. To upgrade a library, bump its version in `package.json` and run
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
+| `ABUSE_CONTACT_EMAIL` | No | Address published to players and hosts as a "Report abuse" link, for reporting content or complaining. A site administrator can override it under Site Settings in the admin panel; with neither set, no reporting route is shown. | `safety@example.org` |
 | `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
 | `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. | `30` |
 | `FLASK_ENV` | No | Flask environment mode | `production` |
@@ -749,7 +773,7 @@ This is a pre-beta project focused on functionality over backwards compatibility
 - Single server instance (no clustering support)
 - SQLite database (not suitable for high concurrency)
 - Basic error handling (needs improvement for production)
-- No in-app reporting route, and limited moderation tooling for a site administrator: they can export a game and read everything in it, including withdrawn announcements, but the only thing they can take down is the whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+- Abuse reporting is a published email address only - no in-app report form - and limited moderation tooling for a site administrator: they can export a game and read everything in it, including withdrawn announcements, but the only thing they can take down is the whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - Limited game customization options
 - No game history or analytics
 

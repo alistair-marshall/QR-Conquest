@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import os
 import math
 import random
+import re
 from functools import wraps
 
 app = Flask(__name__, static_folder='static')
@@ -33,6 +34,12 @@ if not SITE_ADMIN_PASSWORD:
 # Debug features (mobile console viewer, manual GPS coordinate entry) are
 # hidden unless explicitly enabled on the server via this environment variable.
 DEBUG_FEATURES = os.environ.get('DEBUG_FEATURES', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+# Address players and hosts can use to report abusive content (an announcement,
+# a game, team or base name) or complain about the service. Set the default here;
+# a site administrator can override it from the admin panel without a restart.
+# When neither is set, the app shows no reporting route at all.
+ABUSE_CONTACT_EMAIL = os.environ.get('ABUSE_CONTACT_EMAIL', '').strip()
 
 # ==========================================================
 # Retention
@@ -383,6 +390,17 @@ def init_db():
     ON announcements (game_id, sent_at)
     ''')
 
+    # Site-wide settings a site administrator can change at runtime, so the
+    # deployment does not have to be restarted to correct something like the
+    # published abuse-reporting address
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS site_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    )
+    ''')
+
     # Migrate databases created before an announcement could be withdrawn
     cursor.execute('PRAGMA table_info(announcements)')
     announcement_columns = [row['name'] for row in cursor.fetchall()]
@@ -487,6 +505,70 @@ def init_db():
     conn.close()
 
 init_db()
+
+
+# ==========================================================
+# Site Settings
+# ==========================================================
+
+# Deliberately permissive: enough to catch a typo or a pasted sentence, but
+# not an attempt to police the RFC. Angle brackets and quotes are excluded so
+# the value is safe to drop into the page and into a mailto: link.
+EMAIL_PATTERN = re.compile(r"^[^@\s<>\"'`]+@[^@\s<>\"'`.]+(\.[^@\s<>\"'`.]+)+$")
+
+ABUSE_CONTACT_SETTING = 'abuse_contact_email'
+
+
+def get_site_setting(key):
+    """Return a site setting's stored value, or None if it has never been set."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM site_settings WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else None
+
+
+def set_site_setting(key, value):
+    """Store a site setting, or clear it when value is empty so the
+    environment variable's default applies again."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if value:
+        cursor.execute('''
+            INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+                                           updated_at = excluded.updated_at
+        ''', (key, value, int(time.time())))
+    else:
+        cursor.execute('DELETE FROM site_settings WHERE key = ?', (key,))
+    conn.commit()
+    conn.close()
+
+
+def get_abuse_contact_email():
+    """The address players are pointed at to report content or complain.
+
+    An administrator's override wins over the ABUSE_CONTACT_EMAIL environment
+    variable; with neither set the app shows no reporting route.
+    """
+    override = get_site_setting(ABUSE_CONTACT_SETTING)
+    if override:
+        return override
+    return ABUSE_CONTACT_EMAIL
+
+
+def is_valid_email(value):
+    return bool(value) and len(value) <= 254 and bool(EMAIL_PATTERN.fullmatch(value))
+
+
+# Checked once at startup rather than on every page render, and a bad value is
+# dropped rather than served: it would end up in the page shell and in a
+# mailto: link, and a typo there is worse than showing no route at all
+if ABUSE_CONTACT_EMAIL and not is_valid_email(ABUSE_CONTACT_EMAIL):
+    print('WARNING: ABUSE_CONTACT_EMAIL is not a valid email address - ignoring it')
+    print('No abuse reporting route will be shown unless one is set in the admin panel')
+    ABUSE_CONTACT_EMAIL = ''
 
 
 # ==========================================================
@@ -4180,8 +4262,51 @@ def get_host_games(host_id):
 def get_host_games_as_admin(host_id):
     return list_host_games(host_id)
 
+# ==========================================================
+# API Routes - Site Settings (Site Admin)
+# ==========================================================
+
+@app.route('/api/site-settings', methods=['GET'])
+@require_site_admin
+def get_site_settings():
+    override = get_site_setting(ABUSE_CONTACT_SETTING)
+    return jsonify({
+        'abuse_contact_email': override or ABUSE_CONTACT_EMAIL,
+        # Lets the admin panel say where the address in force came from, and
+        # whether clearing the override leaves a fallback behind
+        'abuse_contact_email_override': override,
+        'abuse_contact_email_default': ABUSE_CONTACT_EMAIL
+    })
+
+@app.route('/api/site-settings', methods=['PUT'])
+@require_site_admin
+def update_site_settings():
+    data = request.json
+    if data is None or 'abuse_contact_email' not in data:
+        return jsonify({'error': 'No settings provided'}), 400
+
+    email = (data.get('abuse_contact_email') or '').strip()
+
+    # An empty value clears the override so the ABUSE_CONTACT_EMAIL
+    # environment variable applies again
+    if email and not is_valid_email(email):
+        return jsonify({'error': 'Enter a valid email address'}), 400
+
+    try:
+        set_site_setting(ABUSE_CONTACT_SETTING, email)
+    except sqlite3.Error as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+    return jsonify({
+        'abuse_contact_email': email or ABUSE_CONTACT_EMAIL,
+        'abuse_contact_email_override': email or None,
+        'abuse_contact_email_default': ABUSE_CONTACT_EMAIL
+    })
+
 # Serve the SPA shell, injecting the debug-features flag so the client can
-# decide whether to expose the mobile console and manual GPS entry tools.
+# decide whether to expose the mobile console and manual GPS entry tools, and
+# the abuse-reporting address so the reporting route appears without an extra
+# round trip on a phone with patchy data.
 def render_index():
     index_path = os.path.join(app.static_folder, 'index.html')
     with open(index_path, 'r', encoding='utf-8') as f:
@@ -4190,6 +4315,13 @@ def render_index():
         html = html.replace(
             'window.QRC_DEBUG_FEATURES = false;',
             'window.QRC_DEBUG_FEATURES = true;'
+        )
+    contact = get_abuse_contact_email()
+    if contact:
+        html = html.replace(
+            'window.QRC_ABUSE_CONTACT = "";',
+            # json.dumps leaves '<' alone, and the page shell is HTML, not JSON
+            'window.QRC_ABUSE_CONTACT = %s;' % json.dumps(contact).replace('<', '\\u003c')
         )
     return Response(html, mimetype='text/html')
 

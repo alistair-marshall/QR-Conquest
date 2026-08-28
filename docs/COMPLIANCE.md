@@ -104,18 +104,24 @@ assessment. Record them:
   game and every word written in it is deleted automatically - see the
   retention rule below. Nothing a host wrote sits on the server forever
   because everyone forgot about it.
+- **A reporting route is built in.** Set `ABUSE_CONTACT_EMAIL`, or fill in the
+  address under Site Settings in the admin panel, and every player and host
+  gets a "Report abuse" link - in the footer, and under the messages panel
+  where they read the host's announcements. It reaches you, the provider, not
+  the host being reported. Leave it unset and no route is shown, which is the
+  one configuration you should not ship.
 
 ### What you have to provide yourself
 
-The app gives you none of these, and Ofcom's deadlines for the first two have
-already passed:
+Apart from the reporting link, the app gives you none of these, and Ofcom's
+deadlines for the first two have already passed:
 
 | Duty | What it means here |
 |---|---|
 | Illegal content risk assessment | Write one, keep it, review it when you change the deployment. It can be short: list the user content - all of it host-written: game, team and base names, announcements, and the question bank - the risks, and the mitigations above |
 | Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
 | Terms of service | Say what is allowed and what you will do about content that is not |
-| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. **There is no in-app reporting route**, and a player has no way to reach a host through the app at all |
+| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. Set `ABUSE_CONTACT_EMAIL` or the Site Settings address and the app shows it as a "Report abuse" link; you still have to read that mailbox and act on what arrives. A player has no way to reach a *host* through the app at all |
 | Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: it is withdrawn from everyone immediately, but the text stays in the database until the game is deleted or reaches its purge date |
 | Records | Keep the assessments and your decisions. Export a game before its purge date if you want its record to outlive it |
 
@@ -218,6 +224,10 @@ host, not to any one game, and only a site administrator removes them.
   administrator's job for any game that was actually played.
 - **Security.** Serve over HTTPS, keep `SITE_ADMIN_PASSWORD` strong and out of
   version control, and never enable `DEBUG_FEATURES` in production.
+- **Publish a contact.** The address in `ABUSE_CONTACT_EMAIL` (or Site
+  Settings) is the one the app shows for reports and complaints. It is a
+  sensible place to point data protection queries too, as long as someone
+  actually monitors it.
 
 ### Known gaps to cover in your own procedures
 
@@ -225,7 +235,9 @@ Be aware of these when you write your assessments - they are honest limits of
 the software, not oversights it hides:
 
 - No age assurance of any kind
-- No in-app reporting or complaints route
+- The reporting route is an email address and nothing more: no in-app report
+  form, no ticketing, no record of what was reported, and it is only there if
+  you configure it
 - Limited moderation tooling for a site administrator: they can export a game
   and read every announcement in it, withdrawn ones included, but they cannot
   withdraw a single announcement from the admin panel - the only takedown they
