@@ -1707,8 +1707,8 @@ function formatTimeSince(timestamp) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
-// Popup for a player's dot. Built as DOM nodes rather than an HTML string:
-// players choose their own names, and this popup is rendered on the host's map.
+// Popup for a player's dot, on the host's map. Built as DOM nodes rather than
+// an HTML string, so nothing in the data can be read as markup.
 function buildPlayerPopup(entry) {
   const container = document.createElement('div');
 
@@ -1928,11 +1928,16 @@ function renderApp() {
       const needsTimer = updateGameStatusText(statusText);
       statusDiv.appendChild(statusText);
 
-      // Always show team info if player is on a team
+      // Always show team info if player is on a team, and the name the
+      // server gave them - it is what a host will call them by
       if (appState.gameData.currentTeam) {
         const teamText = document.createElement('p');
         teamText.className = 'text-sm';
-        teamText.textContent = 'Team: ' + getTeamName(appState.gameData.currentTeam);
+        const playerName = getAuthState().playerName;
+        const teamName = getTeamName(appState.gameData.currentTeam);
+        teamText.textContent = playerName
+          ? `${playerName} - ${teamName}`
+          : 'Team: ' + teamName;
         statusDiv.appendChild(teamText);
       }
 

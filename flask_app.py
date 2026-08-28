@@ -112,6 +112,65 @@ def generate_game_id():
 
 
 # ==========================================================
+# Player Names
+# ==========================================================
+
+# Players are never asked for a name. A name a player types is content one
+# user writes and another reads, which is the thing that pulls a deployment
+# into moderation duties, and in practice it is usually a child's real first
+# name sitting on a host's roster. Every player is handed an
+# "adjective-animal" name instead: memorable enough for a host to call out
+# across a field, and personal data about nobody.
+PLAYER_NAME_ADJECTIVES = [
+    'quiet', 'brave', 'swift', 'clever', 'sunny', 'jolly', 'keen', 'bold',
+    'calm', 'eager', 'gentle', 'happy', 'jaunty', 'lively', 'merry', 'nimble',
+    'plucky', 'proud', 'rapid', 'sharp', 'spry', 'sturdy', 'tidy', 'witty',
+    'cheery', 'breezy', 'chirpy', 'daring', 'dapper', 'fearless', 'fleet',
+    'hardy', 'mighty', 'noble', 'perky', 'polite', 'ready', 'sleek',
+    'steady', 'zesty'
+]
+
+PLAYER_NAME_ANIMALS = [
+    'badger', 'otter', 'heron', 'falcon', 'marten', 'weasel', 'hedgehog',
+    'squirrel', 'kestrel', 'puffin', 'seal', 'stoat', 'wren', 'robin',
+    'magpie', 'osprey', 'beaver', 'lynx', 'hare', 'fox', 'dormouse', 'shrew',
+    'newt', 'toad', 'adder', 'pike', 'salmon', 'trout', 'curlew', 'lapwing',
+    'skylark', 'raven', 'rook', 'jackdaw', 'buzzard', 'harrier', 'merlin',
+    'bittern', 'gannet', 'dolphin'
+]
+
+def generate_player_name(cursor, game_id):
+    """Give a joining player an adjective-animal name nobody else in the game
+    is using. Names only have to be unique within a game - one host reads them
+    off one roster, and that is the only place a clash would confuse anyone."""
+    cursor.execute('''
+    SELECT p.name FROM players p
+    JOIN teams t ON p.team_id = t.id
+    WHERE t.game_id = ?
+    ''', (game_id,))
+    taken = {row['name'] for row in cursor.fetchall()}
+
+    combinations = [f'{adjective}-{animal}'
+                    for adjective in PLAYER_NAME_ADJECTIVES
+                    for animal in PLAYER_NAME_ANIMALS]
+    random.shuffle(combinations)
+
+    for name in combinations:
+        if name not in taken:
+            return name
+
+    # Every combination is in use - it would take a 1600-player game, but the
+    # join must not fail over it, so keep going with a numbered suffix
+    suffix = 2
+    while True:
+        for name in combinations:
+            numbered = f'{name}-{suffix}'
+            if numbered not in taken:
+                return numbered
+        suffix += 1
+
+
+# ==========================================================
 # Database Setup and Initialization
 # ==========================================================
 
@@ -1568,7 +1627,6 @@ def return_base(base_id):
 def join_team(team_id):
     data = request.json
     player_id = data.get('player_id') if data else None
-    player_name = data.get('player_name', 'Anonymous Player') if data else 'Anonymous Player'
     submitted_qr = data.get('qr_code') if data else None
     current_time = int(time.time())
 
@@ -1626,13 +1684,14 @@ def join_team(team_id):
 
             conn.commit()
             conn.close()
-            return jsonify({'player_id': player_id})
+            return jsonify({'player_id': player_id, 'player_name': existing_player['name']})
 
     # Generate new player ID if not provided (new player joining)
     if not player_id:
         player_id = str(uuid.uuid4())
 
-    # Add player to the new team
+    # Add player to the new team under a name the server picks for them
+    player_name = generate_player_name(cursor, team['game_id'])
     cursor.execute('''
     INSERT INTO players (id, team_id, name, join_time)
     VALUES (?, ?, ?, ?)
@@ -1641,14 +1700,13 @@ def join_team(team_id):
     conn.commit()
     conn.close()
 
-    return jsonify({'player_id': player_id})
+    return jsonify({'player_id': player_id, 'player_name': player_name})
 
 # Join a game with automatic team assignment (fewest_players / lowest_points)
 @app.route('/api/games/<game_id>/join', methods=['POST'])
 def join_game(game_id):
     data = request.json or {}
     player_id = data.get('player_id')
-    player_name = data.get('player_name', 'Anonymous Player')
     current_time = int(time.time())
 
     conn = get_db_connection()
@@ -1673,7 +1731,7 @@ def join_game(game_id):
     # If the player is already in a team for this game, keep them there
     if player_id:
         cursor.execute('''
-        SELECT p.team_id, t.name FROM players p
+        SELECT p.team_id, p.name AS player_name, t.name AS team_name FROM players p
         JOIN teams t ON p.team_id = t.id
         WHERE p.id = ? AND t.game_id = ?
         ''', (player_id, game_id))
@@ -1683,8 +1741,9 @@ def join_game(game_id):
             conn.close()
             return jsonify({
                 'player_id': player_id,
+                'player_name': existing_player['player_name'],
                 'team_id': existing_player['team_id'],
-                'team_name': existing_player['name']
+                'team_name': existing_player['team_name']
             })
 
     cursor.execute('SELECT * FROM teams WHERE game_id = ?', (game_id,))
@@ -1710,6 +1769,7 @@ def join_game(game_id):
     if not player_id:
         player_id = str(uuid.uuid4())
 
+    player_name = generate_player_name(cursor, game_id)
     cursor.execute('''
     INSERT INTO players (id, team_id, name, join_time)
     VALUES (?, ?, ?, ?)
@@ -1720,6 +1780,7 @@ def join_game(game_id):
 
     return jsonify({
         'player_id': player_id,
+        'player_name': player_name,
         'team_id': chosen_team['id'],
         'team_name': chosen_team['name']
     })
