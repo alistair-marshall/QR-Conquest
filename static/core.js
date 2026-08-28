@@ -117,7 +117,8 @@ function getAuthState() {
     gameId: localStorage.getItem('gameId'),
     hasTeam: !!localStorage.getItem('teamId'),
     teamId: localStorage.getItem('teamId'),
-    playerId: localStorage.getItem('playerId')
+    playerId: localStorage.getItem('playerId'),
+    playerName: localStorage.getItem('playerName')
   };
 }
 
@@ -156,9 +157,14 @@ function updateAuthState(authData) {
     if (authData.teamId) {
       localStorage.setItem('teamId', authData.teamId);
       localStorage.setItem('playerId', authData.playerId || '');
+      // The server names the player; keep it so they can be told who they are
+      if (authData.playerName) {
+        localStorage.setItem('playerName', authData.playerName);
+      }
     } else {
       localStorage.removeItem('teamId');
       localStorage.removeItem('playerId');
+      localStorage.removeItem('playerName');
     }
   }
 
@@ -179,6 +185,7 @@ function clearGameState() {
   localStorage.removeItem('gameId');
   localStorage.removeItem('teamId');
   localStorage.removeItem('playerId');
+  localStorage.removeItem('playerName');
   // Only remove hostName if we're not a host
   if (!appState.hostId) {
     localStorage.removeItem('hostName'); 
@@ -452,7 +459,7 @@ async function handleTeamQR(qrCode, statusData) {
         
         if (confirm(`Do you wish to change from ${currentTeamName} to ${newTeamName}?`)) {
           console.log('Player confirmed team change within same game');
-          await joinTeam(teamId, null, qrCode);
+          await joinTeam(teamId, qrCode);
         } else {
           if (window.navigateTo) {
             window.navigateTo('gameView');
@@ -1909,16 +1916,14 @@ async function deleteGame() {
 
 // Join team. teamQrCode is the code just scanned off the team's sheet; the
 // server insists on it unless the game lets players pick a team from a list.
-async function joinTeam(teamId, playerName, teamQrCode) {
-  playerName = playerName || 'Anonymous Player';
+// The player is not asked for a name - the server issues one and sends it back.
+async function joinTeam(teamId, teamQrCode) {
   try {
     setLoading(true);
-    console.log('Joining team:', teamId, 'with name:', playerName);
+    console.log('Joining team:', teamId);
 
     const authState = getAuthState();
-    const requestBody = {
-      player_name: playerName
-    };
+    const requestBody = {};
 
     if (teamQrCode) {
       requestBody.qr_code = teamQrCode;
@@ -1940,19 +1945,26 @@ async function joinTeam(teamId, playerName, teamQrCode) {
 
     const data = await handleApiResponse(response, 'Failed to join team');
     const playerId = data.player_id;
+    const playerName = data.player_name;
     console.log('Joined team, player ID:', playerId);
 
     // Update authentication state
     updateAuthState({
       teamId: teamId,
-      playerId: playerId
+      playerId: playerId,
+      playerName: playerName
     });
 
     const teamName = getTeamName(teamId);
 
     // Show success message and navigate - UI will handle this
     if (window.showNotification) {
-      window.showNotification(`You have successfully joined ${teamName}!`, 'success');
+      window.showNotification(
+        playerName
+          ? `You have joined ${teamName} as ${playerName}!`
+          : `You have successfully joined ${teamName}!`,
+        'success'
+      );
     }
     if (window.navigateTo) {
       window.navigateTo('gameView');
@@ -1969,16 +1981,15 @@ async function joinTeam(teamId, playerName, teamQrCode) {
   }
 }
 
-// Join a game that auto-assigns teams (fewest_players / lowest_points)
-async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
+// Join a game that auto-assigns teams (fewest_players / lowest_points).
+// As with joinTeam, the server picks the player's name and returns it.
+async function joinGameAuto(gameId) {
   try {
     setLoading(true);
-    console.log('Joining game with auto team assignment:', gameId, 'name:', playerName);
+    console.log('Joining game with auto team assignment:', gameId);
 
     const authState = getAuthState();
-    const requestBody = {
-      player_name: playerName
-    };
+    const requestBody = {};
 
     if (authState.playerId) {
       requestBody.player_id = authState.playerId;
@@ -1998,14 +2009,20 @@ async function joinGameAuto(gameId, playerName = 'Anonymous Player') {
     // Update authentication state
     updateAuthState({
       teamId: data.team_id,
-      playerId: data.player_id
+      playerId: data.player_id,
+      playerName: data.player_name
     });
 
     // Refresh so team player counts and membership are up to date
     await fetchGameData(gameId);
 
     if (window.showNotification) {
-      window.showNotification(`You have been assigned to ${data.team_name}!`, 'success');
+      window.showNotification(
+        data.player_name
+          ? `You have been assigned to ${data.team_name} as ${data.player_name}!`
+          : `You have been assigned to ${data.team_name}!`,
+        'success'
+      );
     }
     if (window.navigateTo) {
       window.navigateTo('gameView');

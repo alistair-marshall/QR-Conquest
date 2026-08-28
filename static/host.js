@@ -3874,28 +3874,15 @@ function renderPlayerRegistrationPage() {
     container.appendChild(autoInfo);
   }
 
-  // Player name form
+  // Join form. Players are never asked for a name - the server gives them one
+  // so that no player-written text ever reaches another user's screen.
   const form = UIBuilder.createElement('form', { className: 'space-y-4' });
 
-  const nameGroup = UIBuilder.createElement('div');
-
-  const nameLabel = UIBuilder.createElement('label', {
-    className: 'block text-gray-700 text-sm font-bold mb-2',
-    htmlFor: 'player-name',
-    textContent: 'Your Name'
+  const nameNote = UIBuilder.createElement('p', {
+    className: 'text-sm text-gray-600 text-center',
+    textContent: 'You will be given a game name, like quiet-badger, when you join.'
   });
-  nameGroup.appendChild(nameLabel);
-
-  const nameInput = UIBuilder.createElement('input', {
-    className: 'shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline',
-    id: 'player-name',
-    type: 'text',
-    placeholder: 'Enter your name',
-    required: true
-  });
-  nameGroup.appendChild(nameInput);
-
-  form.appendChild(nameGroup);
+  form.appendChild(nameNote);
 
   // Team picker for games where players choose their own team
   let selectedTeamId = null;
@@ -3956,16 +3943,10 @@ function renderPlayerRegistrationPage() {
   form.addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const playerName = nameInput.value.trim();
-    if (!playerName) {
-      showNotification('Please enter your name', 'warning');
-      return;
-    }
-
     if (mode === 'team') {
       // The code scanned to get here proves the player was handed this team's
       // sheet; without it the server will not take the join
-      joinTeam(teamId, playerName, teamQrCode);
+      joinTeam(teamId, teamQrCode);
       sessionStorage.removeItem('pendingTeamId');
       sessionStorage.removeItem('pendingTeamQrCode');
       return;
@@ -3978,9 +3959,9 @@ function renderPlayerRegistrationPage() {
 
     try {
       if (mode === 'choose') {
-        await joinTeam(selectedTeamId, playerName);
+        await joinTeam(selectedTeamId);
       } else {
-        await joinGameAuto(pendingJoinGameId, playerName);
+        await joinGameAuto(pendingJoinGameId);
       }
 
       // If they got here by scanning a base, try to capture it now
