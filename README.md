@@ -118,6 +118,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
 - Messages reach players as a notification, and are kept in a list they can scroll back through
 - It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
+- Sent the wrong thing? Tap the bin icon on any message to delete it - it comes off every player's list and yours, though anyone who has already read it has read it
 - Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
 - Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
 
@@ -126,6 +127,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 - **Live Updates**: Watch base ownership change as players capture them
 - **Score Monitoring**: Track which teams are leading throughout the game
 - **Game Timing**: Start and end games manually when appropriate
+- **Deleting a Game**: You can delete a game nobody has joined - a mis-scanned setup, or one that never ran. Once a player has joined, the game holds their data and its history, so it can only be removed by a site administrator; ending the game is what closes it down
 
 ### For Site Administrators - System Management
 
@@ -143,6 +145,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 - Create, edit, and delete host accounts
 - Generate links for new hosts
 - Review host account status and expiry dates
+- Delete any game, including one players have joined - hosts cannot do that themselves, so clearing down finished games is your job and belongs in your retention routine
 
 **Security Features:**
 - Secure authentication via environment variables
@@ -407,7 +410,8 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **WebSockets**: Live base-capture and quiz-outcome notifications pushed to all connected players (via flask-sock)
 - **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
 - **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Once a game ends the server stops accepting position updates, so each player's last fix stays frozen on the record rather than being cleared
-- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count
+- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
+- **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
 - **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
 - **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
 - **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
@@ -638,7 +642,7 @@ costs the host one scan.
 
 ### Privacy Considerations
 - **Location data**: Only stored for base creation and capture verification
-- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text
+- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database until the game itself is deleted
 - **Player names**: Generated by the server as an `adjective-animal` handle - players never type one, so no player's real name is in the app. Served only to the game's own host, never to other players or an anonymous caller
 - **Team QR codes**: Never served to an anonymous caller, only to the game's own host
 - **Player data**: Minimal personal information collected
@@ -729,7 +733,7 @@ This is a pre-beta project focused on functionality over backwards compatibility
 - Single server instance (no clustering support)
 - SQLite database (not suitable for high concurrency)
 - Basic error handling (needs improvement for production)
-- No in-app reporting route, content moderation tooling or retention purge - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+- No in-app reporting route, no retention purge, and no moderation tooling for a site administrator beyond deleting a whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
 - Limited game customization options
 - No game history or analytics
 

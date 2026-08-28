@@ -84,6 +84,14 @@ assessment. Record them:
   checks who is asking.
 - **Team QR codes are never served anonymously** - only to the game's own
   host, because holding one is what joins a team.
+- **A host can take an announcement back down.** Deleting one stops it being
+  served to anyone, the host included, from that moment. It is a soft delete:
+  the text stays in the database with the time it was withdrawn, so you can
+  still answer for what was sent if someone complains about it afterwards.
+- **A game with players in it cannot be deleted by its host.** Once anyone has
+  joined, the game holds other people's data and the history a complaint or an
+  erasure request would be answered from, so only a site administrator can
+  remove it. A host ends the game instead.
 
 ### What you have to provide yourself
 
@@ -96,7 +104,7 @@ already passed:
 | Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
 | Terms of service | Say what is allowed and what you will do about content that is not |
 | Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. **There is no in-app reporting route**, and a player has no way to reach a host through the app at all |
-| Content takedown | You can delete a whole game, which deletes its announcements. There is no per-announcement delete, so plan on direct database access, or removing the game |
+| Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: purging the text needs database access |
 | Records | Keep the assessments and your decisions |
 
 Duties are proportionate to size and risk, and a small game server run for a
@@ -144,10 +152,12 @@ them, and should not.
   minimisation, privacy-protective defaults, and transparency in language a
   child can follow. Its expectations are stricter than the baseline.
 - **Set a retention rule.** Games, announcements and last-known positions live
-  until the host deletes the game. There is no automatic purge, so make
-  deleting finished games part of your routine.
+  until the game is deleted, and once players have joined only a site
+  administrator can delete it. There is no automatic purge, so make clearing
+  down finished games part of *your* routine, not the host's.
 - **Be ready for subject access and erasure requests.** Today the only erasure
-  tool is deleting the whole game.
+  tool is deleting the whole game, which is a site administrator's job for any
+  game that was actually played.
 - **Security.** Serve over HTTPS, keep `SITE_ADMIN_PASSWORD` strong and out of
   version control, and never enable `DEBUG_FEATURES` in production.
 
@@ -158,8 +168,10 @@ the software, not oversights it hides:
 
 - No age assurance of any kind
 - No in-app reporting or complaints route
-- No per-announcement deletion, and no moderation tooling for a site
-  administrator
+- No moderation tooling for a site administrator beyond deleting a whole game:
+  they cannot read or withdraw a single announcement from the admin panel
+- A deleted announcement is hidden, not erased - the row stays until the game
+  is deleted
 - No automatic retention purge
 - No privacy notice or terms shown in the app
 - No rate limiting on any endpoint

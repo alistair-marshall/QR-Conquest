@@ -1240,10 +1240,20 @@ const ANNOUNCEMENT_MAX_LENGTH = 500;
 // well: that is what reaches a player sitting on any other page
 const ANNOUNCEMENT_POLL_INTERVAL_MS = 10000;
 
+// How long an announcement the server did not return is held on screen as one
+// that landed while the request was in flight. Past that it is treated as one
+// the host has deleted, so a withdrawn message clears itself.
+const ANNOUNCEMENT_PENDING_GRACE_SECONDS = 5;
+
 let announcementPollingInterval = null;
 
 // Ids already shown, so a refresh only announces what is genuinely new
 let knownAnnouncementIds = new Set();
+
+// Ids this device has deleted. A poll already in flight when the host deletes
+// one still carries it, so it is filtered out rather than blinking back onto
+// the list until the next poll settles it.
+let deletedAnnouncementIds = new Set();
 
 // A host looking at a game that is not theirs is refused their own record of
 // what they sent; remember that rather than retrying it on every poll
@@ -1258,6 +1268,7 @@ function resetAnnouncementState() {
     error: null
   };
   knownAnnouncementIds = new Set();
+  deletedAnnouncementIds = new Set();
   hostAnnouncementsDenied = false;
 
   if (window.updateAnnouncementBadge) {
@@ -1352,20 +1363,28 @@ async function fetchAnnouncements() {
     }
 
     const data = await response.json();
-    const announcements = data.announcements || [];
+    const announcements = (data.announcements || []).filter(function (announcement) {
+      return !deletedAnnouncementIds.has(announcement.id);
+    });
 
     announceNewAnnouncements(announcements, role);
 
     // An announcement posted while this request was in flight is missing from
     // the response; keep it on screen rather than letting it blink out until
     // the next poll. Only ones at least as new as the newest fetched are kept,
-    // so nothing trimmed off the far end of the history comes back.
+    // so nothing trimmed off the far end of the history comes back - and only
+    // while they are new enough to have raced this request, because anything
+    // else missing from the response is one the host has deleted. Both times
+    // come from the server, so a client clock cannot skew the comparison.
     const newestFetched = announcements.reduce(function (latest, announcement) {
       return Math.max(latest, announcement.sentAt || 0);
     }, 0);
 
+    const oldestPending = (data.serverTime || 0) - ANNOUNCEMENT_PENDING_GRACE_SECONDS;
+
     const pending = appState.announcements.items.filter(function (announcement) {
-      return (announcement.sentAt || 0) >= newestFetched &&
+      const sentAt = announcement.sentAt || 0;
+      return sentAt >= newestFetched && sentAt >= oldestPending &&
         !announcements.some(function (fetched) { return fetched.id === announcement.id; });
     });
 
@@ -1420,6 +1439,47 @@ async function sendAnnouncement(body) {
     console.error('Error sending announcement:', err);
     if (window.showNotification) {
       window.showNotification(err.message || 'Unable to send message.', 'error');
+    }
+    return false;
+  } finally {
+    if (window.refreshAnnouncementPanel) {
+      window.refreshAnnouncementPanel();
+    }
+  }
+}
+
+// Withdraw something the host sent. The server keeps the row with a deletion
+// time, so the deployment can still answer for what was posted, but it stops
+// being served to anyone - the host's own list included. Resolves true once it
+// is gone.
+async function deleteAnnouncement(announcementId) {
+  if (getAnnouncementRole() !== 'host' || !announcementId) return false;
+
+  const authState = getAuthState();
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/games/${appState.gameData.id}/announcements/${announcementId}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host_id: authState.hostId })
+      }
+    );
+
+    await handleApiResponse(response, 'Failed to delete message');
+
+    // Take it off the list now rather than waiting for the next poll
+    deletedAnnouncementIds.add(announcementId);
+    appState.announcements.items = appState.announcements.items.filter(function (announcement) {
+      return announcement.id !== announcementId;
+    });
+
+    return true;
+  } catch (err) {
+    console.error('Error deleting announcement:', err);
+    if (window.showNotification) {
+      window.showNotification(err.message || 'Unable to delete message.', 'error');
     }
     return false;
   } finally {
@@ -1638,6 +1698,12 @@ function handleGameSocketMessage(message) {
     // Deliberately no text on the wire - anyone who knows a game code can
     // listen, so the text is fetched from an endpoint that checks who is
     // asking
+    fetchAnnouncements();
+  } else if (message.type === 'announcement_deleted') {
+    console.log('Announcement deleted event:', message);
+
+    // Refetching is what takes it off the reader's screen; the event names
+    // nothing, for the same reason as above
     fetchAnnouncements();
   } else if (message.type === 'base_returned') {
     console.log('Base returned event:', message);
@@ -1858,7 +1924,9 @@ async function endGame() {
   }
 }
 
-// Delete game
+// Delete a game the host set up but nobody joined. The server refuses this
+// once a player has joined - that game's history is a site administrator's to
+// remove - so the host's way out of a running game is to end it.
 async function deleteGame() {
   if (!appState.gameData.id) {
     throw new Error('No game loaded to delete.');
@@ -3484,7 +3552,9 @@ async function completeGameAsAdmin(game) {
   }
 }
 
-// Delete game as admin by impersonating the host
+// Delete a game as the site admin. A host can only clear away a game nobody
+// joined, so the admin token - not the host id - is what carries this past a
+// game with players in it.
 async function deleteGameAsAdmin(game) {
   if (!appState.siteAdmin.isAuthenticated || !appState.siteAdmin.token) {
     throw new Error('Admin authentication required to delete games.');
@@ -3493,11 +3563,11 @@ async function deleteGameAsAdmin(game) {
   try {
     setLoading(true);
 
-    // Use the host endpoint by providing the host_id (admin knows all host IDs)
     const response = await fetch(`${API_BASE_URL}/games/${game.id}`, {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${appState.siteAdmin.token}`
       },
       body: JSON.stringify({
         host_id: game.host_id
