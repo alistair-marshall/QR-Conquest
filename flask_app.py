@@ -111,15 +111,6 @@ def generate_game_id():
     return str(uuid.uuid4())
 
 
-def looks_like_uuid(value):
-    """True if value is a UUID string, as generate_game_id produces"""
-    try:
-        uuid.UUID(str(value))
-    except (ValueError, AttributeError, TypeError):
-        return False
-    return True
-
-
 # ==========================================================
 # Database Setup and Initialization
 # ==========================================================
@@ -333,22 +324,6 @@ def init_db():
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_points_per_base INTEGER')
     if 'bonus_start_time' not in game_columns:
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_start_time INTEGER')
-
-    # Re-key games that still carry a guessable "adjective-noun" code as their
-    # id, so nobody outside a game can walk the id space into its payload.
-    # Games being played right now are left alone: the id lives in each
-    # player's localStorage, and changing it mid-game would sign every device
-    # out of a game it is standing in. They are picked up on the first restart
-    # after they end. SQLite has no ON UPDATE CASCADE here, so the rows that
-    # reference a game move with it.
-    cursor.execute("SELECT id FROM games WHERE status NOT IN ('active', 'bonus')")
-    stale_game_ids = [row['id'] for row in cursor.fetchall() if not looks_like_uuid(row['id'])]
-    for stale_id in stale_game_ids:
-        fresh_id = generate_game_id()
-        cursor.execute('UPDATE games SET id = ? WHERE id = ?', (fresh_id, stale_id))
-        cursor.execute('UPDATE teams SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
-        cursor.execute('UPDATE bases SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
-        cursor.execute('UPDATE announcements SET game_id = ? WHERE game_id = ?', (fresh_id, stale_id))
 
     # Migrate databases created before players.cooldown_until existed
     cursor.execute('PRAGMA table_info(players)')
