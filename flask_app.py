@@ -4460,6 +4460,43 @@ def update_site_settings():
         'abuse_contact_email_default': ABUSE_CONTACT_EMAIL
     })
 
+# Every front-end file lives at a URL that never changes, so a browser holding
+# a cached copy has no reason to ask for a newer one - and a host left on a
+# months-old core.js is calling endpoints this server has since moved, which
+# reaches them as an unexplained "Unauthorized" rather than as "your app is out
+# of date". The shell stamps every asset URL it names with the version below,
+# so a deploy changes the URLs and the browser fetches the new files.
+#
+# The stamp is the newest modification time under the static folder: it changes
+# exactly when a served file does, needs no build step, and every worker on the
+# same deployment computes the same value. Walking a folder of a few dozen
+# files costs nothing next to the page load it is part of.
+ASSET_VERSION_SUFFIXES = ('.js', '.css', '.html')
+
+
+def asset_version():
+    """A stamp that changes whenever a front-end file changes."""
+    newest = 0.0
+    for root, _dirs, files in os.walk(app.static_folder):
+        for name in files:
+            if not name.endswith(ASSET_VERSION_SUFFIXES):
+                continue
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(root, name)))
+            except OSError:
+                # A file that vanished mid-walk simply does not date the build
+                continue
+
+    return str(int(newest))
+
+
+# src="core.js" and href="/libs/leaflet.css" in the shell, and nothing that
+# points off this origin or carries its own query string already
+ASSET_URL_PATTERN = re.compile(
+    r'\b(src|href)="(?!https?:|//|data:)([^"?]+\.(?:js|css))"'
+)
+
+
 # Serve the SPA shell, injecting the debug-features flag so the client can
 # decide whether to expose the mobile console and manual GPS entry tools, the
 # abuse-reporting address so the reporting route appears without an extra
@@ -4494,7 +4531,18 @@ def render_index():
             'window.QRC_RETENTION_DAYS = %d;' % DEFAULT_GAME_RETENTION_DAYS,
             'window.QRC_RETENTION_DAYS = %d;' % GAME_RETENTION_DAYS
         )
-    return Response(html, mimetype='text/html')
+    # Stamp the asset URLs, and the version the client stamps the rest with
+    version = asset_version()
+    html = html.replace(
+        'window.QRC_ASSET_VERSION = "";',
+        'window.QRC_ASSET_VERSION = "%s";' % version
+    )
+    html = ASSET_URL_PATTERN.sub(r'\1="\2?v=%s"' % version, html)
+
+    # The shell is what names the current asset URLs, so a stale copy of it
+    # would keep pointing at the previous version's files
+    return Response(html, mimetype='text/html',
+                    headers={'Cache-Control': 'no-store'})
 
 # Anything under /api that matched no route above is a client error, not a
 # page. Without this the SPA catch-all below answers 200 with the HTML shell,

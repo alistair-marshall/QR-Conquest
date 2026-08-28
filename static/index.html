@@ -31,6 +31,21 @@
      GAME_RETENTION_DAYS environment variable actually set, so the privacy
      notice quotes this deployment's real retention rule. -->
 <script>window.QRC_RETENTION_DAYS = 30;</script>
+<!-- Asset version stamp. Defaults to empty; the server rewrites this with a
+     stamp that changes whenever a front-end file does, and stamps every asset
+     URL in this page with it. Without it a browser holding a cached copy of
+     the app's JavaScript has no reason to ask for a newer one, and a host can
+     be left running a client old enough to be calling endpoints that have
+     since moved - which reads on their screen as an unexplained error. -->
+<script>
+  window.QRC_ASSET_VERSION = "";
+  // Stamp a same-origin asset URL, for the files fetched by script rather
+  // than named in this page
+  window.assetUrl = function(path) {
+    if (!window.QRC_ASSET_VERSION) return path;
+    return path + (path.indexOf('?') === -1 ? '?' : '&') + 'v=' + window.QRC_ASSET_VERSION;
+  };
+</script>
 <script src="dev-gps.js"></script>
 <script>
   // The offline-capture service worker has been removed; unregister any
@@ -96,7 +111,7 @@
     // Function to load scripts in sequence
     function loadScript(src, callback) {
       var script = document.createElement('script');
-      script.src = src;
+      script.src = window.assetUrl(src);
       script.onload = callback;
       script.onerror = function() {
         console.error('Failed to load ' + src);

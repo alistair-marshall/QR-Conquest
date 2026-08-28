@@ -475,6 +475,21 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 | **site-admin.js** | Admin UI | Admin login, host management, site settings, admin modals | Core.js API functions |
 | **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
 
+### Keeping clients up to date
+
+The page shell is served with `Cache-Control: no-store`, and every asset URL
+in it - the app's own scripts and stylesheet as well as the vendored
+libraries - carries a `?v=` stamp taken from the newest modification time
+under `static/`. A deploy changes that stamp, so the next page load asks for
+new files rather than reusing whatever the browser already has.
+
+This matters because the app is a long-lived page on phones that are rarely
+closed: without the stamp a host could sit on a months-old `core.js`, calling
+endpoints the server has since moved, and see an unexplained error rather than
+anything that says "your app is out of date". If a client still looks stale
+after a deploy, a hard reload (or clearing the site's data) is enough - there
+is no service worker to unregister.
+
 ### Front-end libraries
 
 Tailwind, Leaflet, Lucide, jsQR and QRCode.js are served from `static/libs/`
