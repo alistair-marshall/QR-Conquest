@@ -1604,6 +1604,32 @@ function buildGameSettingsForm(options = {}) {
 
   settingsGrid.appendChild(joinMethodGroup);
 
+  // Contact number. The app has no reply channel - a player with a problem
+  // has no way to reach their host through it - so this is the one route
+  // back, and it is shown to the players in this game and nobody else
+  const hostPhoneGroup = UIBuilder.createElement('div');
+  hostPhoneGroup.appendChild(UIBuilder.createElement('label', {
+    className: 'block text-sm font-medium text-gray-700 mb-1',
+    htmlFor: 'host-phone-input',
+    textContent: 'Your contact number (optional)'
+  }));
+
+  hostPhoneGroup.appendChild(UIBuilder.createElement('input', {
+    type: 'tel',
+    id: 'host-phone-input',
+    value: gameData.hostPhone || '',
+    placeholder: '07700 900123',
+    maxlength: '32',
+    className: 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-purple-500'
+  }));
+
+  hostPhoneGroup.appendChild(UIBuilder.createElement('p', {
+    className: 'text-xs text-gray-500 mt-1',
+    textContent: 'Players in this game get a "Call the host" button with this number, in the menu and with your messages. Leave it empty and they get no way to reach you through the app.'
+  }));
+
+  settingsGrid.appendChild(hostPhoneGroup);
+
   settingsSection.appendChild(settingsGrid);
   form.appendChild(settingsSection);
 
@@ -2099,6 +2125,15 @@ function validateGameSettings() {
   const joinMethodSelect = document.getElementById('join-method-select');
   const joinMethod = joinMethodSelect ? joinMethodSelect.value : 'team_qr';
 
+  // Get the host's contact number. The server has the last word on what is a
+  // number; this only catches it before a round trip
+  const hostPhoneInput = document.getElementById('host-phone-input');
+  const hostPhone = hostPhoneInput ? hostPhoneInput.value.trim() : '';
+  if (hostPhone && !/^[0-9+()\-.\s]+$/.test(hostPhone)) {
+    showNotification('Contact number can only contain digits and + ( ) - .', 'error');
+    return null;
+  }
+
   // Get quiz capture settings
   const quizEnabledCheckbox = document.getElementById('quiz-enabled-checkbox');
   const quizEnabled = quizEnabledCheckbox ? quizEnabledCheckbox.checked : false;
@@ -2149,7 +2184,8 @@ function validateGameSettings() {
     active_categories: activeCategories,
     max_shield: isNaN(maxShield) ? 5 : maxShield,
     cooldown_seconds: isNaN(cooldownSeconds) ? 30 : cooldownSeconds,
-    bonus_round_enabled: bonusEnabled
+    bonus_round_enabled: bonusEnabled,
+    host_phone: hostPhone
   };
 
   // The points value is locked once the bonus round has started, so only

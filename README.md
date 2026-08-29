@@ -50,10 +50,11 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 **Messages From Your Host:**
 - Your host can send a message to everyone playing - a start time, a change of plan, a base that's out of action
 - New messages pop up as a notification, and the megaphone icon in the header carries an unread count until you've read them
-- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
+- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other
+- If your host gave the game a contact number, you get a "Call the host" button - in the menu, and at the top of the messages panel. If they didn't, use the contact details they gave you another way
 
 **Reporting Something:**
-- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer of every page and under the messages panel
+- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer and the menu of every page, and under the messages panel
 - It gives you the address of the administrator who runs the site, not your game host, and opens your email app with the game already filled in
 - Whether it appears at all depends on the site publishing an address
 
@@ -125,7 +126,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 **Messaging Your Players:**
 - Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
 - Messages reach players as a notification, and are kept in a list they can scroll back through
-- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
+- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. A host can publish a contact number for the game, which players see as a "Call the host" button, but that is a number the host chose to hand out and it rings their phone outside the app - it is not a channel and the app learns nothing from it. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
 - Sent the wrong thing? Tap the bin icon on any message to delete it - it comes off every player's list and yours, though anyone who has already read it has read it
 - Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
 - Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
@@ -195,7 +196,8 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 
 3. **Create your game**:
    - Visit your host secret link if not already authenticated
-   - Click "Host a Game" or use "Host Menu" button
+   - Click "Host a Game", or open the menu (the icon at the top right of
+     every page) and choose "Host menu"
    - Create new game with descriptive name - that name is how the game is identified everywhere you and your players see it
 
 4. **Set up teams**:
@@ -225,7 +227,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Click "Start Game" from your host panel
    - Monitor live scoreboard and base ownership
    - Use the megaphone icon in the header to message all players at once
-   - Make sure players have a way to contact you outside the app - the app has no reply channel
+   - Put your number in "Your contact number" under game settings, so players who hit a problem get a "Call the host" button. There is still no reply channel - it rings your phone, and only the players who have joined this game are ever shown it
    - End game when appropriate and review final results
 
 ### For Site Administrators
@@ -244,11 +246,22 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    python flask_app.py
    ```
 
+   **Serve `index.html` through the app, not as a static file.** The app
+   rewrites the page shell as it serves it - the reporting address, the
+   retention period the privacy notice quotes, the live-socket flag, and the
+   version stamp that busts the browser cache on every front-end file. A
+   static-file mapping for `/` (a PythonAnywhere static mapping, an nginx
+   `try_files`, a CDN in front of the app) bypasses all of it and serves the
+   defaults baked into the file instead. Map only `/static`, `/libs` and
+   `/icons` statically, if anything, and let `/` reach the WSGI app. To check a
+   running deployment, view source on the homepage: `window.QRC_ASSET_VERSION`
+   should carry a number rather than `""`.
+
 #### Host Management
 
 3. **Access admin panel**:
    - Navigate to the homepage
-   - Click "Site Administration" link in footer
+   - Open the menu (the icon at the top right) and choose "Site administration"
    - Enter admin password
 
 4. **Create host accounts**:
@@ -450,7 +463,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
 - **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
-- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag rather than served from an endpoint, so the reporting link renders with the first paint and needs no credential
+- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag, so the reporting link renders with the first paint and needs no credential. The shell is stamped once, at load, and only by the app - so the client also asks `GET /api/public-settings` after first paint and corrects itself if the two disagree. That covers a tab left open across a change of address, and a deployment serving `index.html` as a static file, where the shell arrives with its defaults and no reporting route would be published at all. The same endpoint carries the retention period the privacy notice quotes, for the same reason
 - **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
 - **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
 - **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
@@ -461,9 +474,11 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **QR Scanning**: Camera-based QR code detection
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: Capture notifications over the live socket or the game poll, whichever the deployment supports, plus automatic polling for live scoreboard updates
+- **App menu**: One button at the top right of every page holding the routes that are not for players - the host menu and site administration - with the Privacy and Report abuse links repeated under them, so reporting something does not mean scrolling a map to reach the footer. It replaces a "Host Menu" button in the header and a "Site Administration" link in the footer, which put two versions of the same idea at opposite ends of the page. Built as a modal: full-width rows are a better tap target on a phone than a dropdown
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
 - **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
-- **Abuse Reporting**: A "Report abuse" link in the footer, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
+- **Host contact number**: An optional per-game number a host publishes under game settings, shown to the players in that game as a "Call the host" button in the app menu and above the host's messages. It is the only route from a player back to a host, and it is one-way and outside the app - a `tel:` link, nothing stored about who rang. Deliberately kept out of the game payload, which takes no credential: the host reads their own number there, players get it from `/api/players/<id>/announcements`, which is keyed on a player id, and nobody else is served it at all
+- **Abuse Reporting**: A "Report abuse" link in the footer and in the app menu, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
 - **Responsive Design**: Works on mobile phones and tablets
 
 **File Responsibility Matrix**:

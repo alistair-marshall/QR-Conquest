@@ -9,6 +9,9 @@ const appState = {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
+    // The host's own contact number, served to the host alone. A player in
+    // this game reads it from appState.announcements instead
+    hostPhone: '',
     status: null
   },
   loading: false,
@@ -38,6 +41,8 @@ const appState = {
   announcements: {
     items: [],
     unread: 0,
+    // How a player reaches their host, sent with the messages it belongs with
+    hostPhone: '',
     loading: false,
     loaded: false,
     error: null
@@ -260,6 +265,7 @@ function clearGameState() {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
+    hostPhone: '',
     status: null
   };
 
@@ -1171,6 +1177,8 @@ async function fetchGameData(gameId) {
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
+    // Only present for the host - see get_game in flask_app.py
+    appState.gameData.hostPhone = data.hostPhone || '';
     appState.gameData.settings = data.settings || {};
 
     // Announcements belong to this game, so pick them up as soon as the game
@@ -1365,6 +1373,7 @@ function resetAnnouncementState() {
   appState.announcements = {
     items: [],
     unread: 0,
+    hostPhone: '',
     loading: false,
     loaded: false,
     error: null
@@ -1492,6 +1501,8 @@ async function fetchAnnouncements() {
 
     appState.announcements.items = announcements.concat(pending);
     appState.announcements.unread = data.unread || 0;
+    // A player is told how to reach their host alongside the host's messages
+    appState.announcements.hostPhone = data.hostPhone || '';
     appState.announcements.loaded = true;
     appState.announcements.error = null;
   } catch (err) {
@@ -3585,6 +3596,45 @@ function clearSiteAdminData() {
   appState.siteAdmin.settingsLoading = false;
   appState.siteAdmin.settingsLoaded = false;
   appState.siteAdmin.settingsError = null;
+}
+
+// The settings a player needs that the page shell carries: the reporting
+// address and the retention period the privacy notice quotes. The shell is
+// normally stamped with both by the server, but a deployment serving
+// index.html as a static file never runs that code, and the shell's defaults -
+// no reporting route, 30 days - stand instead. A shell is also stamped once,
+// at load, so a tab open across a change of address keeps the old one.
+//
+// Asking the server settles both. Fire and forget after first paint: nothing
+// here blocks the app, and a phone on patchy data simply keeps whatever the
+// shell gave it.
+async function refreshPublicSettings() {
+  let settings;
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/public-settings`);
+    if (!response.ok) return;
+    settings = await response.json();
+  } catch (e) {
+    // Offline, or an older server without the endpoint. The shell's values
+    // stand, which is what happened before this call existed
+    console.log('Could not refresh public settings:', e.message);
+    return;
+  }
+
+  const days = Number(settings.retention_days);
+  if (Number.isFinite(days) && days >= 1) {
+    window.QRC_RETENTION_DAYS = days;
+  }
+
+  // Only the reporting link is on screen already, so it is the only one worth
+  // a redraw - the privacy notice reads the retention period when it opens
+  const contact = (settings.abuse_contact_email || '').trim();
+  if (contact === (window.QRC_ABUSE_CONTACT || '').trim()) return;
+
+  window.QRC_ABUSE_CONTACT = contact;
+  if (typeof window.renderApp === 'function') {
+    window.renderApp();
+  }
 }
 
 // Site-wide settings (currently just the published abuse-reporting address)

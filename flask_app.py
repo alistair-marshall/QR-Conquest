@@ -285,6 +285,7 @@ def init_db():
             bonus_round_enabled INTEGER DEFAULT 0,
             bonus_points_per_base INTEGER,
             bonus_start_time INTEGER,
+            host_phone TEXT,
             FOREIGN KEY (host_id) REFERENCES hosts (id)
         )
         ''')
@@ -466,6 +467,8 @@ def init_db():
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_points_per_base INTEGER')
     if 'bonus_start_time' not in game_columns:
         cursor.execute('ALTER TABLE games ADD COLUMN bonus_start_time INTEGER')
+    if 'host_phone' not in game_columns:
+        cursor.execute('ALTER TABLE games ADD COLUMN host_phone TEXT')
 
     # Migrate databases created before players.cooldown_until existed
     cursor.execute('PRAGMA table_info(players)')
@@ -1197,6 +1200,45 @@ def validate_bonus_settings(bonus_points_per_base):
 
     return None
 
+# The host's own number, which players are shown so they can reach whoever is
+# running the game. Kept deliberately permissive - numbers are written a dozen
+# ways around the world and a host should be able to type theirs the way they
+# say it - but bounded to what can go in a tel: link, so nothing that ends up
+# in one is anything but a number.
+HOST_PHONE_PATTERN = re.compile(r'^[0-9+()\-.\s]+$')
+HOST_PHONE_MAX_LENGTH = 32
+
+
+def normalise_host_phone(value):
+    """Tidy a submitted number, or return an error message.
+
+    Returns (number, None) on success - number is '' when the host is clearing
+    it - or (None, message) when it cannot be used.
+    """
+    if value is None:
+        return '', None
+
+    if not isinstance(value, str):
+        return None, 'Contact number must be text'
+
+    phone = ' '.join(value.split())
+    if not phone:
+        return '', None
+
+    if len(phone) > HOST_PHONE_MAX_LENGTH:
+        return None, f'Contact number must be {HOST_PHONE_MAX_LENGTH} characters or fewer'
+
+    if not HOST_PHONE_PATTERN.match(phone):
+        return None, 'Contact number can only contain digits and + ( ) - .'
+
+    # A number players are meant to ring has to have a number in it. Five is
+    # short enough for an internal extension and long enough to reject punctuation
+    if sum(c.isdigit() for c in phone) < 5:
+        return None, 'Contact number does not look like a phone number'
+
+    return phone, None
+
+
 # Helper function to count the active questions available to a game's quiz
 # pool (its host's active questions in the game's active categories)
 def count_active_pool(cursor, host_id, categories):
@@ -1276,18 +1318,23 @@ def create_game():
         conn.close()
         return jsonify({'error': 'Auto-start time must be in the future'}), 400
 
+    host_phone, phone_error = normalise_host_phone(data.get('host_phone'))
+    if phone_error:
+        conn.close()
+        return jsonify({'error': phone_error}), 400
+
     current_time = int(time.time())
 
     cursor.execute('''
     INSERT INTO games (id, host_id, name, status, capture_radius_meters, points_interval_seconds,
                       auto_start_time, game_duration_minutes, join_method, created_time,
                       quiz_enabled, active_categories, max_shield, cooldown_seconds,
-                      bonus_round_enabled, bonus_points_per_base)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      bonus_round_enabled, bonus_points_per_base, host_phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (game_id, host_id, data['name'], 'setup', capture_radius, points_interval,
           auto_start_time, game_duration, join_method, current_time,
           int(quiz_enabled), json.dumps(active_categories), max_shield, cooldown_seconds,
-          int(bonus_round_enabled), bonus_points_per_base))
+          int(bonus_round_enabled), bonus_points_per_base, host_phone))
 
     conn.commit()
     conn.close()
@@ -1375,6 +1422,16 @@ def update_game_settings(game_id):
             return jsonify({'error': 'active_categories must be a list of category names'}), 400
         update_fields.append('active_categories = ?')
         params.append(json.dumps(active_categories))
+
+    # An empty value clears it, which is how a host takes their number back
+    # down without deleting the game
+    if 'host_phone' in data:
+        host_phone, phone_error = normalise_host_phone(data['host_phone'])
+        if phone_error:
+            conn.close()
+            return jsonify({'error': phone_error}), 400
+        update_fields.append('host_phone = ?')
+        params.append(host_phone)
 
     max_shield = data.get('max_shield', game['max_shield'])
     cooldown_seconds = data.get('cooldown_seconds', game['cooldown_seconds'])
@@ -1633,6 +1690,14 @@ def get_game(game_id):
         'teams': teams,
         'bases': bases
     }
+
+    # The host's own number, for the panel that sets it. It is deliberately not
+    # in the anonymous view: this endpoint takes no credential, and a host's
+    # phone number is not something to hand to anyone who has the game's id.
+    # Players in the game read it from their announcements endpoint, which is
+    # keyed on a player id, the same way the announcement text itself is.
+    if is_host:
+        payload['hostPhone'] = game['host_phone'] or ''
 
     if events_since is not None:
         payload['events'] = recent_events
@@ -2676,6 +2741,14 @@ def get_player_announcements(player_id):
 
     announcements = fetch_announcements(cursor, player['game_id'])
 
+    # Sent with the messages because it belongs with them: the panel says there
+    # is no reply channel and to contact the host the way they told you to,
+    # and this is the host telling you. Scoped to a player id rather than put
+    # in the game payload, which anyone holding the game's id can read.
+    cursor.execute('SELECT host_phone FROM games WHERE id = ?', (player['game_id'],))
+    game_row = cursor.fetchone()
+    host_phone = (game_row['host_phone'] or '') if game_row else ''
+
     read_at = player['announcements_read_at'] or 0
     cursor.execute("""
     SELECT COUNT(*) FROM announcements
@@ -2685,7 +2758,8 @@ def get_player_announcements(player_id):
 
     conn.close()
 
-    return jsonify({'announcements': announcements, 'unread': unread, 'serverTime': int(time.time())})
+    return jsonify({'announcements': announcements, 'unread': unread,
+                    'hostPhone': host_phone, 'serverTime': int(time.time())})
 
 
 # Read marker, so the unread badge only counts what has not been shown yet
@@ -4245,7 +4319,8 @@ def build_game_export(cursor, game):
                 'bonus_round_enabled': bool(game['bonus_round_enabled']),
                 'bonus_points_per_base': game['bonus_points_per_base'],
                 'bonus_start_time': game['bonus_start_time'],
-                'bonus_start_time_iso': iso_time(game['bonus_start_time'])
+                'bonus_start_time_iso': iso_time(game['bonus_start_time']),
+                'host_phone': game['host_phone'] or None
             }
         },
         'teams': teams,
@@ -4418,6 +4493,29 @@ def get_all_games_as_admin():
 
     return jsonify(games)
 
+
+# ==========================================================
+# API Routes - Public Settings
+# ==========================================================
+
+# The page shell already carries these values, stamped in by render_index
+# below, and that is where a client normally reads them. But a deployment that
+# serves index.html as a plain static file - a PythonAnywhere static mapping,
+# an nginx try_files, a CDN in front of the app - never runs render_index, and
+# the shell's own defaults stand instead: no reporting route published at all,
+# and a privacy notice quoting a retention period this deployment may not run.
+# The shell is also stamped once, at load, so a tab left open across a change
+# of address keeps the old one however it was served.
+#
+# Both are answered by letting the client ask. No credential: the address is
+# published to players by design, and the retention period is in the privacy
+# notice they read.
+@app.route('/api/public-settings', methods=['GET'])
+def get_public_settings():
+    return jsonify({
+        'abuse_contact_email': get_abuse_contact_email(),
+        'retention_days': GAME_RETENTION_DAYS
+    })
 
 # ==========================================================
 # API Routes - Site Settings (Site Admin)
