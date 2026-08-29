@@ -1,849 +1,109 @@
 # QR Conquest
 
-A GPS-based team capture game using QR codes for authentication and base capture. Players join teams by scanning QR codes and compete to capture and hold bases around a physical area.
-
-## Game Overview
-
-QR Conquest is a real-world team-based strategy game where teams compete to capture and control bases, consisting of physical locations with a QR code. The game combines digital technology with physical movement, creating an engaging outdoor activity perfect for team building, events, or casual competition.
-
-### For Players - The Game Experience
-
-**Getting Started:**
-You'll receive a team QR code from your game host or team captain. Simply scan this code with your phone to join your team - no app download required, everything works through your web browser. For the best GPS performance, we recommend installing the game as a PWA (Progressive Web App) when prompted by your browser.
-
-**Joining Your Team:**
-- Scan your team's unique QR code 
-- Read the short privacy notice on the join page - where you are, who can see it, and how long it is kept, in words a ten-year-old can read. It is shown before your phone is asked about your location, and the **Privacy** link in the footer brings it back any time
-- Confirm the team to join it - you are given a game name like `quiet-badger`, so there is nothing to type
-- See your team's color and current score
-
-**Capturing Bases:**
-- Navigate to base locations shown on the interactive map
-- When you're at a base, scan its QR code
-- Your location is automatically verified to prevent remote captures
-- Successfully captured bases change to your team's color and start earning points
-
-**Quiz Capture (if enabled by your host):**
-- Instead of capturing instantly, scanning a base opens a quiz - answer correctly to reduce, capture, neutralise or reinforce it
-- Each base has a shield: reduce an enemy base's shield to 0 to neutralise it, then capture it; reinforce your own base to make it harder to take
-- A wrong answer ends your turn and locks you out of answering anywhere in the game for a short cooldown - the app shows a countdown
-- The map and base list show each base's current shield so your team can plan attacks and defence
-
-**Winning the Game:**
-- Teams earn points for every moment they control a base
-- The longer you hold bases, the more points you accumulate
-- Watch the live scoreboard to track your team's progress
-- Coordinate with teammates to capture and defend strategic locations
-
-**Bonus Round (if enabled by your host):**
-- When the main game ends, captured bases stop scoring - and the hunt begins
-- Race to the bases and scan them where they stand to collect them; collected bases disappear from everyone's map
-- Bring the physical QR codes back to the host - the points are only awarded once the host scans each base back in
-- Every collected base is worth a fixed number of bonus points, sized so that even the last-placed team could win by collecting them all
-- Mid-question when the bonus round starts? Your answer no longer affects the base (and a wrong answer costs no cooldown) - the app prompts you to collect the base instead
-
-**Finding Your Way:**
-- A black arrowhead on the map shows where you are, so you can see how far you are from each base - it turns to point the way you're travelling once you start moving
-- Tap the crosshair button on the map to jump back to your own position if you've panned away
-- Your latest position is shared with your game host while you play, so they can see where everyone is - only the host sees it, only your most recent position is kept (never a route history), and sharing stops as soon as the game ends
-
-**Messages From Your Host:**
-- Your host can send a message to everyone playing - a start time, a change of plan, a base that's out of action
-- New messages pop up as a notification, and the megaphone icon in the header carries an unread count until you've read them
-- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other
-- If your host gave the game a contact number, you get a "Call the host" button - in the menu, and at the top of the messages panel. If they didn't, use the contact details they gave you another way
-
-**Reporting Something:**
-- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer and the menu of every page, and under the messages panel
-- It gives you the address of the administrator who runs the site, not your game host, and opens your email app with the game already filled in
-- Whether it appears at all depends on the site publishing an address
-
-**Game Features:**
-- **Real-time Map**: See all bases and which team currently controls each one
-- **Live Scoreboard**: Track team rankings as they change throughout the game
-- **Capture Notifications**: A notification whenever any team captures a base - instantly over the live socket where the deployment can carry one, otherwise on the next poll a moment later
-- **Host Messages**: Announcements from your host, sent to everyone at once
-- **Team Coordination**: Work together to develop capture and defense strategies
-
-### For Hosts - Managing Games
-
-**Your Role:**
-As a game host, you create and manage the entire game experience. You'll set up teams, place bases at physical locations, and oversee the competition from start to finish.
-
-**Getting Started:**
-- Receive a host secret link from the site administrator
-- Visit your secret link to authenticate and access game management features
-- Print QR codes for your game (1 per team plus 1 per base you plan to create)
-- Create a new game
-
-**Setting Up Teams:**
-- Scan QR codes to create teams (minimum 2 teams required)
-- Assign team names and colors
-- Each QR code becomes a unique team that players can join
-- Share team QR codes with players to let them join
-- Edit a team's name or colour at any time from the host panel
-- Delete a team that nobody has joined - during setup or mid-game, so a spare team doesn't sit on the scoreboard with zero points - and its QR code is freed to reuse for another team or base
-
-**Placing Bases:**
-- Visit each location where you want to place a base
-- Place a QR code for the players to find
-- Scan the QR code at that location to create a base
-- Your GPS location is automatically recorded
-- Give each base a descriptive name (e.g., "Library Steps", "Main Entrance")
-- Bases appear immediately on the game map
-
-**Quiz Capture (optional):**
-- Build a reusable Question Bank from your host panel (multiple-choice or true/false, with categories) - it's shared across all of your games
-- In Game Settings, enable quiz-based capture, choose which categories are in play, and set the max shield and wrong-answer cooldown
-- The game can't start with quiz capture enabled unless at least one category is selected and has active questions
-- Bulk-import an existing question set as JSON or CSV from the Question Bank page - see [The Question Bank](#the-question-bank) for formats and details
-
-**Bonus Round (optional):**
-- Enable the bonus round in Game Settings to end each game with players collecting the physical QR codes back in
-- When the main game ends (manually or on its timer), base scoring freezes and players are told to collect the bases
-- Players must scan each base at its location to mark it collected (so nobody hunts for a base that has already gone), then bring the QR code back to you
-- Scan each returned QR code to check it in - only then does the collecting team score the bonus points
-- Any base QR code in your hand can be scanned in, even one that was never marked collected or belongs to a deleted base - it comes off the map so players stop hunting for it, but scores no points
-- Points per base can be set manually, or left on automatic: the value is chosen when the bonus round starts so that the last-placed team would win by collecting every base
-- Your host panel shows a live checklist of which bases are still out, collected, or returned; ending the game releases all QR codes as usual
-
-**Managing the Game:**
-- Fold any section of the host panel away by tapping its heading - a game with five teams and twenty-six bases is a very long page otherwise. **Collapse all** brings the whole panel back to a single screen, **Expand all** puts it back, and the team and base headings carry a count so you can see what is in a folded section without opening it
-- What you fold stays folded on that device, so the panel comes back the way you left it
-- Start the game when teams are ready
-- Delete any team that ended up unused once players have arrived (only while it has no players)
-- Monitor all team activity in real-time
-- Watch live base captures and score changes
-- End the game and view final results
-
-**Seeing Where Everyone Is:**
-- Your game map shows the last known position of every player as a small pin in their team's colour - handy for spotting a team that's drifted out of the play area or a player who's gone quiet
-- Bases are circles and players are pins, so the two never get confused at a glance
-- Positions that haven't updated in the last five minutes are faded, and each pin's popup names the player, their team, and when they were last seen
-- Use the "Show players" tick box above the map to take the pins off it when a big group crowds the bases - the setting sticks between visits
-- Your own position shows as a black arrowhead, the same as it does for players
-
-**Messaging Your Players:**
-- Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
-- Messages reach players as a notification, and are kept in a list they can scroll back through
-- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. A host can publish a contact number for the game, which players see as a "Call the host" button, but that is a number the host chose to hand out and it rings their phone outside the app - it is not a channel and the app learns nothing from it. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
-- Sent the wrong thing? Tap the bin icon on any message to delete it - it comes off every player's list and yours, though anyone who has already read it has read it
-- Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
-- Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
-
-**Game Control:**
-- **Real-time Dashboard**: See all teams, bases, and current game status
-- **Live Updates**: Watch base ownership change as players capture them
-- **Score Monitoring**: Track which teams are leading throughout the game
-- **Game Timing**: Start and end games manually when appropriate
-- **Deleting a Game**: You can delete a game nobody has joined - a mis-scanned setup, or one that never ran. Once a player has joined, the game holds their data and its history, so it can only be removed by a site administrator; ending the game is what closes it down
-
-### For Site Administrators - System Management
-
-**Your Role:**
-You oversee the entire QR Conquest system, creating and managing host accounts who can then run games.
-
-**Host Management:**
-- Create host accounts for people who will run games
-- Generate unique links for each host
-- Set expiry dates for host permissions (optional)
-- Monitor system usage and host activity
-
-**System Control:**
-- Access the secure admin panel
-- Create, edit, and delete host accounts
-- Generate links for new hosts
-- Review host account status and expiry dates
-- Delete any game, including one players have joined - hosts cannot do that themselves
-- Export any game: one JSON file holding the whole record of it, for your files or to answer a complaint
-- Finished games clear themselves down. Every player's GPS position is deleted the moment a game ends, and thirty days after that the game and everything in it is deleted for good. Export anything you may need before then
-- Publish the address players and hosts use to report abuse (Site Settings)
-
-**Security Features:**
-- Secure authentication via environment variables
-- Host permissions can be time-limited
-- Individual QR codes for each host account
-
-## Complete Setup Guide
-
-### For Players
-
-1. **Receive your team QR code** from the game host or team captain
-2. **Scan the QR code** with your phone's camera
-3. **Install as PWA** when prompted for better GPS performance (optional but recommended)
-4. **Read the short privacy notice** on the join page - what the game knows about where you are, who can see it, and how long it is kept, in plain words. It is on screen before your phone ever asks about your location
-5. **Confirm the team** to join it - the game names you `quiet-badger` or similar; you are never asked to type a name
-6. **Navigate to bases** using the map
-7. **Scan base QR codes** when you're close enough to capture them
-8. **Watch your team climb the scoreboard!**
-
-### For Game Hosts
-
-#### Pre-Game Preparation
-
-1. **Get your host access**:
-   - Receive host secret link from site administrator
-   - Visit your secret link to authenticate and access game management features
-
-2. **Prepare physical materials**:
-   - Count how many teams and bases you want (minimum 2 teams, recommended 3-10 bases)
-   - **Generate QR codes**: Use the built-in code generator at `/code-generator/` or click "Print QR Codes" in the host panel
-   - Print QR codes: 1 per team + 1 per base (e.g., for 4 teams and 6 bases, print 10 QR codes)
-   - Place base QR codes at strategic locations
-   - Ensure locations are accessible and safe
-
-#### Game Setup
-
-3. **Create your game**:
-   - Visit your host secret link if not already authenticated
-   - Click "Host a Game", or open the menu (the icon at the top right of
-     every page) and choose "Host menu"
-   - Create new game with descriptive name - that name is how the game is identified everywhere you and your players see it
-
-4. **Set up teams**:
-   - Use "Scan QR Code" to add teams
-   - For each team QR code scanned, choose "Assign as Team"
-   - Set team name and color
-   - Repeat for all teams (minimum 2 required)
-
-5. **Set up bases**:
-   - Visit each location where you want to place a base
-   - Place a QR code for the players to find and scan
-   - Scan the QR code at that location
-   - Choose "Assign as Base"
-   - Set base name and verify GPS location is accurate
-   - Repeat for all base locations
-
-#### Game Time
-
-6. **Team assignment**:
-   - Distribute team QR codes to team captains or players
-   - Players scan their team QR codes to join teams
-   - Monitor team formation in your host panel
-
-7. **Start and manage the game**:
-   - Ensure minimum 2 teams are formed
-   - Brief players on rules and base locations
-   - Click "Start Game" from your host panel
-   - Monitor live scoreboard and base ownership
-   - Use the megaphone icon in the header to message all players at once
-   - Put your number in "Your contact number" under game settings, so players who hit a problem get a "Call the host" button. There is still no reply channel - it rings your phone, and only the players who have joined this game are ever shown it
-   - End game when appropriate and review final results
-
-### For Site Administrators
-
-#### System Setup
-
-1. **Set up environment**:
-   ```bash
-   export SITE_ADMIN_PASSWORD="your_secure_admin_password"
-   # Optional, but publish one before you run games for other people:
-   export ABUSE_CONTACT_EMAIL="safety@example.org"
-   ```
-
-2. **Start the application**:
-   ```bash
-   python flask_app.py
-   ```
-
-   **Serve `index.html` through the app, not as a static file.** The app
-   rewrites the page shell as it serves it - the reporting address, the
-   retention period the privacy notice quotes, the live-socket flag, and the
-   version stamp that busts the browser cache on every front-end file. A
-   static-file mapping for `/` (a PythonAnywhere static mapping, an nginx
-   `try_files`, a CDN in front of the app) bypasses all of it and serves the
-   defaults baked into the file instead. Map only `/static`, `/libs` and
-   `/icons` statically, if anything, and let `/` reach the WSGI app. To check a
-   running deployment, view source on the homepage: `window.QRC_ASSET_VERSION`
-   should carry a number rather than `""`.
-
-#### Host Management
-
-3. **Access admin panel**:
-   - Navigate to the homepage
-   - Open the menu (the icon at the top right) and choose "Site administration"
-   - Enter admin password
-
-4. **Create host accounts**:
-   - Create host account with descriptive name
-   - Set expiry date (optional)
-   - Generate host secret link
-   - Share the secret link with the host (can be sent digitally or printed)
-
-5. **Keep what you need from finished games**:
-   - Under **Game Management**, an ended game shows when it will be deleted
-   - **Export** downloads the whole record of that game as one JSON file:
-     settings, teams and players, bases, the capture timeline, every
-     announcement including ones the host withdrew, and the quiz questions
-     players were served. Credentials are left out, so the file is safe to
-     file away
-   - Do this before the retention window runs out. After that the game is
-     gone, and the export is the only copy there will be
-
-#### Abuse Reporting
-
-6. **Publish a reporting address**:
-   - Open the "Site Settings" tab in the admin panel
-   - Enter the address reports and complaints should reach you on, and save
-   - Players and hosts then see a "Report abuse" link in the footer, and
-     players see one under the host messages panel. It opens their email app
-     with the game pre-filled
-   - The address defaults to the `ABUSE_CONTACT_EMAIL` environment variable;
-     saving here overrides it without a restart, and clearing the field falls
-     back to it. With neither set, no reporting route is shown - see
-     [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for why you should set one
-
-## The Question Bank
-
-The Question Bank powers quiz capture. It belongs to your host account, not to any single game: build it once and reuse it across every game you run. It is managed from the "Manage Question Bank" button on your host panel.
-
-### How questions are organised
-
-Every question has:
-
-| Field | Description |
-|-------|-------------|
-| Text | The question shown to the player |
-| Type | Multiple choice (`mc`) or true/false (`tf`) |
-| Options | The answer choices (multiple choice only; true/false always shows True and False) |
-| Correct answer | The option that captures/reinforces the base |
-| Category | A free-text label used to group questions (e.g. "Nature", "History", "Ages 5-8") |
-| Explanation | Optional text shown to the player after they answer, right or wrong |
-
-Categories are the unit of selection: when you create a game with quiz capture, you choose which categories are in play for that game. This lets one bank serve different audiences - for example a "Kids" category for a family event and a "Pub Quiz" category for an adults' game, without maintaining two banks.
-
-### How questions are served during a game
-
-- When a player scans a base, the server picks a random question from your **active** questions in the game's selected categories.
-- Within a single scan session, the server avoids repeating a question the player has already been served, as long as the pool is big enough.
-- The correct answer is never sent to the player's device - answers are checked server-side.
-- A game cannot start with quiz capture enabled unless at least one selected category contains at least one active question.
-
-### Managing questions
-
-Each question card in the Question Bank offers:
-
-- **Edit** - change any field. Edits apply immediately: answers are always marked against the latest saved version, so a mistake in a question can be corrected even mid-game.
-- **Disable / Enable** - a disabled question stays in the bank but is never served. Use this to temporarily pull a question (e.g. mid-game, if you spot a mistake in it) without losing it.
-- **Delete** - permanently removes the question. Each category header also has a **Delete All** button to delete the whole category at once.
-
-Deletion is blocked while a running game (active or in its bonus round) is using the question's category - a question already on a player's screen must remain answerable. Disable it instead, or delete it after the game ends. Bulk deletes skip in-use questions and report how many were skipped.
-
-### Importing a question bank
-
-The **Bulk Import** button on the Question Bank page accepts an existing question set in either JSON or CSV form - paste it into the import box. Rows are validated individually: valid rows are imported, invalid rows are skipped, and the import report lists each skipped row with the reason, so one bad row never blocks the rest.
-
-**JSON format** - an array of question objects:
-
-```json
-[
-  {
-    "text": "What is the capital of France?",
-    "type": "mc",
-    "options": ["Paris", "London", "Berlin"],
-    "correct": 0,
-    "category": "Geography",
-    "explanation": "Paris has been France's capital since 987."
-  },
-  {
-    "text": "The Pacific is the largest ocean.",
-    "type": "tf",
-    "correct": true,
-    "category": "Geography"
-  }
-]
-```
-
-**CSV format** - a header row followed by one question per line. Options are separated with `|`:
-
-```csv
-text,type,options,correct,category,explanation
-What is the capital of France?,mc,Paris|London|Berlin,Paris,Geography,Paris has been France's capital since 987.
-The Pacific is the largest ocean.,tf,,true,Geography,
-```
-
-**Field rules** (both formats):
-
-| Field | Required | Rules |
-|-------|----------|-------|
-| `text` | Yes | Any non-empty text |
-| `type` | Yes | `mc` (multiple choice) or `tf` (true/false) |
-| `options` | For `mc` | At least two non-blank options. JSON: an array of strings. CSV: pipe-separated (`Paris\|London\|Berlin`). Leave empty for `tf` |
-| `correct` | Yes | For `mc`: either the zero-based index of the correct option (`0` for the first) or the exact text of exactly one option (case-insensitive). For `tf`: `true` or `false` |
-| `category` | Yes | Any non-empty text; creates the category if it doesn't exist yet |
-| `explanation` | No | Shown to the player after answering |
-
-Tips:
-
-- If a question's text contains commas, use the JSON format or quote the CSV field (`"Which is bigger, the Sun or the Moon?"`).
-- Imported questions are active immediately. Import a category you don't want in play yet? Just don't select that category in Game Settings.
-- Spreadsheets export CSV directly, so a question bank can be maintained in Excel/Google Sheets with the columns above and pasted in whenever it changes.
-
-## QR Code Generation
-
-QR Conquest includes a built-in QR code generator for creating printable codes needed for games. This tool is essential for hosts who need to prepare physical QR codes before running games.
-
-### Accessing the QR Code Generator
-
-- **Direct URL**: Visit `/code-generator/` on your QR Conquest installation
-- **From Host Panel**: Click the "Print QR Codes" button in the game management interface
-- **Standalone Use**: The generator works independently and doesn't require host authentication
-
-### QR Code Generator Features
-
-**Layout Options:**
-- **Paper Sizes**: A4, Letter, A3, and Tabloid formats
-- **Grid Layouts**: 2-6 columns with automatic row calculation
-- **Smart Sizing**: Automatically calculates optimal QR code size for maximum codes per page
-
-**Visual Customisation:**
-- **Plain White**: Simple, clean QR codes on white background
-- **Black Border**: QR codes with distinctive black borders
-- **Orienteering Flag**: Orange and white triangular pattern background (ideal for outdoor events)
-- **Custom Colours**: Choose your own background and border colours
-
-**Content Options:**
-- **Custom Headers**: Add text above each QR code (e.g., "Team Red", "Base Alpha")
-- **URL Display**: Optionally show the full URL below each QR code
-- **Unique IDs**: Each QR code gets a unique 11-character identifier
-
-**Print Optimisation:**
-- **Browser-friendly**: Works with standard browser print functions
-- **High Contrast**: Ensures QR codes remain scannable when printed
-- **Efficient Layouts**: Maximises codes per page while maintaining readability
-
-### Using Generated QR Codes
-
-1. **Generate Codes**: Create as many QR codes as needed (typically 2-10 teams + 5-20 bases)
-2. **Print**: Use your browser's print function for high-quality output
-3. **Deploy**: Place base QR codes at strategic locations around your game area
-4. **Distribute**: Give team QR codes to team captains or players
-5. **Assign in Game**: When hosting, scan each QR code to assign it as either a team or base
-
-### Best Practices for QR Code Preparation
-
-**Planning Your Codes:**
-- Print extra codes as spares (equipment failures, weather damage)
-- Use headers to pre-label codes by intended purpose
-- Consider laminating codes for outdoor use
-
-**Base Placement:**
-- Choose locations that are accessible but not too obvious
-- Ensure codes are visible and scannable
-- Protect from weather if playing outdoors
-- Consider GPS accuracy when placing codes
-
-**Team Distribution:**
-- Give one team QR code to each team captain
-- Keep digital copies as backup
-- Consider sharing team codes via secure messaging if needed
-
-### Technical Specifications
-
-**QR Code Details:**
-- **Format**: Standard QR codes with high error correction
-- **Size**: Automatically calculated based on layout (typically 80-300px)
-- **Content**: Full URLs in format `https://yoursite.com/?id={unique_id}`
-- **Compatibility**: Works with any QR code scanner or camera app
-
-**Browser Support:**
-- Modern web browsers with JavaScript enabled
-- Print functionality requires standard browser print capabilities
-- No special software or plugins required
-
-
-## Technical Architecture
-
-### Backend (Python Flask)
-- **Database**: SQLite with tables for hosts, games, teams, players, bases, captures, questions, answer_sessions, announcements and site_settings
-- **Authentication**: Token-based for site admin, QR code-based for hosts/players
-- **Live events**: Base captures, quiz outcomes, bonus collections and announcements reach every player in the game by one of two routes. A WebSocket (flask-sock) pushes them the moment they happen; where a socket cannot be held open - the client's network, or a host like uWSGI that gives flask-sock no socket to take over - the same events ride along on the client's five-second poll of the game, from a short in-memory buffer the server keeps per game. Each event carries a sequence number, so a client that has both routes working announces it once. `LIVE_EVENT_SOCKET=off` skips the socket entirely; nothing but a few seconds of latency is lost
-- **Quiz Capture**: An optional per-game mode where GPS proximity opens a scan session of server-marked questions; correct answers reduce/capture/neutralise/reinforce a base's shield atomically, wrong answers apply a game-wide cooldown to the player
-- **Player Positions**: Players post their latest GPS fix to the server while they play; only the newest fix per player is stored (no route history) and it is served exclusively to the game's host, so teams can't track each other. Ending a game deletes every stored position outright - the server stops accepting updates and clears the last fix, so nothing is left saying where anybody was
-- **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
-- **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
-- **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
-- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag, so the reporting link renders with the first paint and needs no credential. The shell is stamped once, at load, and only by the app - so the client also asks `GET /api/public-settings` after first paint and corrects itself if the two disagree. That covers a tab left open across a change of address, and a deployment serving `index.html` as a static file, where the shell arrives with its defaults and no reporting route would be published at all. The same endpoint carries the retention period the privacy notice quotes, for the same reason
-- **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
-- **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
-- **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game
-- **Bonus Round**: An optional post-game phase (game status `bonus`) where base-holding scores freeze and teams collect base QR codes; a GPS-verified player scan marks a base collected, a host scan confirms its return and awards fixed bonus points per base (auto-sized so last place collecting everything would win). The host can scan in any base - one that was never marked collected, or a deleted one - to clear it from the map without awarding points
-
-### Frontend (Vanilla JavaScript)
-- **PWA**: Installable Progressive Web App
-- **QR Scanning**: Camera-based QR code detection
-- **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
-- **Real-time Updates**: Capture notifications over the live socket or the game poll, whichever the deployment supports, plus automatic polling for live scoreboard updates
-- **App menu**: One button at the top right of every page holding the routes that are not for players - the host menu and site administration - with the Privacy and Report abuse links repeated under them, so reporting something does not mean scrolling a map to reach the footer. It replaces a "Host Menu" button in the header and a "Site Administration" link in the footer, which put two versions of the same idea at opposite ends of the page. Built as a modal: full-width rows are a better tap target on a phone than a dropdown
-- **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
-- **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
-- **Host contact number**: An optional per-game number a host publishes under game settings, shown to the players in that game as a "Call the host" button in the app menu and above the host's messages. It is the only route from a player back to a host, and it is one-way and outside the app - a `tel:` link, nothing stored about who rang. Deliberately kept out of the game payload, which takes no credential: the host reads their own number there, players get it from `/api/players/<id>/announcements`, which is keyed on a player id, and nobody else is served it at all
-- **Abuse Reporting**: A "Report abuse" link in the footer and in the app menu, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
-- **Responsive Design**: Works on mobile phones and tablets
-
-**File Responsibility Matrix**:
-| File | Responsibility | Contains | Calls |
-|------|---------------|----------|-------|
-| **core.js** | API & State | Authentication, QR handling, game management APIs | UI functions via `window.functionName` |
-| **ui.js** | Main UI | Landing, game view, QR scanner, navigation, announcements panel, privacy notice, abuse reporting link and modal, PWA | Core.js API functions |
-| **host.js** | Host UI | Host panel, team/base forms, question bank, host modals | Core.js API functions |
-| **site-admin.js** | Admin UI | Admin login, host management, site settings, admin modals | Core.js API functions |
-| **dev-gps.js** | Dev tooling | GPS simulator and simulated QR scans; inert unless `DEBUG_FEATURES` is set | Core.js `handleQRCode` |
-
-### Keeping clients up to date
-
-The page shell is served with `Cache-Control: no-store`, and every asset URL
-in it - the app's own scripts and stylesheet as well as the vendored
-libraries - carries a `?v=` stamp taken from the newest modification time
-under `static/`. A deploy changes that stamp, so the next page load asks for
-new files rather than reusing whatever the browser already has.
-
-This matters because the app is a long-lived page on phones that are rarely
-closed: without the stamp a host could sit on a months-old `core.js`, calling
-endpoints the server has since moved, and see an unexplained error rather than
-anything that says "your app is out of date". If a client still looks stale
-after a deploy, a hard reload (or clearing the site's data) is enough - there
-is no service worker to unregister.
-
-### Front-end libraries
-
-Tailwind, Leaflet, Lucide, jsQR and QRCode.js are served from `static/libs/`
-rather than a CDN. Players are usually outdoors on patchy mobile data, and a
-blocked or slow CDN previously took the styling, the map or the QR scanner
-down with it; serving the libraries from the app itself removes that failure
-mode. The only third-party request left in normal play is the OpenStreetMap
-tiles the map needs - which is why the privacy notice players read names
-OpenStreetMap and says what their servers can tell from the request; the
-opt-in debug console (`DEBUG_FEATURES`) still pulls Eruda from a CDN when a
-developer asks for it. The vendored copies are committed, so running the app
-still takes nothing more than Python and `flask_app.py`.
-
-| Library | Vendored as | Version |
-|---------|-------------|---------|
-| Tailwind CSS | `static/libs/tailwind.css` (prebuilt) | 3.4.19 |
-| Leaflet | `static/libs/leaflet.js`, `leaflet.css`, `images/` | 1.9.4 |
-| Lucide icons | `static/libs/lucide.min.js` | 1.34.0 |
-| QRCode.js | `static/libs/qrcode.min.js` | 1.0.0 |
-| jsQR | `static/libs/jsQR.js` | vendored previously |
-
-Tailwind used to run from the Play CDN, which compiled the classes in the
-browser on every page load; it is now built ahead of time into a ~29 KB
-stylesheet. **After adding new Tailwind classes to the front end, rebuild it:**
+A GPS-based team capture game played with printed QR codes. Teams race around a
+park, a campus or a town centre, scan the codes they find, and score points for
+every minute they hold a base. Everything runs in the phone's browser - there is
+no app to install and nothing for a player to type.
+
+![The player's view of a game in progress: scoreboard, map and scan button](docs/images/player-game.png)
+
+## How a game works
+
+1. **A host prints QR codes** - one per team, one per base - using the built-in
+   [code generator](docs/QR-CODES.md).
+2. **The host places the base codes** around the play area and scans each one
+   where it stands, which records the base's position.
+3. **Players scan their team's code** to join. The game gives each player a name
+   like `quiet-badger`; nobody types anything about themselves.
+4. **Players capture bases** by walking to them and scanning the code. The
+   server checks the scanned code and the player's GPS position, so a base
+   cannot be taken from the car park.
+5. **Held bases score points** on a timer, so the winning team is the one that
+   takes bases early and keeps them.
+
+Two options change the shape of a game. **Quiz capture** puts a question between
+a player and a base, and gives every base a shield to wear down. The **bonus
+round** ends the game with a scramble to collect the physical QR codes back in,
+worth enough points that the last-placed team could still win.
+
+## Documentation
+
+| Document | Who it is for | What is in it |
+|----------|---------------|---------------|
+| [Playing a game](docs/PLAYING.md) | Players | Joining, the map, capturing bases, quizzes, messages from the host, the bonus round |
+| [Hosting a game](docs/HOSTING.md) | Hosts | Planning, placing bases, every game setting, running the game, messaging players, ending it |
+| [The question bank](docs/QUESTION-BANK.md) | Hosts using quiz capture | Writing questions, categories, bulk import formats |
+| [QR codes](docs/QR-CODES.md) | Hosts | Generating, printing and looking after the physical codes |
+| [Deployment](docs/DEPLOYMENT.md) | Whoever runs the server | Installing, HTTPS, production servers, environment variables, upgrades |
+| [Site administration](docs/ADMINISTRATION.md) | Site administrators | Host accounts, rotating credentials, exporting and deleting games, retention |
+| [Security model](docs/SECURITY.md) | Anyone reviewing the design | What counts as a credential, what the API will and will not serve, known limitations |
+| [Legal responsibilities](docs/COMPLIANCE.md) | Whoever runs the server | Online Safety Act and UK GDPR duties that come with a public deployment |
+| [Architecture](docs/ARCHITECTURE.md) | Developers | How the server and client fit together, file responsibilities, build tooling |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Everyone | The problems that actually come up, by role |
+
+## Quick start
 
 ```bash
-npm install       # dev tooling only - not needed to run the game
-npm run build:css
-```
-
-The build scans `static/*.html`, `static/*.js` and
-`static/code-generator/*.html` for class names (see `tools/tailwind.config.js`),
-so a class must appear as a literal string somewhere in the source. Team
-colours are additionally safelisted, because they are stored per team in the
-database. To upgrade a library, bump its version in `package.json` and run
-`npm run vendor`, which recopies the files and rebuilds the stylesheet.
-
-### App icon
-
-The logo in `static/icons/` is a castle keep whose walls enclose a real QR
-code - the module pattern is the genuine version-2 QR for `QRCONQUEST` at the
-highest error-correction level, so it carries a real code's irregular
-clustering rather than a hand-drawn grid, and the gate is punched out of it on
-module boundaries. It is drawn in the game's own purple with the gold used for
-flags elsewhere in the app, and nothing in it relies on the page behind it, so
-it reads on a light or a dark background equally well.
-
-`static/icons/icon.svg` is the source; `tools/generate-icon.py` draws it
-(`pip install segno`). The two PNGs are rendered from that SVG on a
-`#F5F3FF` field, sized so the keep stays inside a maskable icon's safe zone -
-the recipe is in the script's docstring.
-
-### QR Code System
-- **Host Authentication**: Unique secret links for host authentication
-- **Team QR**: Unique UUID linking to specific team in specific game
-- **Base QR**: Unique UUID linking to physical location and game
-- **URL Format**: `https://yoursite.com/?id={qr_uuid}`
-- **Sent with the action, not just resolved once**: scanning a code looks up what it points at, and the code then travels with the join or capture request itself so the server can confirm the scan really happened - see [Security Features](#security-features)
-
-## Installation & Deployment
-
-### Prerequisites
-- Python 3.7+
-- Modern web browser with camera access
-- HTTPS connection (required for camera access)
-
-### Local Development
-
-1. **Clone and setup**:
-   ```bash
-   git clone <repository-url>
-   cd qr-conquest
-   pip install -r requirements.txt
-   ```
-
-2. **Set environment variables**:
-   ```bash
-   export SITE_ADMIN_PASSWORD="your_secure_password"
-   ```
-
-3. **Run application**:
-   ```bash
-   python flask_app.py
-   ```
-
-4. **Access application**:
-   - Open `http://localhost:5000` in browser
-   - For camera access, use HTTPS proxy or mobile device on same network
-
-5. **Testing without a park** (optional):
-   - Set `DEBUG_FEATURES=true` before starting the server to enable the GPS simulator
-   - An on-screen panel lets you move a fake GPS position (arrow buttons, right-click the map to teleport, or `devGPS.set(lat, lng)` in the console) and simulate QR scans by typing the code's value - so the full capture, quiz, and bonus-round flows can be exercised at a desk
-
-### Production Deployment
-
-1. **Set up HTTPS** (required for camera access):
-   ```bash
-   # Example with Nginx reverse proxy
-   server {
-       listen 443 ssl;
-       server_name your-domain.com;
-       
-       ssl_certificate /path/to/cert.pem;
-       ssl_certificate_key /path/to/key.pem;
-       
-       location / {
-           proxy_pass http://localhost:5000;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           # Required for the live-notification WebSocket (/ws/...)
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection "upgrade";
-           proxy_read_timeout 3600s;
-       }
-   }
-   ```
-
-2. **Configure environment**:
-   ```bash
-   export SITE_ADMIN_PASSWORD="strong_production_password"
-   export FLASK_ENV="production"
-   ```
-
-3. **Run with production server**:
-   ```bash
-   # Using Gunicorn. Each WebSocket connection holds a thread for its
-   # lifetime, so run with a generous thread pool. A single worker keeps
-   # all connections in one process so capture broadcasts reach everyone.
-   pip install gunicorn
-   gunicorn -w 1 --threads 100 -b 0.0.0.0:5000 flask_app:app
-   ```
-
-4. **On a host that serves one request at a time**: shared hosting often runs
-   the app under uWSGI as a single process with a single core (PythonAnywhere
-   does), which means exactly one request is answered at a time and everything
-   else waits its turn. The game still works - players poll rather than hold a
-   connection - but the app's own request volume is the whole budget, so keep
-   an eye on it: the site admin panel reads its games table in one request, and
-   a live game costs roughly one request per player every five seconds. The
-   live-events WebSocket cannot connect there at all - the socket the handshake
-   needs is not in uWSGI's WSGI environment - so set `LIVE_EVENT_SOCKET=off` and
-   clients will not try. They lose nothing: capture notifications ride along on
-   the same five-second poll, a moment later than a socket would deliver them.
-   Left on, each client makes a few doomed attempts and then stops trying by
-   itself, which costs a handful of requests per page load.
-
-## Configuration Options
-
-### Environment Variables
-
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `SITE_ADMIN_PASSWORD` | Yes | Password for site admin access | `secure_admin_pass_123` |
-| `ABUSE_CONTACT_EMAIL` | No | Address published to players and hosts as a "Report abuse" link, for reporting content or complaining. A site administrator can override it under Site Settings in the admin panel; with neither set, no reporting route is shown. | `safety@example.org` |
-| `LIVE_EVENT_SOCKET` | No | Whether clients open the live-events WebSocket. On by default. Set it off on a host that cannot carry a WebSocket (uWSGI, which is what PythonAnywhere and similar shared hosting run) so clients do not attempt one; the same events reach them on their five-second poll of the game either way. | `off` |
-| `DEBUG_FEATURES` | No | Expose developer tools in the client: a GPS simulator (movable fake position with an on-screen panel, plus a "simulate QR scan" box) and a mobile debug console. Hidden by default; never enable in production. | `true` |
-| `GAME_RETENTION_DAYS` | No | How many days after a game ends before it and everything in it is permanently deleted. Defaults to 30. Set it to match the retention schedule you wrote for your deployment; a value below 1 is ignored with a warning. The privacy notice players read quotes this value, so it stays true whatever you set. | `30` |
-| `FLASK_ENV` | No | Flask environment mode | `production` |
-| `FLASK_DEBUG` | No | Enable debug mode | `False` |
-
-### Game Settings
-
-Set when creating a game; most can be changed from Game Settings until the relevant phase locks them in.
-
-| Setting | Default | Range | Description |
-|---------|---------|-------|-------------|
-| Capture radius | 15 m | 5-500 m | How close a player must be to a base to capture or collect it (GPS-verified server-side) |
-| Points interval | 15 s | 5 s - 1 h | How often each held base earns its team a point |
-| Auto-start time | Off | - | Optionally start the game automatically at a set time |
-| Game duration | Manual end | 5 min - 30 days | Optionally end the game automatically after this long (must be at least 10x the points interval) |
-| Join method | Team QR only | - | How players join: scan a team QR, pick their own team, or auto-assign to the team with fewest players / lowest score |
-| Quiz capture | Off | - | Capture via quiz questions instead of instant scan; requires selecting question categories (see [The Question Bank](#the-question-bank)) |
-| Max shield | 5 | 1-20 | Quiz capture: the most a base can be reinforced |
-| Wrong-answer cooldown | 30 s | 5-3600 s | Quiz capture: how long a wrong answer locks the player out of answering anywhere |
-| Bonus round | Off | - | End the game with a collect-the-bases phase instead of stopping outright |
-| Bonus points per base | Auto | 1-1,000,000 | Auto sizes the value when the bonus round starts so the last-placed team could win by collecting every base; locked once the bonus round begins |
-
-There is no hard limit on teams or bases; 2-8 teams and 5-20 bases work well in practice.
-
-### Live Notifications
-
-- Base captures are broadcast to everyone in the game, over the live socket or the game poll
-- Scoreboard and map refresh immediately when a capture happens
-- Host announcements arrive as a toast with an unread badge on the header's megaphone icon; they are polled every 10 seconds as well as pushed, so they still reach a player sitting on a page where the game socket isn't running
-- Automatic reconnection with backoff if the connection drops
-- Visual indicators for online/offline status
-
-## Security Features
-
-### Authentication Model
-- **Three-tier security**: Site Admin → Host → Player
-- **Secret link expiry**: Host permissions can be time-limited
-- **Session management**: Persistent authentication via localStorage
-- **No password storage**: Only site admin password in environment
-- **Credentials stay out of shared payloads**: a host's `host_id`, a team's QR code and a player's id are credentials, so none of them appear in the game payload any caller can read. A game's id is a random UUID rather than a guessable code, so the payload cannot be reached by walking the id space either - but it is still scoped as though it could be, because the id travels to every player device that scans in
-- **Credentials stay out of URLs**: a host identifies itself with an `X-Host-ID` header rather than a `?host_id=` query string or an id in the path, either of which would be recorded in server and proxy access logs, browser history and the `Referer` header sent to anything the page links out to. Writes carry their host id in the JSON body, which is not logged
-- **A host addresses only its own data**: the endpoints a host uses live under `/api/host/...` and carry no id at all - the header names whose question bank or games are being read, so there is no id in the path that could disagree with the credential, and nothing to guess but the credential itself. An unknown host id is refused exactly like a missing one, so the API cannot be used to test whether a host id is real. The remaining `/api/hosts/<host_id>/...` routes are the site admin's, authorised by the admin bearer token, where the id names which record to manage rather than who is asking
-- **A scan is proved by the code, not the id**: joining a team, capturing a base and collecting one in the bonus round are things a player earns by being handed a team sheet or finding a base marker, so those endpoints carry the scanned QR code and check it against the row the id in the path names. The id on its own proves nothing: a team id and a base id both travel in the game payload every player device reads, so an id-only endpoint can be driven from an armchair by anyone already in the game - one team's players could sign themselves onto another, and any base on the map could be taken without walking to it. A base capture needs the code **and** the GPS fix: the code proves the player found the marker, the location proves they are standing at it now, and neither substitutes for the other. Games set to let players pick their own team are the one exception on joining - choosing from a list is the intended way in there, so no code is required, though a code sent anyway is still checked. Bases the host scans back in during the bonus round are not covered, because the host can read every code from its own game payload and a check would add nothing
-- **Credentials can be rotated**: a host holds two secrets - the `qr_code` its device scans to enrol, and the `host_id` that device stores and sends afterwards. **Rotate** on the site admin's host list replaces *both*, because replacing only the QR code would leave a leaked `host_id` working forever. The host's games and question bank move across unchanged; every device signed in as that host is signed out and gets back in by scanning the new code. This is the remedy whenever a secret link is forwarded to the wrong person, a host's phone is lost, or a host leaves
-
-### Known Limitation: The Enrolment Link Is a URL
-
-A host enrols by opening `/?id=<qr_code>` - scanned from a printed code or
-followed from the secret link. The credential is therefore *in a URL*, which
-is exactly what the rules above avoid everywhere else. This is inherent to
-QR-based enrolment: with no usernames or passwords, the link has to carry the
-secret, because the link **is** the credential. It is a deliberate trade -
-hosts set up by pointing a camera at a poster instead of managing accounts -
-and it is worth knowing where that secret can end up:
-
-- **The host's browser history.** The app calls `history.replaceState` as soon
-  as it reads the parameter, so the `?id=` entry is replaced rather than left
-  behind, but a browser that syncs history across devices may still have taken
-  a copy
-- **Server and proxy access logs.** `GET /?id=<qr_code>` and the
-  `GET /api/qr-codes/<qr_code>/status` that follows it both appear in full in
-  ordinary access logs. Anyone who can read those logs can enrol as that host.
-  If you keep logs, treat them as holding credentials: restrict who can read
-  them, and keep them no longer than you need
-- **Wherever the link was sent.** A secret link pasted into email or a group
-  chat stays there, readable by anyone with access to that thread, long after
-  the game ends
-
-`Referrer-Policy: no-referrer` is set on the page, so the credential is never
-sent onward in a `Referer` header. Browsers already withhold it cross-origin
-by default; the explicit policy makes that a guarantee rather than a default.
-
-None of this is fixed by the routing changes above, and it cannot be while
-enrolment stays QR-only. What makes it survivable is that the exposure is
-**recoverable**: use **Rotate** to retire a link that has been over-shared or
-a host id that may have been read from a log, and set an expiry date on hosts
-so a forgotten link stops working on its own. Rotate on any suspicion - it
-costs the host one scan.
-
-### Data Protection
-- **Input validation**: All API inputs validated
-- **SQL injection protection**: Parameterized queries
-- **HTTPS required**: Camera access requires secure connection
-
-### Privacy Considerations
-- **Players are told before they are asked**: a short privacy notice - written to be read by a ten-year-old, five points, no legal vocabulary - appears in full on the join page, and as a modal for anyone whose device is about to be asked for a position without having been through it. Nothing calls `watchPosition` or `getCurrentPosition` until it has been acknowledged on that device, so the notice cannot end up behind the browser's location prompt. It covers where a player's position goes and who sees it, the generated name, the OpenStreetMap tiles the map is drawn from, how long anything is kept, and that they can say no. A **Privacy** link in the footer reopens it at any time. It is transparency, not consent: acknowledging it records nothing on the server, and it does not replace the privacy notice a deployment has to publish for itself - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
-- **Location data**: Only stored for base creation and capture verification, and only the newest fix per player - never a route. Every stored position is deleted the moment the game ends
-- **Retention**: A finished game deletes itself. Ending it clears the personal data play needed; thirty days later the game and everything in it is permanently deleted, sweeper-driven and automatic. Set `GAME_RETENTION_DAYS` to match your own retention schedule, and export anything you need to keep before the clock runs out
-- **Announcements**: Written by the host for everyone in the game; the game-wide socket carries no announcement text. A host can delete one, which withdraws it from every player - the text stays in the database, so the deployment can still answer for what was sent, until the game is deleted or purged
-- **Player names**: Generated by the server as an `adjective-animal` handle - players never type one, so no player's real name is in the app. Served only to the game's own host, never to other players or an anonymous caller
-- **Team QR codes**: Never served to an anonymous caller, only to the game's own host
-- **Player data**: Minimal personal information collected
-- **QR codes**: Unique UUIDs with no personal information
-- **Game isolation**: Each game's data is completely separate
-
-### Legal Responsibilities of Running a Deployment
-
-Putting this on a public URL makes **you** the provider of a user-to-user
-service under the Online Safety Act 2023 and the data controller under UK
-GDPR - not the authors of this software. Both carry duties: risk assessments
-you must write and keep, a reporting route for players, terms of service, a
-privacy notice, and a retention rule for finished games. If children will play,
-more applies again.
-
-The design keeps the risk low on purpose - no player-to-player messaging, no
-private channel between a host and a player, no free text from players at all,
-and no personal data in anonymous API responses - but it cannot do the
-paperwork for you.
-
-**Read [docs/COMPLIANCE.md](docs/COMPLIANCE.md) before running games for other
-people.** It sets out what is in scope and why, what the design already
-handles, the gaps you must cover yourself, and the documents worth holding.
-
-## Troubleshooting
-
-### Common Issues
-
-**Camera not working**:
-- Ensure HTTPS connection (required for camera access)
-- Check browser permissions for camera
-- Try different browser or device
-
-**QR codes not scanning**:
-- Ensure good lighting conditions
-- Hold camera steady and close to QR code
-- Try manual entry of QR code value
-- Check QR code is properly generated
-
-**GPS not accurate**:
-- Install as Progressive Web App for best performance
-- Enable high accuracy mode in browser
-- Wait for GPS to settle before capturing bases
-- Check device has good GPS signal
-- Consider testing capture range in different conditions
-
-**Game not starting**:
-- Ensure minimum 2 teams created
-- Check host authentication is valid
-- Verify all teams have valid QR codes
-- If quiz capture is enabled: at least one category must be selected and contain at least one active question
-- Check game status in host panel
-
-**Players can't join teams**:
-- Check team QR codes are properly assigned
-- Ensure game hasn't started yet
-- Try refreshing browser and re-scanning
-- Verify QR code is readable and not damaged
-
-### Debug Information
-
-Enable debug mode for detailed logging:
-```bash
-export FLASK_DEBUG=True
+git clone <repository-url>
+cd QR-Conquest
+pip install -r requirements.txt
+export SITE_ADMIN_PASSWORD="choose_something_long"
 python flask_app.py
 ```
 
-Check browser console for JavaScript errors:
-- Press F12 to open developer tools
-- Check Console tab for error messages
-- Network tab shows API request/response details
+Then open `http://localhost:5000`. The database is created on first run as
+`qr_game.db` in the working directory.
 
-## License
+Cameras need HTTPS in every browser, so scanning only works on `localhost` or
+behind TLS - see [Deployment](docs/DEPLOYMENT.md) for the production setup, and
+for the GPS simulator that lets you play through a whole game at a desk.
 
-This project is provided as-is for educational and entertainment purposes. Please respect local laws and property rights when placing QR codes and conducting games.
+## What it is built on
+
+- **Server**: a single Flask application (`flask_app.py`) over SQLite. No
+  message broker, no worker processes, no external services.
+- **Client**: vanilla JavaScript, installable as a PWA. Tailwind, Leaflet,
+  Lucide, jsQR and QRCode.js are vendored into `static/libs/`, so a slow or
+  blocked CDN cannot take the map or the scanner down mid-game.
+- **Credentials**: QR codes. There are no player accounts and no passwords
+  except the site administrator's, which lives in an environment variable.
+- **Data**: a finished game deletes every player position immediately and the
+  whole game 30 days later, on a timer the deployment sets.
+
+## Repository layout
+
+| Path | What it holds |
+|------|---------------|
+| `flask_app.py` | The entire server: API, database schema, live events, retention sweeper |
+| `static/index.html` | The page shell, rewritten by the server as it is served |
+| `static/core.js` | API calls, authentication state, QR handling, polling and the live socket |
+| `static/ui.js` | Player-facing UI: landing page, game view, map, scanner, announcements, privacy notice |
+| `static/host.js` | Host panel: game setup, teams, bases, settings, question bank |
+| `static/site-admin.js` | Site administration: hosts, games, site settings |
+| `static/dev-gps.js` | Developer GPS simulator, inert unless `DEBUG_FEATURES` is set |
+| `static/code-generator/` | Standalone printable QR code generator |
+| `static/libs/` | Vendored front-end libraries |
+| `tools/` | Build tooling: Tailwind config, asset vendoring, icon generator |
+| `docs/` | The documentation this README links to |
+
+## Status
+
+Pre-beta, and shaped by running real games rather than by a compatibility
+policy. Expect breaking changes; there is no upgrade path between versions
+beyond "the database file keeps its shape unless a release says otherwise".
+
+Known limitations are listed in
+[Architecture](docs/ARCHITECTURE.md#known-limitations).
 
 ## Contributing
 
-This is a pre-beta project focused on functionality over backwards compatibility. Contributions welcome, but expect breaking changes as the system evolves.
+Fork, branch, and test with all three roles - player, host and site
+administrator - before opening a pull request. The GPS simulator in
+[Deployment](docs/DEPLOYMENT.md#testing-without-a-park) makes that possible
+without leaving your desk. Describe what you changed and how you exercised it.
 
-### Development Setup
-1. Fork the repository
-2. Create feature branch
-3. Test thoroughly with all user roles
-4. Submit pull request with detailed description
+## Licence
 
-### Known Limitations
-- Single server instance (no clustering support)
-- SQLite database (not suitable for high concurrency)
-- Basic error handling (needs improvement for production)
-- Abuse reporting is a published email address only - no in-app report form - and limited moderation tooling for a site administrator: they can export a game and read everything in it, including withdrawn announcements, but the only thing they can take down is the whole game - a host can withdraw their own announcements, but nobody else can - see [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
-- Limited game customization options
-- No game history or analytics
-
----
-
-**Have fun conquering with QR codes!**
+Provided as-is for educational and entertainment purposes. Respect local laws
+and property rights when placing QR codes and running games. See
+[LICENSE](LICENSE).

@@ -118,8 +118,8 @@ assessment. Record them:
   once you have set it - open the homepage and look for the link. A deployment
   that serves `index.html` as a static file used to publish no route however
   the address was set; the app now asks the server for it as well, but see
-  "Serve `index.html` through the app" in the README, because the same
-  misconfiguration still breaks other things.
+  "Serve `index.html` through the app" in [Deployment](DEPLOYMENT.md), because
+  the same misconfiguration still breaks other things.
 
 ### What you have to provide yourself
 
@@ -319,7 +319,8 @@ the software, not oversights it hides:
   one sees team names, scores and base locations for that game. They cannot
   see the roster of generated player names, join a team, or read anything a
   host sent to players
-- Single server, SQLite, no clustering - see "Known Limitations" in the README
+- Single server, SQLite, no clustering - see "Known limitations" in
+  [Architecture](ARCHITECTURE.md#known-limitations)
 
 ## Documents worth holding
 
