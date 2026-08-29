@@ -542,6 +542,21 @@ colours are additionally safelisted, because they are stored per team in the
 database. To upgrade a library, bump its version in `package.json` and run
 `npm run vendor`, which recopies the files and rebuilds the stylesheet.
 
+### App icon
+
+The logo in `static/icons/` is a castle keep whose walls enclose a real QR
+code - the module pattern is the genuine version-2 QR for `QRCONQUEST` at the
+highest error-correction level, so it carries a real code's irregular
+clustering rather than a hand-drawn grid, and the gate is punched out of it on
+module boundaries. It is drawn in the game's own purple with the gold used for
+flags elsewhere in the app, and nothing in it relies on the page behind it, so
+it reads on a light or a dark background equally well.
+
+`static/icons/icon.svg` is the source; `tools/generate-icon.py` draws it
+(`pip install segno`). The two PNGs are rendered from that SVG on a
+`#F5F3FF` field, sized so the keep stays inside a maskable icon's safe zone -
+the recipe is in the script's docstring.
+
 ### QR Code System
 - **Host Authentication**: Unique secret links for host authentication
 - **Team QR**: Unique UUID linking to specific team in specific game

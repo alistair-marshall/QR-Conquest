@@ -1,270 +1,223 @@
-<?xml version="1.0" ?>
-<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <rect fill="#ffffff" height="512" width="512"/>
-  <g class="svg-content" data-height="200" data-view-box="0 0 200 200" data-width="200" transform="translate(0, 0) scale(2.5)">
-    <defs color="rgb(2, 8, 23)" fill="#a4bcfc" stroke="none">
-      <clipPath id="svg1-clip-path-background-color-57">
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="200" stroke="none" width="200" x="0" y="0"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-dot-color-57">
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="0"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="0"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="0"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="0"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="8"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="8"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="8"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="16"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="16"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="16"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="16"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="16"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="24"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="32"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="32"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="32"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="32"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="32"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="40"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="40"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="40"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="40"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="48"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="48"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="48"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="48"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="48"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="56"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="56"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="56"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="16" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="48" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="64"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="16" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="24" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="56" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="72"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="24" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="48" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="152" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="176" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="80"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="8" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="16" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="88"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="16" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="48" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="176" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="96"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="56" y="104"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="104"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="104"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="104"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="104"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="0" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="24" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="48" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="152" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="112"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="8" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="24" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="40" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="120"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="0" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="32" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="48" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="56" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="152" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="128"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="176" y="136"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="144"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="152"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="152" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="160"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="176" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="168"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="64" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="104" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="152" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="176"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="72" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="80" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="88" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="120" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="184"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="96" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="112" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="128" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="136" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="144" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="160" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="168" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="184" y="192"/>
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="8" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="8" x="192" y="192"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-square-color-0-0-57">
-        <path clip-rule="evenodd" color="rgb(2, 8, 23)" d="M 0 0v 56h 56v -56zM 8 8h 40v 40h -40z" fill="#a4bcfc" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-dot-color-0-0-57">
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" transform="matrix(1, 0, 0, 1, 0, 0)" width="24" x="16" y="16"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-square-color-1-0-57">
-        <path clip-rule="evenodd" color="rgb(2, 8, 23)" d="M 144 0v 56h 56v -56zM 152 8h 40v 40h -40z" fill="#a4bcfc" stroke="none" transform="matrix(0, 1, -1, 0, 200, -144)"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-dot-color-1-0-57">
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" transform="matrix(0, 1, -1, 0, 200, -144)" width="24" x="160" y="16"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-square-color-0-1-57">
-        <path clip-rule="evenodd" color="rgb(2, 8, 23)" d="M 0 144v 56h 56v -56zM 8 152h 40v 40h -40z" fill="#a4bcfc" stroke="none" transform="matrix(0, -1, 1, 0, -144, 200)"/>
-      </clipPath>
-      <clipPath id="svg1-clip-path-corners-dot-color-0-1-57">
-        <rect color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" transform="matrix(0, -1, 1, 0, -144, 200)" width="24" x="16" y="160"/>
-      </clipPath>
-    </defs>
-    <rect clip-path="url(&quot;#svg1-clip-path-background-color-57&quot;)" color="rgb(2, 8, 23)" fill="rgba(0, 0, 0, 0)" height="200" stroke="none" width="200" x="0" y="0"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-dot-color-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="200" stroke="none" width="200" x="0" y="0"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-square-color-0-0-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="56" stroke="none" width="56" x="0" y="0"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-dot-color-0-0-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" width="24" x="16" y="16"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-square-color-1-0-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="56" stroke="none" width="56" x="144" y="0"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-dot-color-1-0-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" width="24" x="160" y="16"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-square-color-0-1-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="56" stroke="none" width="56" x="0" y="144"/>
-    <rect clip-path="url(&quot;#svg1-clip-path-corners-dot-color-0-1-57&quot;)" color="rgb(2, 8, 23)" fill="#a4bcfc" height="24" stroke="none" width="24" x="16" y="160"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 600"
+     width="100%" height="100%" role="img"
+     aria-label="QR Conquest: a castle keep built from a QR code">
+  <defs>
+    <linearGradient id="keep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7E22CE"/>
+      <stop offset="1" stop-color="#581C87"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Flag, behind the keep so the pole appears to rise from the turret -->
+  <g id="flag">
+    <rect x="218" y="30" width="12" height="146" rx="6" fill="#C084FC"/>
+    <path d="M 228,34 L 328,62 L 228,90 Z" fill="#F59E0B"/>
+    <circle cx="264" cy="62" r="11" fill="#581C87"/>
   </g>
-  <!-- Map Layer -->
-  <g transform="translate(-25, 100) scale(1)">
-    <!-- Map Outline -->
-    <path d="M230,70 C250,55 270,60 290,50 C310,40 330,30 350,40 C370,50 390,60 410,50              C430,40 450,30 470,40 C490,50 510,60 500,80 C490,100 470,120 450,140              C430,160 410,170 390,180 C370,190 350,180 330,190 C310,200 290,210 270,200              C250,190 230,180 210,190 C190,200 170,210 150,200 C130,190 110,180 90,190              C70,200 50,210 40,190 C30,170 50,160 70,170 C90,180 110,170 130,160              C150,150 170,160 190,150 C210,140 220,130 230,70" fill="#4CAF50" stroke="#2E7D32" stroke-linecap="round" stroke-width="8"/>
-    <!-- Blue Rivers -->
-    <path d="M247,107 C270,100 290,110 300,105 C310,100 320,110 330,105" fill="none" stroke="#1976D2" stroke-linecap="round" stroke-width="4"/>
-    <path d="M330,105 C340,115 350,110 360,120 C370,130 380,125 390,135" fill="none" stroke="#1976D2" stroke-linecap="round" stroke-width="4"/>
-    <path d="M245,65 C240,140 250,135 260,145 C270,155 280,150 290,160" fill="none" stroke="#1976D2" stroke-linecap="round" stroke-width="4"/>
-    <path d="M150,160 C160,170 170,165 180,175 C190,185 200,180 210,190" fill="none" stroke="#1976D2" stroke-linecap="round" stroke-width="4"/>
-    <!-- Flag 1 - Red -->
-    <g transform="translate(380, 70)">
-      <line stroke="#424242" stroke-width="4" x1="0" x2="0" y1="0" y2="100"/>
-      <rect fill="#F44336" height="36" width="50" x="0" y="0"/>
-    </g>
-    <!-- Flag 2 - Blue -->
-    <g transform="translate(300, 30)">
-      <line stroke="#424242" stroke-width="4" x1="0" x2="0" y1="0" y2="100"/>
-      <rect fill="#2962ff" height="36" width="50" x="0" y="0"/>
-    </g>
-    <!-- Flag 3 - Green -->
-    <g transform="translate(130, 80)">
-      <line stroke="#424242" stroke-width="4" x1="0" x2="0" y1="0" y2="100"/>
-      <rect fill="#4CAF50" height="36" width="50" x="0" y="0"/>
-    </g>
+
+  <!-- The keep itself -->
+  <path d="M 24,96 H 132 V 176 H 170 V 96 H 278 V 176 H 316 V 96 H 424 V 576 H 24 Z" fill="url(#keep)" stroke="#C084FC"
+        stroke-width="12" stroke-linejoin="miter"/>
+
+  <!-- Turret windows -->
+  <g id="windows">
+    <path d="M 70,162 V 132 A 8,8 0 0 1 86,132 V 162 Z" fill="#FBBF24"/>
+    <path d="M 362,162 V 132 A 8,8 0 0 1 378,132 V 162 Z" fill="#FBBF24"/>
+  </g>
+
+  <!-- The genuine version-2 QR code for "QRCONQUEST", error correction H -->
+  <g id="qr">
+    <rect x="56" y="208" width="84" height="84" fill="none" stroke="#FAF5FF" stroke-width="14"/>
+    <rect x="77" y="229" width="42" height="42" fill="#FBBF24"/>
+    <rect x="308" y="208" width="84" height="84" fill="none" stroke="#FAF5FF" stroke-width="14"/>
+    <rect x="329" y="229" width="42" height="42" fill="#FBBF24"/>
+    <rect x="56" y="460" width="84" height="84" fill="none" stroke="#FAF5FF" stroke-width="14"/>
+    <rect x="77" y="481" width="42" height="42" fill="#FBBF24"/>
+    <rect x="280" y="432" width="56" height="56" fill="none" stroke="#FAF5FF" stroke-width="14"/>
+    <rect x="301" y="453" width="14" height="14" fill="#FBBF24"/>
+    <rect x="175" y="201" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="201" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="201" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="201" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="215" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="215" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="215" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="215" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="215" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="229" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="229" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="229" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="243" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="243" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="257" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="257" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="257" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="257" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="257" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="271" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="271" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="271" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="271" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="271" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="285" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="285" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="285" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="285" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="285" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="299" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="105" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="119" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="133" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="147" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="313" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="49" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="77" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="327" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="63" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="105" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="133" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="329" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="341" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="49" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="63" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="105" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="119" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="203" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="329" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="343" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="355" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="49" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="133" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="147" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="329" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="369" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="49" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="63" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="77" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="119" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="245" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="329" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="383" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="105" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="119" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="133" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="217" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="397" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="77" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="105" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="175" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="189" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="231" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="259" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="411" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="49" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="63" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="77" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="91" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="119" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="133" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="147" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="425" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="439" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="439" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="439" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="453" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="343" y="453" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="467" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="343" y="467" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="161" y="481" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="481" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="481" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="481" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="329" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="343" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="495" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="509" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="509" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="509" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="273" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="343" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="357" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="371" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="523" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="287" y="537" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="301" y="537" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="315" y="537" width="14" height="14" fill="#FAF5FF"/>
+    <rect x="385" y="537" width="14" height="14" fill="#FAF5FF"/>
+  </g>
+
+  <!-- Gatehouse, cut out of the code on module boundaries -->
+  <g id="gate">
+    <path d="M 189,570 V 474 A 35,35 0 0 1 259,474 V 570 Z" fill="#3B0764" stroke="#FAF5FF" stroke-width="5" stroke-linejoin="round"/>
+    <line x1="206.5" y1="449.689" x2="206.5" y2="570" stroke="#F59E0B" stroke-width="3.5" opacity="0.7"/>
+    <line x1="224" y1="445" x2="224" y2="570" stroke="#F59E0B" stroke-width="3.5" opacity="0.7"/>
+    <line x1="241.5" y1="449.689" x2="241.5" y2="570" stroke="#F59E0B" stroke-width="3.5" opacity="0.7"/>
   </g>
 </svg>
