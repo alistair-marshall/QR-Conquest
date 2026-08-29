@@ -241,6 +241,45 @@ in the script's docstring.
 4. Rebuild the stylesheet if you added Tailwind classes.
 5. Open a pull request describing what changed and how you exercised it.
 
+### Demo data
+
+Clicking a testable game together by hand takes twenty minutes, so there is a
+seeder:
+
+```bash
+SITE_ADMIN_PASSWORD=devpass python flask_app.py &
+SITE_ADMIN_PASSWORD=devpass python tools/seed-demo-game.py
+```
+
+It creates a host, a question bank, a running game with three teams, six bases,
+eight players and a scoreboard with a history, and a second game with quiz
+capture on. It prints the URLs that enrol the host and join each team - open one
+in a browser and you are in a game that looks like a real one. Everything it
+makes lives in `qr_game.db`, so deleting that file undoes it.
+
+Backdating the captures - which is what makes the scoreboard non-zero - is the
+one thing the seeder does behind the API's back, by writing to the SQLite file
+directly. `--no-backdate` keeps every write on the API.
+
+### Regenerating the screenshots
+
+The images in `docs/images/` are taken from that seeded game by driving a real
+browser:
+
+```bash
+pip install playwright && playwright install chromium
+SITE_ADMIN_PASSWORD=devpass python tools/capture-screenshots.py
+```
+
+It writes all seventeen under the names the documentation expects, moving the
+game into its bonus round and ending the quiz game partway through to reach the
+states the later shots need. Re-seed a fresh database before running it again.
+`--only <shot>` re-takes one, and `--tiles` lets OpenStreetMap load into the
+maps, which the committed images deliberately leave out.
+
+If you change a screen the documentation illustrates, re-take its screenshot in
+the same commit. That is the whole reason the script is in the repository.
+
 ## Known limitations
 
 - Single server instance; no clustering. The live-event buffer and socket

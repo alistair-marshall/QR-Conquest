@@ -188,3 +188,6 @@ cython_debug/
 # Node (front-end asset build tooling only - see tools/)
 node_modules/
 package-lock.json
+
+# Demo data written by tools/seed-demo-game.py
+demo-game.json

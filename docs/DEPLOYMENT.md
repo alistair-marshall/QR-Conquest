@@ -53,6 +53,10 @@ Between them, the whole game - joining, capture, quiz sessions, cooldowns, the
 bonus round - can be played through at a desk. Never set this in production: it
 is a developer console and a location spoofer sitting on the player's page.
 
+For something to play *with*, `tools/seed-demo-game.py` fills a local server
+with a host, a question bank and two games mid-flight - see
+[Architecture](ARCHITECTURE.md#demo-data).
+
 ## Production
 
 ### Serve `index.html` through the app, not as a static file
