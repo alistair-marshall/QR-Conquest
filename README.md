@@ -53,7 +53,7 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 - It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
 
 **Reporting Something:**
-- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer of every page and under the messages panel
+- If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer and the menu of every page, and under the messages panel
 - It gives you the address of the administrator who runs the site, not your game host, and opens your email app with the game already filled in
 - Whether it appears at all depends on the site publishing an address
 
@@ -195,7 +195,8 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 
 3. **Create your game**:
    - Visit your host secret link if not already authenticated
-   - Click "Host a Game" or use "Host Menu" button
+   - Click "Host a Game", or open the menu (the icon at the top right of
+     every page) and choose "Host menu"
    - Create new game with descriptive name - that name is how the game is identified everywhere you and your players see it
 
 4. **Set up teams**:
@@ -259,7 +260,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
 
 3. **Access admin panel**:
    - Navigate to the homepage
-   - Click "Site Administration" link in footer
+   - Open the menu (the icon at the top right) and choose "Site administration"
    - Enter admin password
 
 4. **Create host accounts**:
@@ -472,9 +473,10 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **QR Scanning**: Camera-based QR code detection
 - **Maps**: Interactive Leaflet maps showing base locations and ownership, the viewer's own position as a black arrowhead, and (for hosts, behind a "Show players" toggle) each player's last known position as a pin in their team colour
 - **Real-time Updates**: Capture notifications over the live socket or the game poll, whichever the deployment supports, plus automatic polling for live scoreboard updates
+- **App menu**: One button at the top right of every page holding the routes that are not for players - the host menu and site administration - with the Privacy and Report abuse links repeated under them, so reporting something does not mean scrolling a map to reach the footer. It replaces a "Host Menu" button in the header and a "Site Administration" link in the footer, which put two versions of the same idea at opposite ends of the page. Built as a modal: full-width rows are a better tap target on a phone than a dropdown
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
 - **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
-- **Abuse Reporting**: A "Report abuse" link in the footer, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
+- **Abuse Reporting**: A "Report abuse" link in the footer and in the app menu, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
 - **Responsive Design**: Works on mobile phones and tablets
 
 **File Responsibility Matrix**:

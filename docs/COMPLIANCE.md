@@ -106,10 +106,11 @@ assessment. Record them:
   because everyone forgot about it.
 - **A reporting route is built in.** Set `ABUSE_CONTACT_EMAIL`, or fill in the
   address under Site Settings in the admin panel, and every player and host
-  gets a "Report abuse" link - in the footer, and under the messages panel
-  where they read the host's announcements. It reaches you, the provider, not
-  the host being reported. Leave it unset and no route is shown, which is the
-  one configuration you should not ship. Check it is actually reaching players
+  gets a "Report abuse" link - in the footer, in the menu at the top right
+  of every page, and under the messages panel where they read the host's
+  announcements. It reaches you, the provider, not the host being reported.
+  Leave it unset and no route is shown, which is the one configuration you
+  should not ship. Check it is actually reaching players
   once you have set it - open the homepage and look for the link. A deployment
   that serves `index.html` as a static file used to publish no route however
   the address was set; the app now asks the server for it as well, but see

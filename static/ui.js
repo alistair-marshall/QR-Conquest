@@ -1963,7 +1963,7 @@ function renderApp() {
 
     headerContent.appendChild(leftSection);
 
-    // Right side: Admin button
+    // Right side: messages, and the menu
     const rightSection = document.createElement('div');
     rightSection.className = 'flex items-center';
 
@@ -1975,16 +1975,14 @@ function renderApp() {
       adminBadge.textContent = 'Site Admin';
       rightSection.appendChild(adminBadge);
     } else {
-      // Regular host button
       // Host announcements, sent by the host and read by the players
       if (getAnnouncementRole()) {
         rightSection.appendChild(createAnnouncementButton());
       }
 
-      const hostButton = UIBuilder.createButton('Host Menu', function() {
-        handleHostButtonClick();
-      }, 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-4 rounded-lg transition-all duration-200', 'shield');
-      rightSection.appendChild(hostButton);
+      // Everything role-based - the host menu, site administration - is behind
+      // this one button now, rather than a button here and a link in the footer
+      rightSection.appendChild(createAppMenuButton());
     }
     headerContent.appendChild(rightSection);
     header.appendChild(headerContent);
@@ -2048,38 +2046,32 @@ function renderApp() {
 
     // Add footer
     const footer = document.createElement('footer');
-    footer.className = 'bg-gray-200 p-4 text-center text-sm text-gray-600';
+    footer.className = 'bg-gray-200 px-4 py-3 text-center text-gray-600';
 
+    // One centred line. Site administration has moved into the header menu,
+    // leaving the copyright and the two links a player, a parent or a regulator
+    // should not have to hunt for. Both are in the menu as well, for a page
+    // long enough that this is below the fold
     const footerContent = document.createElement('div');
-    footerContent.className = 'flex justify-between items-center';
+    footerContent.className = 'flex flex-wrap justify-center items-center gap-x-3 gap-y-1 text-xs';
 
-    const copyright = document.createElement('div');
+    const copyright = document.createElement('span');
+    copyright.className = 'text-gray-500';
     copyright.textContent = 'QR Conquest © 2025';
     footerContent.appendChild(copyright);
 
-    const footerLinks = document.createElement('div');
-    footerLinks.className = 'flex items-center gap-4';
+    const linkClass = 'text-gray-500 hover:text-gray-700 underline';
 
     // Always available, so a player or a parent can read what the game does
     // with a location long after the join page has gone
-    footerLinks.appendChild(createPrivacyNoticeLink('text-gray-500 hover:text-gray-700 text-xs underline'));
+    footerContent.appendChild(createFooterSeparator());
+    footerContent.appendChild(createPrivacyNoticeLink(linkClass));
 
     // Only shown when this deployment has published a contact address
     if (getAbuseContact()) {
-      footerLinks.appendChild(createAbuseReportLink('text-gray-500 hover:text-gray-700 text-xs underline'));
+      footerContent.appendChild(createFooterSeparator());
+      footerContent.appendChild(createAbuseReportLink(linkClass));
     }
-
-    const adminLink = document.createElement('a');
-    adminLink.className = 'text-gray-500 hover:text-gray-700 text-xs';
-    adminLink.textContent = 'Site Administration';
-    adminLink.href = '#';
-    adminLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      navigateTo('siteAdminLogin');
-    });
-    footerLinks.appendChild(adminLink);
-
-    footerContent.appendChild(footerLinks);
 
     footer.appendChild(footerContent);
     newContent.appendChild(footer);
@@ -3135,6 +3127,149 @@ function createAnnouncementButton() {
   return button;
 }
 
+// =============================================================================
+// APP MENU
+// =============================================================================
+
+// The header used to carry a "Host Menu" button and the footer a "Site
+// Administration" link - two routes into the same kind of thing, at opposite
+// ends of the page, and neither of use to the players who are most of the
+// people here. Both now live behind one button, which also gives the legal
+// links a home that is reachable without scrolling to the bottom of a map.
+//
+// Built as a modal rather than a dropdown: the app has no popover primitive,
+// and full-width rows are a better tap target on the phone this is played on.
+
+let appMenuModalRef = null;
+
+// The "kebab" that opens the menu, sat beside the announcements button
+function createAppMenuButton() {
+  const button = UIBuilder.createElement('button', {
+    className: 'bg-white bg-opacity-20 hover:bg-opacity-30 text-white py-2 px-3 rounded-lg transition-all duration-200',
+    title: 'Menu',
+    'aria-label': 'Menu',
+    onClick: showAppMenu
+  });
+
+  button.appendChild(UIBuilder.createElement('i', { 'data-lucide': 'more-vertical' }));
+
+  setTimeout(function () {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }, 0);
+
+  return button;
+}
+
+// One row of the menu. The description carries what the label cannot say in
+// two words - who a route is for, so a player can see it is not for them
+function createAppMenuRow(icon, label, description, onClick) {
+  const row = UIBuilder.createElement('button', {
+    className: 'w-full flex items-start gap-3 text-left px-3 py-3 rounded-lg hover:bg-gray-100 transition-colors',
+    onClick: function () {
+      closeAppMenu();
+      onClick();
+    }
+  });
+
+  row.appendChild(UIBuilder.createElement('i', {
+    'data-lucide': icon,
+    className: 'text-gray-500 mt-0.5 flex-shrink-0'
+  }));
+
+  const text = UIBuilder.createElement('div');
+  text.appendChild(UIBuilder.createElement('div', {
+    className: 'font-medium text-gray-900',
+    textContent: label
+  }));
+  text.appendChild(UIBuilder.createElement('div', {
+    className: 'text-xs text-gray-500',
+    textContent: description
+  }));
+  row.appendChild(text);
+
+  return row;
+}
+
+function closeAppMenu() {
+  if (appMenuModalRef) {
+    appMenuModalRef.close();
+  }
+}
+
+function showAppMenu() {
+  closeAppMenu();
+
+  const content = UIBuilder.createElement('div', { className: 'space-y-1' });
+
+  content.appendChild(createAppMenuRow(
+    'shield',
+    'Host menu',
+    'Set up and run a game. Hosts only',
+    handleHostButtonClick
+  ));
+
+  content.appendChild(createAppMenuRow(
+    'settings',
+    'Site administration',
+    'Manage hosts and games across this site',
+    function () {
+      navigateTo('siteAdminLogin');
+    }
+  ));
+
+  // The two the footer also carries. Repeated here because the footer is below
+  // the fold on a page showing a map, and reporting something should not
+  // depend on finding your way to the bottom of it
+  const legal = UIBuilder.createElement('div', {
+    className: 'mt-2 pt-2 border-t border-gray-200 space-y-1'
+  });
+
+  legal.appendChild(createAppMenuRow(
+    'lock',
+    'Privacy',
+    'What the game does with where you are',
+    showPrivacyNoticeModal
+  ));
+
+  if (getAbuseContact()) {
+    legal.appendChild(createAppMenuRow(
+      'flag',
+      'Report abuse',
+      'Report content, or complain about a game',
+      showAbuseReportModal
+    ));
+  }
+
+  content.appendChild(legal);
+
+  appMenuModalRef = UIBuilder.createModal({
+    title: 'Menu',
+    content: content,
+    size: 'sm',
+    actions: [{
+      text: 'Close',
+      onClick: closeAppMenu,
+      className: 'flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors'
+    }],
+    onClose: function () {
+      appMenuModalRef = null;
+    }
+  });
+
+  // A menu is dismissed by tapping away from it, which createModal does not do
+  // for its own dialogs - those ask a question and want an answer
+  appMenuModalRef.addEventListener('click', function (e) {
+    if (e.target === appMenuModalRef) closeAppMenu();
+  });
+
+  document.body.appendChild(appMenuModalRef);
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+}
+
 function updateAnnouncementBadge() {
   const badge = document.getElementById('announcement-unread-badge');
   if (!badge) return;
@@ -3788,6 +3923,16 @@ function ensurePrivacyNoticeAccepted(options) {
       previousClose();
       resolve(hasAcceptedPrivacyNotice());
     };
+  });
+}
+
+// The dot between two footer links. Hidden from a screen reader, which gets
+// the links as a list and does not need the punctuation read out
+function createFooterSeparator() {
+  return UIBuilder.createElement('span', {
+    className: 'text-gray-400',
+    textContent: '\u00b7',
+    'aria-hidden': 'true'
   });
 }
 
