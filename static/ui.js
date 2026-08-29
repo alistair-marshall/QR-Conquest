@@ -478,21 +478,15 @@ function renderLandingPage() {
   const container = document.createElement('div');
   container.className = 'text-center py-10';
 
-  // Icons
-  const iconContainer = document.createElement('div');
-  iconContainer.className = 'flex justify-center mb-8';
-
-  const mapIcon = document.createElement('i');
-  mapIcon.setAttribute('data-lucide', 'map');
-  mapIcon.className = 'w-16 h-16 text-blue-600';
-  iconContainer.appendChild(mapIcon);
-
-  const flagIcon = document.createElement('i');
-  flagIcon.setAttribute('data-lucide', 'flag');
-  flagIcon.className = 'w-16 h-16 ml-4 text-green-600';
-  iconContainer.appendChild(flagIcon);
-
-  container.appendChild(iconContainer);
+  // Logo. The height is set here rather than with a Tailwind class because
+  // the prebuilt stylesheet carries no size this large.
+  const logo = document.createElement('img');
+  logo.src = window.assetUrl('/icons/icon.svg');
+  logo.alt = '';
+  logo.className = 'mx-auto mb-8';
+  logo.style.height = '9rem';
+  logo.style.width = 'auto';
+  container.appendChild(logo);
 
   // Title and description
   const title = document.createElement('h2');
