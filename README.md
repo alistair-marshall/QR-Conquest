@@ -5,6 +5,12 @@ park, a campus or a town centre, scan the codes they find, and score points for
 every minute they hold a base. Everything runs in the phone's browser - there is
 no app to install and nothing for a player to type.
 
+It is built for children to play, at schools, youth groups and family events, so
+a lot of work has gone into holding as little about them as a game can. There
+are no player accounts: no usernames, no passwords, no email addresses. Players
+are given a code name rather than asked for a real one, and a game is over in an
+hour or two, after which what it holds is of no further use to anybody.
+
 ![The player's view of a game in progress: scoreboard, map and scan button](docs/images/player-game.png)
 
 ## How a game works
@@ -13,8 +19,9 @@ no app to install and nothing for a player to type.
    [code generator](docs/QR-CODES.md).
 2. **The host places the base codes** around the play area and scans each one
    where it stands, which records the base's position.
-3. **Players scan their team's code** to join. The game gives each player a name
-   like `quiet-badger`; nobody types anything about themselves.
+3. **Players scan their team's code** to join. The game issues each player a
+   code name like `quiet-badger`; nobody signs up and nobody types anything
+   about themselves.
 4. **Players capture bases** by walking to them and scanning the code. The
    server checks the scanned code and the player's GPS position, so a base
    cannot be taken from the car park.
@@ -65,9 +72,11 @@ for the GPS simulator that lets you play through a whole game at a desk.
 - **Client**: vanilla JavaScript, installable as a PWA. Tailwind, Leaflet,
   Lucide, jsQR and QRCode.js are vendored into `static/libs/`, so a slow or
   blocked CDN cannot take the map or the scanner down mid-game.
-- **Credentials**: QR codes. There are no player accounts and no passwords
-  except the site administrator's, which lives in an environment variable.
-- **Data**: a finished game deletes every player position immediately and the
+- **Credentials**: QR codes. There are no player accounts - no usernames, no
+  passwords, no email addresses - and no password at all except the site
+  administrator's, which lives in an environment variable.
+- **Data**: players are known by a server-issued code name, generated fresh for
+  each game. A finished game deletes every player position immediately and the
   whole game 30 days later, on a timer the deployment sets.
 
 ## Repository layout

@@ -4,6 +4,13 @@ QR Conquest is a single Flask application over SQLite, serving a vanilla
 JavaScript client. There is no build step needed to run it, no message broker,
 and no external service beyond the map tiles.
 
+One constraint shapes a lot of the design: the players are children. There are
+no player accounts - no usernames, passwords or email addresses - players are
+issued a server-generated code name rather than asked for one, and a game's data
+is treated as ephemeral, because a game lasts an hour or two and little of it
+matters afterwards. Where a decision below looks like it is throwing data away,
+that is why.
+
 ## The server
 
 `flask_app.py` holds the whole server: the schema, every endpoint, the live-event
@@ -40,6 +47,20 @@ questions; correct answers reduce, capture, neutralise or reinforce a base's
 shield atomically, and wrong answers apply a game-wide cooldown to that player.
 The correct answer never leaves the server.
 
+### Player identity
+
+A player is a row created when a device scans into a team: a UUID the device
+keeps in `localStorage`, and an `adjective-animal` code name the server picks
+(`generate_player_name`), unique within that game. Nothing is asked of the
+player, and a name supplied by a modified client is ignored. The code name
+exists so a host's roster can distinguish players and so an investigation after
+the event has something to refer to - it is deliberately not an identity.
+
+`players.id` is a primary key, so an id belongs to one game only; the client
+clears its stored player id when it scans into a different game
+(`clearGameState`), and the new join gets a fresh id and a fresh code name.
+Nothing on the server links a player across games.
+
 ### Player positions
 
 Players post their latest GPS fix while they play - one every 15 seconds at most.
@@ -51,11 +72,13 @@ clears the last fix.
 ### Retention
 
 A game is tidied when it ends and purged `GAME_RETENTION_DAYS` later (30 by
-default). The tidy clears what only mattered during play - every player's last
-GPS fix, and any quiz cooldown still running - while keeping the record a
-complaint would be answered from: generated player names, team membership and
-join times, the capture timeline, quiz sessions, and every word the host wrote,
-withdrawn announcements included. The purge then deletes the game and all of it.
+default). Games run for an hour or two, so the window is sized for someone
+asking questions after the event rather than for keeping anything. The tidy
+clears what only mattered during play - every player's last GPS fix, and any
+quiz cooldown still running - while keeping the record a complaint would be
+answered from: generated code names, team membership and join times, the
+capture timeline, quiz sessions, and every word the host wrote, withdrawn
+announcements included. The purge then deletes the game and all of it.
 A background sweeper runs hourly, so a restarted server never sits on expired
 data.
 
@@ -91,10 +114,9 @@ reason.
 
 ### Game ids and payload scoping
 
-A game is keyed by a random UUID. Earlier versions used a short "adjective-noun"
-code, which anyone outside a game could guess their way through to reach its
-payload. Nobody has to read the id out - the host names the game, and players
-reach it by scanning a QR code - so it is not shown anywhere in the UI.
+A game is keyed by a random UUID. Nobody has to read the id out - the host
+names the game, and players reach it by scanning a QR code - so it is not shown
+anywhere in the UI.
 
 The game payload is fetched without a credential, so the anonymous view carries
 no player names or ids and none of the QR codes that join a team, whatever the id

@@ -27,9 +27,9 @@ page, under **Host menu**.
 
 ### Count and print your codes
 
-You need one code per team and one per base, plus a few spares. Six bases and
-three teams is a comfortable first game; there is no hard limit, but 2-8 teams
-and 5-20 bases is where the game plays best.
+You need one code per team and one per base, plus a few spares. Ten bases and
+three teams is a comfortable first game; there is no hard limit, but 2-6 teams
+and 10-30 bases have worked in the past.
 
 Print them from the built-in generator - **Print QR Codes** in the host panel,
 or `/code-generator/` directly. [QR codes](QR-CODES.md) covers the layouts,
@@ -128,8 +128,14 @@ the host panel is a live view of the whole game.
   twenty-six bases is a long page otherwise. **Collapse all** and **Expand all**
   do the lot, and the team and base headings carry a count so you can see what
   is inside a folded section. What you fold stays folded on that device.
-- **Teams** show their player count, the names the game gave those players, and
-  their live score.
+- **Teams** show their player count, the code names the game gave those players,
+  and their live score. Players are never asked for a real name - the game is
+  built for children, so it issues an `adjective-animal` code name instead. It
+  is there to tell one player from another on this roster, and to give you
+  something to refer to if a question comes up afterwards; it is not a way of
+  knowing who anybody is, and a player gets a different one in every game they
+  join. If you need to match a code name to a child, do it from your own
+  register on the day.
 - **Bases** show who holds each one - and, in a quiz game, its shield.
 - **Your map** shows the last known position of every player as a pin in their
   team's colour, with bases as circles so the two never get confused. Positions
@@ -141,7 +147,9 @@ the host panel is a live view of the whole game.
 Player positions exist so you can spot a team that has drifted out of the play
 area or a player who has gone quiet. They are served to you and to nobody else -
 not to other players, and not to an anonymous caller - and every one of them is
-deleted the moment the game ends.
+deleted the moment the game ends. Nothing about a game is meant to outlive it by
+much: the game itself is deleted automatically a few weeks later, and your game
+list shows the date for each ended game.
 
 ## Talking to your players
 

@@ -1,7 +1,9 @@
 # Playing a game
 
 Everything you need is a phone with a camera and a browser. There is no app to
-download, no account to create, and nothing to type about yourself.
+download, no account to create, and nothing to type about yourself. The game is
+made for children to play, so it is built to know as little about you as it can:
+no username, no password, no email address, and no name.
 
 ## Joining your team
 
@@ -11,12 +13,18 @@ Scan it with your phone's camera and the join page opens.
 ![The join page, showing the team being joined and the privacy notice](images/player-join.png)
 
 Before the page asks your phone for your location, it tells you what the game
-does with it: who can see where you are, the name the game gives you, where the
-map pictures come from, and how long anything is kept. The **Privacy** link in
-the footer brings that notice back at any time.
+does with it: who can see where you are, the code name the game gives you, where
+the map pictures come from, and how long anything is kept. The **Privacy** link
+in the footer brings that notice back at any time.
 
-Tap **Join Team** and you are in. The game gives you a name like `quiet-badger` -
-you never type one, so the game never learns your real name.
+Tap **Join Team** and you are in. The game gives you a code name like
+`quiet-badger` - you never type one, so the game never learns your real name.
+
+The code name is not an account and it is not really about you. It is there so
+your host can tell one player apart from another on their roster, and so that if
+something goes wrong there is a way to talk about what happened without naming
+anybody. You get a new one every time you join a game, and it is only yours for
+that game.
 
 If your host has set the game up to let players choose, you may see a list of
 teams instead of needing a code. Which way it works is the host's choice.
@@ -47,6 +55,11 @@ Your latest position is sent to your host while you play, so they can see where
 everyone is. Only the host sees it, only your most recent position is kept -
 never a trail of where you have been - and it is deleted the moment the game
 ends.
+
+A game is usually over in an hour or two, and what it holds is meant to last no
+longer than it is useful. Your position goes as soon as the game ends; the rest
+of the game - the code names, who was on which team, which base was taken when -
+is deleted automatically a few weeks later.
 
 ## Capturing bases
 

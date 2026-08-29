@@ -61,16 +61,20 @@ a narrow screen to reach the per-game actions:
 
 The export is how you answer a complaint or a subject access request, and the
 only way to keep a game's record past its retention window. Take it before the
-clock runs out.
+clock runs out - but take it sparingly. Players are children, identified only by
+the code name the server gave them for that one game, and the export is the one
+place that data leaves the retention rule and lands on somebody's laptop.
 
 ## Retention
 
-A finished game cleans itself up in two stages:
+Games are short - usually under two hours - and the data is meant to be just as
+short-lived: once a game is over, almost none of it has any further use. A
+finished game cleans itself up in two stages:
 
 1. **When it ends.** Every player's stored GPS position is deleted outright,
    along with any quiz cooldown still running. What is kept is the record a
-   complaint would be answered from: generated player names, team membership and
-   join times, the capture timeline, quiz sessions, and every word the host
+   complaint would be answered from: the generated code names, team membership
+   and join times, the capture timeline, quiz sessions, and every word the host
    wrote, withdrawn announcements included.
 2. **After the retention window.** The game and everything in it is deleted for
    good. Thirty days by default, set by `GAME_RETENTION_DAYS`.

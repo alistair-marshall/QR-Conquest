@@ -5,9 +5,50 @@ it. If you are only reading the code, or running it on your laptop for
 yourself, none of this applies.
 
 It is written for the UK, because that is where the authors run it. It is a
-practical engineering summary, not legal advice - if children will play on your
-deployment, get someone qualified to look at your risk assessment and your
-DPIA.
+practical engineering summary, not legal advice - and because children are the
+expected players, get someone qualified to look at your risk assessment and your
+DPIA before you run a public game.
+
+## Who plays, and what is held about them
+
+**The game is aimed at children.** Schools, youth groups, scout troops and
+family events are the normal setting, and a deployment should be assessed on
+the basis that children *will* play, not that they might. Everything below
+follows from that.
+
+The design answer has been to hold as little as possible, so that there is
+little to lose, little to disclose and little to argue about:
+
+- **There are no player accounts.** No usernames, no passwords, no email
+  addresses, no sign-up of any kind. A player's entire enrolment is scanning a
+  team QR code, which is why the app never has to hold a credential for them,
+  never sends them an email, and cannot be the reason a child's address ends up
+  in a database.
+- **Players are given code names, not asked for names.** The server issues an
+  `adjective-animal` handle - `quiet-badger`, `swift-heron` - unique within the
+  game. Its purpose is operational, not social: it is what lets a host tell two
+  players apart on a roster, and what lets a complaint, a support question or a
+  bug be investigated afterwards without anybody being named. It identifies a
+  row, not a person.
+- **Everything is meant to be ephemeral.** A game typically runs for under two
+  hours. Once it ends, what it holds has served its purpose: positions are
+  deleted outright at that moment, and the rest is kept only for as long as
+  somebody might reasonably ask what happened - thirty days by default - before
+  being deleted automatically.
+- **Code names do not follow a player between games.** A new game means a new
+  code name and a new player id; nothing on the server links a player's rows in
+  one game to their rows in another. Unless a player remembers their own code
+  name and tells someone, last month's game says nothing about who was in this
+  one.
+
+None of that removes your duties - a code name attached to a GPS position is
+still personal data, and children's data at that. It does mean the volume is
+small, the sensitivity is bounded, and the honest answer to "what do you hold
+about my child?" is short. It also means that, asked about one particular
+child, the honest answer usually begins "we cannot tell which one is yours" -
+see [When a parent asks what you hold about their
+child](#when-a-parent-asks-what-you-hold-about-their-child) for how to handle
+that, because it is the normal case rather than the awkward exception.
 
 ## The short version
 
@@ -18,8 +59,8 @@ Standing this up on a public URL makes you two things at once:
   and base names the host sets - can be seen by other users. Players write
   nothing at all: every word of free text in a game comes from its host.
 - **The data controller** under UK GDPR and the Data Protection Act 2018, for
-  everything the app stores: GPS positions, the generated names those
-  positions are tied to, announcements.
+  everything the app stores: GPS positions, the generated code names those
+  positions are tied to, announcements. Assume your data subjects are children.
 
 Both come with duties that are yours, not the software's. The app is built to
 keep them small and to avoid the worst risks by design, but it cannot do the
@@ -41,9 +82,9 @@ encountered by other users. One thing puts QR Conquest there:
   the game.
 
 **Players write nothing.** There is no text field anywhere in the player app -
-no message box, no free-text answer, and since names are generated rather than
-typed, no name box either. A player contributes scans and GPS fixes, and
-nothing a player produces is ever shown to another player.
+no message box, no free-text answer, and since player names are generated
+code names rather than typed, no name box either. A player contributes scans
+and GPS fixes, and nothing a player produces is ever shown to another player.
 
 There is no exemption that fits. The "limited functionality" exemption covers
 comments and reviews on the provider's own content. The one-to-one exemption
@@ -73,13 +114,19 @@ assessment. Record them:
 - **No free text from players at all.** Players are never given a text box:
   not for a name, not for a message, not for an answer. Quiz answers are
   multiple choice.
-- **Player names are generated, not chosen.** The server issues each player an
-  `adjective-animal` name - `quiet-badger`, `swift-heron` - unique within the
-  game. A player cannot supply one, and a name sent by a modified client is
-  ignored. No player's real name, or anything else they might have typed,
-  reaches the app.
-- **Only the host sees player names.** They are shown on the host's roster and
-  on the host's map, and nowhere else. The game payload a player's device
+- **No player accounts.** Nobody registers, so there is no username, no
+  password and no email address for a child anywhere in the system. Scanning a
+  team QR code is the whole of joining.
+- **Player names are generated code names, not real names.** The server issues
+  each player an `adjective-animal` name - `quiet-badger`, `swift-heron` -
+  unique within the game. A player cannot supply one, and a name sent by a
+  modified client is ignored. No player's real name, or anything else they
+  might have typed, reaches the app. The handle exists so that a host can tell
+  players apart and so that an investigation after the event has something to
+  refer to - it is a label on a row, not an identity, and a fresh one is issued
+  each time a player joins a game.
+- **Only the host sees player code names.** They are shown on the host's roster
+  and on the host's map, and nowhere else. The game payload a player's device
   fetches carries team names and scores but never the roster; the endpoint
   that serves live positions refuses anyone but the game's own host; and no
   socket event names a player. Players see teams, not people.
@@ -115,11 +162,7 @@ assessment. Record them:
   announcements. It reaches you, the provider, not the host being reported.
   Leave it unset and no route is shown, which is the one configuration you
   should not ship. Check it is actually reaching players
-  once you have set it - open the homepage and look for the link. A deployment
-  that serves `index.html` as a static file used to publish no route however
-  the address was set; the app now asks the server for it as well, but see
-  "Serve `index.html` through the app" in [Deployment](DEPLOYMENT.md), because
-  the same misconfiguration still breaks other things.
+  once you have set it - open the homepage and look for the link.
 
 ### What you have to provide yourself
 
@@ -129,7 +172,7 @@ deadlines for the first two have already passed:
 | Duty | What it means here |
 |---|---|
 | Illegal content risk assessment | Write one, keep it, review it when you change the deployment. It can be short: list the user content - all of it host-written: game, team and base names, announcements, and the question bank - the risks, and the mitigations above |
-| Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
+| Children's access assessment | There is no age assurance in the app, and the game is aimed at children - schools, youth groups and family events are the point of it. Write the assessment on that basis: children are likely to access the service, so do the children's risk assessment too and meet the children's safety duties. Concluding otherwise would need a deployment closed to adults only, and evidence of it |
 | Terms of service | Say what is allowed and what you will do about content that is not |
 | Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. Set `ABUSE_CONTACT_EMAIL` or the Site Settings address and the app shows it as a "Report abuse" link; you still have to read that mailbox and act on what arrives. Reaching a *host* is separate: a host can publish a contact number for their game, and if they leave it empty their players have no route to them through the app |
 | Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: it is withdrawn from everyone immediately, but the text stays in the database until the game is deleted or reaches its purge date |
@@ -147,7 +190,7 @@ take content down are the floor.
 | Data | Where it comes from | Notes |
 |---|---|---|
 | Host name | Created by the site administrator | Travels in the game payload, though the player app does not display it |
-| Player name | Generated by the server at join | An `adjective-animal` handle like `quiet-badger`, unique within the game. Nobody types it, so it is not a real name, and it is served only to the game's own host |
+| Player code name | Generated by the server at join | An `adjective-animal` handle like `quiet-badger`, unique within the game. Nobody types it, so it is not a real name, and it is served only to the game's own host. It exists to distinguish players on a roster and in any later investigation, and it is regenerated for every game, so it carries nothing from one game to the next |
 | Game, team and base names | Written by the host | Read by every player |
 | Question bank - question text, options, explanations, categories | Written by the host, or bulk-imported by them | Held against the host account and reused across their games |
 | Team membership, scores, capture history | Gameplay | |
@@ -159,10 +202,12 @@ take content down are the floor.
 Players type nothing at all, which is the main reason the risk here is
 modest: there is no field a player can use to volunteer their real name, their
 medical details or anything else, so the app does not routinely collect
-special category data. Every piece of free text in the app is written by the
-host - the game name, the team names, the base names, the announcements and
-the question bank - though a host could of course type anything into any of
-them, and should not.
+special category data. There is also no account to hold - no username, no
+password, no email address - so the only identifier the app has for a player is
+the code name it made up for them and the id their own device keeps. Every
+piece of free text in the app is written by the host - the game name, the team
+names, the base names, the announcements and the question bank - though a host
+could of course type anything into any of them, and should not.
 
 ### What players are told, and when
 
@@ -203,8 +248,10 @@ old text are shown the new one.
 
 ### How long it is kept
 
-A game's data has a lifecycle, and the app enforces it without anyone
-remembering to:
+A game is a short-lived thing - typically under two hours from the first scan
+to the whistle - and the data is treated the same way. Once the game is over,
+almost none of it has any further use. The app enforces that lifecycle without
+anyone remembering to:
 
 **When the game ends** - whether the host ends it, an administrator does, or
 the scheduled end time passes - everything that only mattered while people
@@ -213,7 +260,7 @@ any quiz cooldown still counting down. Base and team QR codes are released at
 the same time, as they always were. From that moment a finished game holds no
 location data at all, and the host's map has nothing to show.
 
-**What survives** is the record: the generated player names, who was on which
+**What survives** is the record: the generated code names, who was on which
 team and when they joined, the capture and ownership timeline, the quiz
 sessions, and every word of free text the host wrote - announcements included,
 withdrawn ones included, with the times they were sent and taken down. That is
@@ -239,12 +286,53 @@ are cleared but the game itself stays; end or delete abandoned games. And host
 accounts and their question banks are outside it entirely: they belong to the
 host, not to any one game, and only a site administrator removes them.
 
+### When a parent asks what you hold about their child
+
+This is the request to have thought about in advance, because the usual answer
+is that you cannot identify the child at all.
+
+Nothing on the server ties a row to a person. There is no name, no email, no
+account and no device fingerprint - only a UUID the server generated and a code
+name it made up. Given "my daughter played your game at the school fete last
+Saturday", there is no query that finds her.
+
+That is the design working rather than a gap in it, and it still leaves you
+with plenty to say:
+
+- **Answer the general question in full.** It needs no identification, and it
+  is usually what is actually being asked. What the app holds about *any*
+  player is: a server-generated code name, which team they were on, the minute
+  they scanned in, whether they had read the host's messages, which bases they
+  scanned and which quiz questions they were served - and, only while the game
+  was still running, their most recent GPS fix. Nothing else. The position was
+  deleted when the game ended.
+- **Say that you cannot identify them, and why.** Article 11 UK GDPR covers
+  this directly: where a controller can demonstrate it is not in a position to
+  identify the data subject, the Article 15 to 20 rights do not apply - but you
+  must tell the requester so, and give them the chance to supply information
+  that would enable identification.
+- **Point them at the ways the code name can be recovered.** The child's own
+  phone is the likeliest: the app keeps the code name on the device and shows
+  it beside their team name, so unless they have joined another game since -
+  which clears it - they can simply read it off the screen. Otherwise the
+  host's own register from the day, plus the team, narrows it a long way. On a
+  small team the whole list may be short enough to discuss, though those rows
+  belong to other children and that is a judgement call, not a default.
+- **Check the date first.** Thirty days after the game ended there is nothing
+  left to search, and "we no longer hold it" is the complete and accurate
+  answer.
+
+Erasure is where this genuinely bites. Retention is per game and
+all-or-nothing, so a request to delete one child's data, without a code name to
+act on, comes down to deleting the entire game or waiting for the purge. Say so
+plainly rather than promising a selective deletion the software cannot do.
+
 ### What you need to do
 
 - **A DPIA is very likely mandatory.** You are systematically tracking the
-  location of identifiable individuals, quite possibly children. That sits on
-  the ICO's list of likely-high-risk processing. Do it before your first public
-  game, not after.
+  location of individuals who are usually children. That sits on the ICO's list
+  of likely-high-risk processing, and children's data raises it further. Do it
+  before your first public game, not after.
 - **Decide your lawful basis** and write it down - legitimate interests is the
   usual fit for running the game itself.
 - **Tell people.** The app tells players the essentials itself - see "What
@@ -254,12 +342,12 @@ host, not to any one game, and only a site administrator removes them.
   how someone exercises their rights. Put it where they will actually see it:
   on the team sheet, in the briefing, or in the consent form parents sign, and
   make sure it does not contradict what the app says on screen.
-- **If children play, the ICO's Age Appropriate Design Code applies** - data
-  minimisation, privacy-protective defaults, and transparency in language a
-  child can follow. Its expectations are stricter than the baseline. The
-  in-app notice is written for a ten-year-old to read on their own and is
-  shown before the location prompt, which is the transparency limb; the rest
-  of the code is still yours to meet.
+- **The ICO's Age Appropriate Design Code applies**, because children are the
+  intended players - data minimisation, privacy-protective defaults, and
+  transparency in language a child can follow. Its expectations are stricter
+  than the baseline. The in-app notice is written for a ten-year-old to read on
+  their own and is shown before the location prompt, which is the transparency
+  limb; the rest of the code is still yours to meet.
 - **Check the retention rule fits.** The app enforces one for you: positions
   are deleted when a game ends, and thirty days later the game and everything
   in it is deleted permanently by a background sweeper. Write that down as
@@ -269,10 +357,11 @@ host, not to any one game, and only a site administrator removes them.
   abandoned games; and the host accounts and question banks the games hang off
   are not touched by any of it.
 - **Be ready for subject access and erasure requests.** Export the game and
-  you have everything the app holds about everyone in it in one file - that is
-  the answer to a subject access request, though bear in mind a player is
-  identified in it only by a generated `adjective-animal` name, so matching a
-  real person to a row is something you have to do from your own records.
+  you have everything the app holds about everyone in it in one file. What you
+  cannot do is pick out one child: a player is identified only by a generated
+  code name, and nothing on the server links it to a person. See "When a parent
+  asks what you hold about their child" above for what to say when they do not
+  know the code name, which is the normal case.
   Erasure is still all-or-nothing: deleting the whole game, which is a site
   administrator's job for any game that was actually played.
 - **Security.** Serve over HTTPS, keep `SITE_ADMIN_PASSWORD` strong and out of
@@ -302,9 +391,10 @@ the software, not oversights it hides:
   a game nobody ever ended
 - Host accounts and question banks are outside the retention rule; they live
   until a site administrator deletes them
-- Exports are files that leave the system. They hold player names, join times
-  and everything the host wrote, so where they are stored and who can read
-  them becomes your problem the moment you download one
+- Exports are files that leave the system. They hold player code names, join
+  times and everything the host wrote, so where they are stored and who can
+  read them becomes your problem the moment you download one - and an export
+  outlives the retention rule the rest of the design leans on
 - No terms of service shown in the app. The privacy notice that is shown is a
   short plain-language summary written for players, not the full notice UK
   GDPR requires from you - it names no controller, no lawful basis and no
@@ -317,7 +407,7 @@ the software, not oversights it hides:
   secret either: every player device that scans into a game holds it, and it
   appears in request paths that a server or proxy may log. Anyone who obtains
   one sees team names, scores and base locations for that game. They cannot
-  see the roster of generated player names, join a team, or read anything a
+  see the roster of generated code names, join a team, or read anything a
   host sent to players
 - Single server, SQLite, no clustering - see "Known limitations" in
   [Architecture](ARCHITECTURE.md#known-limitations)
@@ -327,8 +417,9 @@ the software, not oversights it hides:
 For a typical deployment that runs games for other organisations:
 
 1. Illegal content risk assessment (OSA)
-2. Children's access assessment, and a children's risk assessment if children
-   are likely to access it (OSA)
+2. Children's access assessment, and the children's risk assessment that
+   follows from it - the game is aimed at children, so expect to need both
+   (OSA)
 3. Data protection impact assessment (UK GDPR)
 4. Privacy notice, in language your players can read - the app's own notice
    is a summary of the software, not a substitute for yours
