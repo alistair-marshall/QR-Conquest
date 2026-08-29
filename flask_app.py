@@ -4420,6 +4420,29 @@ def get_all_games_as_admin():
 
 
 # ==========================================================
+# API Routes - Public Settings
+# ==========================================================
+
+# The page shell already carries these values, stamped in by render_index
+# below, and that is where a client normally reads them. But a deployment that
+# serves index.html as a plain static file - a PythonAnywhere static mapping,
+# an nginx try_files, a CDN in front of the app - never runs render_index, and
+# the shell's own defaults stand instead: no reporting route published at all,
+# and a privacy notice quoting a retention period this deployment may not run.
+# The shell is also stamped once, at load, so a tab left open across a change
+# of address keeps the old one however it was served.
+#
+# Both are answered by letting the client ask. No credential: the address is
+# published to players by design, and the retention period is in the privacy
+# notice they read.
+@app.route('/api/public-settings', methods=['GET'])
+def get_public_settings():
+    return jsonify({
+        'abuse_contact_email': get_abuse_contact_email(),
+        'retention_days': GAME_RETENTION_DAYS
+    })
+
+# ==========================================================
 # API Routes - Site Settings (Site Admin)
 # ==========================================================
 

@@ -244,6 +244,17 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    python flask_app.py
    ```
 
+   **Serve `index.html` through the app, not as a static file.** The app
+   rewrites the page shell as it serves it - the reporting address, the
+   retention period the privacy notice quotes, the live-socket flag, and the
+   version stamp that busts the browser cache on every front-end file. A
+   static-file mapping for `/` (a PythonAnywhere static mapping, an nginx
+   `try_files`, a CDN in front of the app) bypasses all of it and serves the
+   defaults baked into the file instead. Map only `/static`, `/libs` and
+   `/icons` statically, if anything, and let `/` reach the WSGI app. To check a
+   running deployment, view source on the homepage: `window.QRC_ASSET_VERSION`
+   should carry a number rather than `""`.
+
 #### Host Management
 
 3. **Access admin panel**:
@@ -450,7 +461,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **Retention**: A game is tidied when it ends and purged thirty days later. The tidy clears what only mattered during play - every player's last GPS fix, and any quiz cooldown still running - while keeping the record a complaint would be answered from: generated player names, team membership and join times, the capture timeline, quiz sessions, and every word the host wrote, withdrawn announcements included. The purge then deletes the game and all of it. A background sweeper runs hourly, so a restarted server never sits on expired data. The window is 30 days by default and set by `GAME_RETENTION_DAYS`
 - **Game Export**: `GET /api/games/<id>/export` gives a site administrator the whole record of one game as a single JSON file - settings, teams, players, bases, the capture timeline, announcements including withdrawn ones, quiz sessions and the questions those sessions served. It is the way to keep a game's record past the purge, or to answer a complaint or a subject access request from it. Credentials are deliberately left out: no host ids, and none of the QR codes that enrol a host, join a team or mark a base. It takes the admin bearer token, not a host id - a host cannot export
 - **Announcements**: One-way, one-to-many messages from a host to everyone in their game. There is no player-to-host, host-to-team or host-to-player channel, by design. Announcement text is never put on the shared game socket - anyone who knows a game's id can listen to it, so the socket only says that something new exists and players fetch the text from their own endpoint. A read marker per player drives the unread count. A host can withdraw one they sent: it is a soft delete, so the row stays with the time it was withdrawn and nothing serves it again
-- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag rather than served from an endpoint, so the reporting link renders with the first paint and needs no credential
+- **Abuse reporting**: A single site-wide contact address, taken from `ABUSE_CONTACT_EMAIL` unless a site administrator has overridden it in `site_settings`. It is injected into the page shell alongside the debug flag, so the reporting link renders with the first paint and needs no credential. The shell is stamped once, at load, and only by the app - so the client also asks `GET /api/public-settings` after first paint and corrects itself if the two disagree. That covers a tab left open across a change of address, and a deployment serving `index.html` as a static file, where the shell arrives with its defaults and no reporting route would be published at all. The same endpoint carries the retention period the privacy notice quotes, for the same reason
 - **Game deletion**: A host can only delete a game no player has joined. After that the game holds other people's data, and deleting it takes the site admin's bearer token - the same endpoint, authorised differently
 - **Game ids**: A game is keyed by a random UUID. Earlier versions used a short "adjective-noun" code, which anyone outside a game could guess their way through to reach its payload. Nobody has to read the id out - the host names the game, and players reach it by scanning a QR code - so it is not shown anywhere in the UI
 - **Payload scoping**: The game payload is fetched without a credential, so the anonymous view carries no player names or ids and none of the QR codes that join a team, whatever the id in the path. A host sending its own host id in the `X-Host-ID` header gets those fields for its own game

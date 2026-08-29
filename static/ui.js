@@ -341,6 +341,11 @@ function initializeApp() {
 
   // Cooldown lockouts persist across reloads (Section 14) - keep the banner live
   startCooldownBannerMonitoring();
+
+  // Last, and deliberately not awaited: the first paint above is drawn from
+  // the page shell, and this only corrects it if the server disagrees. See
+  // refreshPublicSettings in core.js for when that happens.
+  refreshPublicSettings();
 }
 
 
