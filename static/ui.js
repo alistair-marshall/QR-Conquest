@@ -3128,6 +3128,25 @@ function createAnnouncementButton() {
 }
 
 // =============================================================================
+// CONTACTING THE HOST
+// =============================================================================
+
+// The number the host published for this game, for the players in it. Empty
+// for a host - they do not need to ring themselves - and for anyone who has
+// not joined, who is never sent it.
+function getHostPhone() {
+  if (getAnnouncementRole() !== 'player') return '';
+  const phone = appState.announcements && appState.announcements.hostPhone;
+  return typeof phone === 'string' && phone.trim() ? phone.trim() : '';
+}
+
+// A tel: link needs the number without the way it is written - a dialler will
+// take the spaces and brackets, but not every phone is a dialler
+function buildHostPhoneHref(phone) {
+  return 'tel:' + phone.replace(/[^0-9+]/g, '');
+}
+
+// =============================================================================
 // APP MENU
 // =============================================================================
 
@@ -3202,6 +3221,19 @@ function showAppMenu() {
   closeAppMenu();
 
   const content = UIBuilder.createElement('div', { className: 'space-y-1' });
+
+  // First, because it is the one thing in here a player might need in a hurry
+  const hostPhone = getHostPhone();
+  if (hostPhone) {
+    content.appendChild(createAppMenuRow(
+      'phone',
+      'Call the host',
+      hostPhone,
+      function () {
+        window.location.href = buildHostPhoneHref(hostPhone);
+      }
+    ));
+  }
 
   content.appendChild(createAppMenuRow(
     'shield',
@@ -3449,12 +3481,45 @@ function showAnnouncementPanel() {
   const isHost = role === 'host';
   const content = UIBuilder.createElement('div');
 
+  const hostPhone = getHostPhone();
+
   content.appendChild(UIBuilder.createElement('p', {
     className: 'text-sm text-gray-600 mb-3',
     textContent: isHost
       ? 'Goes to every player in this game. There is no reply channel - players contact you the way you told them to. Delete a message to take it off everyone\'s list.'
-      : 'Messages from your game host. You cannot reply here - contact your host the way they told you to.'
+      : hostPhone
+        ? 'Messages from your game host. You cannot reply here - call them instead.'
+        : 'Messages from your game host. You cannot reply here - contact your host the way they told you to.'
   }));
+
+  // The panel has always told players to contact the host "the way they told
+  // you to" without giving them a way. When the host has published a number,
+  // this is it, above the messages rather than below them - someone opening
+  // this with a problem is not here to read
+  if (hostPhone) {
+    const callLink = UIBuilder.createElement('a', {
+      className: 'flex items-center gap-3 mb-3 px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors',
+      href: buildHostPhoneHref(hostPhone)
+    });
+
+    callLink.appendChild(UIBuilder.createElement('i', {
+      'data-lucide': 'phone',
+      className: 'text-purple-700 flex-shrink-0'
+    }));
+
+    const callText = UIBuilder.createElement('div');
+    callText.appendChild(UIBuilder.createElement('div', {
+      className: 'font-medium text-purple-900',
+      textContent: 'Call the host'
+    }));
+    callText.appendChild(UIBuilder.createElement('div', {
+      className: 'text-xs text-purple-700',
+      textContent: hostPhone
+    }));
+    callLink.appendChild(callText);
+
+    content.appendChild(callLink);
+  }
 
   content.appendChild(UIBuilder.createElement('div', {
     id: 'announcement-list',

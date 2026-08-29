@@ -65,7 +65,11 @@ assessment. Record them:
   one-to-many only. There is no host-to-one-player message, no host-to-one-team
   message, and no reply channel. A private line between an adult in authority
   and a child is the highest-risk pattern in a service like this, and it is not
-  in the product.
+  in the product. A host may publish a contact number for their game, which
+  players see as a "Call the host" button - but that is a number the host chose
+  to give out, going one way, outside the app, and carrying nothing about who
+  is ringing. The app never stores or shows a player's number, and a host still
+  cannot reach one player.
 - **No free text from players at all.** Players are never given a text box:
   not for a name, not for a message, not for an answer. Quiz answers are
   multiple choice.
@@ -127,7 +131,7 @@ deadlines for the first two have already passed:
 | Illegal content risk assessment | Write one, keep it, review it when you change the deployment. It can be short: list the user content - all of it host-written: game, team and base names, announcements, and the question bank - the risks, and the mitigations above |
 | Children's access assessment | There is no age assurance in the app. If children can access your deployment and it is the kind of service that attracts them - a game run at schools, youth groups or family events usually is - you must also do a children's risk assessment and meet the children's safety duties |
 | Terms of service | Say what is allowed and what you will do about content that is not |
-| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. Set `ABUSE_CONTACT_EMAIL` or the Site Settings address and the app shows it as a "Report abuse" link; you still have to read that mailbox and act on what arrives. A player has no way to reach a *host* through the app at all |
+| Reporting and complaints | Publish a route - an email address is fine - for someone to report content or complain. Set `ABUSE_CONTACT_EMAIL` or the Site Settings address and the app shows it as a "Report abuse" link; you still have to read that mailbox and act on what arrives. Reaching a *host* is separate: a host can publish a contact number for their game, and if they leave it empty their players have no route to them through the app |
 | Content takedown | A host can delete any announcement they sent, which withdraws it from every player. For anything else a host wrote - the game, team and base names, or the question bank - the tool is still editing it or, as a site administrator, deleting the whole game. Bear in mind that a deleted announcement is only soft deleted: it is withdrawn from everyone immediately, but the text stays in the database until the game is deleted or reaches its purge date |
 | Records | Keep the assessments and your decisions. Export a game before its purge date if you want its record to outlive it |
 

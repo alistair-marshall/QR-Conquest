@@ -50,7 +50,8 @@ You'll receive a team QR code from your game host or team captain. Simply scan t
 **Messages From Your Host:**
 - Your host can send a message to everyone playing - a start time, a change of plan, a base that's out of action
 - New messages pop up as a notification, and the megaphone icon in the header carries an unread count until you've read them
-- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other. If you need your host, use the contact details they gave you
+- It's one-way: nobody can message you individually, you can't reply in the app, and players can't message each other
+- If your host gave the game a contact number, you get a "Call the host" button - in the menu, and at the top of the messages panel. If they didn't, use the contact details they gave you another way
 
 **Reporting Something:**
 - If a message from your host, or a game, team or base name, is abusive - or you want to complain about how a game is being run - use the "Report abuse" link, in the footer and the menu of every page, and under the messages panel
@@ -125,7 +126,7 @@ As a game host, you create and manage the entire game experience. You'll set up 
 **Messaging Your Players:**
 - Tap the megaphone icon in the header to message every player in the game - it's available from any page, including the host panel
 - Messages reach players as a notification, and are kept in a list they can scroll back through
-- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
+- It is deliberately one-way and one-to-many: there is no way to message a single player or team, and no reply channel. That keeps a private line between a host and a player - who may well be a child - out of the design entirely. A host can publish a contact number for the game, which players see as a "Call the host" button, but that is a number the host chose to hand out and it rings their phone outside the app - it is not a channel and the app learns nothing from it. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the reasoning
 - Sent the wrong thing? Tap the bin icon on any message to delete it - it comes off every player's list and yours, though anyone who has already read it has read it
 - Because players can't reach you in the app, give them a way to reach you outside it - a phone number on the team sheet - before the game starts
 - Messaging works before the game starts and after it ends, so you can brief everyone and then call them back in
@@ -226,7 +227,7 @@ You oversee the entire QR Conquest system, creating and managing host accounts w
    - Click "Start Game" from your host panel
    - Monitor live scoreboard and base ownership
    - Use the megaphone icon in the header to message all players at once
-   - Make sure players have a way to contact you outside the app - the app has no reply channel
+   - Put your number in "Your contact number" under game settings, so players who hit a problem get a "Call the host" button. There is still no reply channel - it rings your phone, and only the players who have joined this game are ever shown it
    - End game when appropriate and review final results
 
 ### For Site Administrators
@@ -476,6 +477,7 @@ QR Conquest includes a built-in QR code generator for creating printable codes n
 - **App menu**: One button at the top right of every page holding the routes that are not for players - the host menu and site administration - with the Privacy and Report abuse links repeated under them, so reporting something does not mean scrolling a map to reach the footer. It replaces a "Host Menu" button in the header and a "Site Administration" link in the footer, which put two versions of the same idea at opposite ends of the page. Built as a modal: full-width rows are a better tap target on a phone than a dropdown
 - **Announcements**: A panel reachable from the header on every page, with an unread badge and toast notifications for anything that arrives while it is closed; hosts get a composer, players a read-only list
 - **Privacy Notice**: A plain-language notice - written for a ten-year-old - shown in full on the join page and as a modal before the browser is ever asked for a position, with a **Privacy** link in the footer to reopen it. Quotes the deployment's own `GAME_RETENTION_DAYS`
+- **Host contact number**: An optional per-game number a host publishes under game settings, shown to the players in that game as a "Call the host" button in the app menu and above the host's messages. It is the only route from a player back to a host, and it is one-way and outside the app - a `tel:` link, nothing stored about who rang. Deliberately kept out of the game payload, which takes no credential: the host reads their own number there, players get it from `/api/players/<id>/announcements`, which is keyed on a player id, and nobody else is served it at all
 - **Abuse Reporting**: A "Report abuse" link in the footer and in the app menu, and under the announcement list for players, opening a modal with the site administrator's address and a pre-filled `mailto:`. Hidden entirely when no address is configured
 - **Responsive Design**: Works on mobile phones and tablets
 

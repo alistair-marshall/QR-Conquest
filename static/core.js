@@ -9,6 +9,9 @@ const appState = {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
+    // The host's own contact number, served to the host alone. A player in
+    // this game reads it from appState.announcements instead
+    hostPhone: '',
     status: null
   },
   loading: false,
@@ -38,6 +41,8 @@ const appState = {
   announcements: {
     items: [],
     unread: 0,
+    // How a player reaches their host, sent with the messages it belongs with
+    hostPhone: '',
     loading: false,
     loaded: false,
     error: null
@@ -260,6 +265,7 @@ function clearGameState() {
     currentTeam: null,
     currentPlayer: null,
     hostName: null,
+    hostPhone: '',
     status: null
   };
 
@@ -1171,6 +1177,8 @@ async function fetchGameData(gameId) {
     appState.gameData.bases = data.bases;
     appState.gameData.status = data.status;
     appState.gameData.hostName = data.hostName;
+    // Only present for the host - see get_game in flask_app.py
+    appState.gameData.hostPhone = data.hostPhone || '';
     appState.gameData.settings = data.settings || {};
 
     // Announcements belong to this game, so pick them up as soon as the game
@@ -1365,6 +1373,7 @@ function resetAnnouncementState() {
   appState.announcements = {
     items: [],
     unread: 0,
+    hostPhone: '',
     loading: false,
     loaded: false,
     error: null
@@ -1492,6 +1501,8 @@ async function fetchAnnouncements() {
 
     appState.announcements.items = announcements.concat(pending);
     appState.announcements.unread = data.unread || 0;
+    // A player is told how to reach their host alongside the host's messages
+    appState.announcements.hostPhone = data.hostPhone || '';
     appState.announcements.loaded = true;
     appState.announcements.error = null;
   } catch (err) {
