@@ -1172,6 +1172,10 @@ async function loadHostGames() {
             statusClass += ' bg-yellow-100 text-yellow-800';
             statusText = 'Setup';
             break;
+          case 'bonus':
+            statusClass += ' bg-amber-100 text-amber-800';
+            statusText = 'Bonus round';
+            break;
           case 'ended':
             statusClass += ' bg-gray-100 text-gray-800';
             statusText = 'Ended';
@@ -1231,7 +1235,9 @@ async function loadHostGames() {
         // Action button
         const actionButton = UIBuilder.createElement('div');
 
-        if (game.status === 'setup' || game.status === 'active') {
+        // A game in its bonus round still needs the panel - that is where the
+        // host scans returned base codes back in
+        if (game.status === 'setup' || game.status === 'active' || game.status === 'bonus') {
           const manageButton = UIBuilder.createButton('Continue Managing', function() {
             // Load this game and navigate to host panel
             localStorage.setItem('gameId', game.id);

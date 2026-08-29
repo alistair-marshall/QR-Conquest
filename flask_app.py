@@ -4658,6 +4658,14 @@ def api_not_found(path):
 @app.route('/<path:path>')
 def serve(path):
     if path not in ("", "index.html") and os.path.exists(app.static_folder + '/' + path):
+        # A directory under static/ is served by its index.html - the QR code
+        # generator lives at /code-generator/, and send_from_directory alone
+        # answers a directory with a 404
+        if os.path.isdir(app.static_folder + '/' + path):
+            index = path.rstrip('/') + '/index.html'
+            if os.path.exists(app.static_folder + '/' + index):
+                return send_from_directory(app.static_folder, index)
+            return render_index()
         return send_from_directory(app.static_folder, path)
     else:
         return render_index()

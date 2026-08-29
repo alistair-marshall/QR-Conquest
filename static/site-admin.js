@@ -529,6 +529,10 @@ function buildGameRow(game) {
             statusClass += ' bg-yellow-100 text-yellow-800';
             statusText = 'Setup';
             break;
+        case 'bonus':
+            statusClass += ' bg-amber-100 text-amber-800';
+            statusText = 'Bonus round';
+            break;
         case 'ended':
             statusClass += ' bg-gray-100 text-gray-800';
             statusText = 'Ended';
