@@ -21,6 +21,12 @@ const UIBuilder = {
         element.addEventListener(eventName, value);
       } else if (key === 'className') {
         element.className = value;
+      } else if (key === 'htmlFor') {
+        // The DOM property is htmlFor, the attribute is for. Callers here
+        // write htmlFor, which otherwise fell through to setAttribute and
+        // produced a dead "htmlfor" attribute - so every label written this
+        // way was tied to nothing, and tapping it did not focus its input
+        element.htmlFor = value;
       } else if (key === 'textContent') {
         element.textContent = value;
       } else if (key === 'innerHTML') {

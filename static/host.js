@@ -1610,7 +1610,7 @@ function buildGameSettingsForm(options = {}) {
   const hostPhoneGroup = UIBuilder.createElement('div');
   hostPhoneGroup.appendChild(UIBuilder.createElement('label', {
     className: 'block text-sm font-medium text-gray-700 mb-1',
-    'for': 'host-phone-input',
+    htmlFor: 'host-phone-input',
     textContent: 'Your contact number (optional)'
   }));
 
